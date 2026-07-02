@@ -1,0 +1,73 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "library"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Tenant {
+  id        String    @id @default(uuid())
+  name      String
+  contacts  Contact[]
+  createdAt DateTime  @default(now())
+}
+
+model Contact {
+  id            String         @id @default(uuid())
+  tenantId      String
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  phone         String?
+  name          String
+  conversations Conversation[]
+  memory        BusinessMemory?
+  tasks         Task[]
+}
+
+model Conversation {
+  id           String        @id @default(uuid())
+  contactId    String
+  contact      Contact       @relation(fields: [contactId], references: [id])
+  status       String        // NEW, ACTIVE, RESOLVED
+  interactions Interaction[]
+}
+
+model Interaction {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  direction      String       // INBOUND, OUTBOUND
+  type           String       // TEXT, AUDIO, IMAGE
+  content        String
+  timestamp      DateTime     @default(now())
+}
+
+model BusinessMemory {
+  id              String   @id @default(uuid())
+  contactId       String   @unique
+  contact         Contact  @relation(fields: [contactId], references: [id])
+  name            String?
+  company         String?
+  interests       String[]
+  lastInteraction DateTime?
+  objections      String[]
+  leadStatus      String?
+  tags            String[]
+  updatedAt       DateTime @updatedAt
+}
+
+model Task {
+  id        String   @id @default(uuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id])
+  title     String
+  status    String   @default("PENDING")
+  dueDate   DateTime?
+  createdAt DateTime @default(now())
+}

@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  ingenioia:
+    build: .
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      # Base de Datos
+      - DATABASE_URL=${DATABASE_URL}
+      
+      # Conexión con Hermes API (LLM)
+      - HERMES_BASE_URL=${HERMES_BASE_URL:-https://api.openai.com/v1}
+      - HERMES_API_KEY=${HERMES_API_KEY}
+      - HERMES_MODEL=${HERMES_MODEL:-gpt-4o-mini}
+      
+      # Conexión con WhatsApp (WAHA)
+      - WAHA_API_URL=${WAHA_API_URL:-http://localhost:3001}
