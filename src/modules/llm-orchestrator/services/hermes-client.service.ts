@@ -18,14 +18,20 @@ export class HermesClientService {
 
     this.logger.log(`LLM Inference Triggered contra Hermes API real en ${hermesUrl}...`);
 
+    const model = process.env.HERMES_MODEL || 'hermes';
+
     try {
-      const response = await fetch(`${hermesUrl}/generate`, {
+      const response = await fetch(`${hermesUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          'Authorization': `Bearer ${apiKey}`,
+          'X-Hermes-Session-Id': 'ingenio-core-default-session'
         },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: prompt }]
+        })
       });
 
       if (!response.ok) {
@@ -33,10 +39,25 @@ export class HermesClientService {
       }
 
       const result = await response.json();
+      const choice = result.choices?.[0]?.message;
+      
+      let parsedToolCalls = undefined;
+      if (choice?.tool_calls && choice.tool_calls.length > 0) {
+        parsedToolCalls = choice.tool_calls.map((tc: any) => {
+          let args = {};
+          try {
+            args = typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments;
+          } catch(e) {}
+          return {
+            name: tc.function.name,
+            arguments: args
+          };
+        });
+      }
 
       return {
-        content: result.content,
-        toolCalls: result.toolCalls
+        content: choice?.content || undefined,
+        toolCalls: parsedToolCalls
       };
     } catch (error: any) {
       this.logger.error('Error llamando a la API de Hermes', error.message);
