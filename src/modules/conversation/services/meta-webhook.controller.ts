@@ -18,6 +18,9 @@ export class MetaWebhookController {
 
   @Post()
   async receiveMessage(@Body() body: any, @Res() res: FastifyReply) {
+    console.log("WEBHOOK RECIBIDO");
+    console.log(JSON.stringify(body, null, 2));
+
     // 1. Responder INMEDIATAMENTE a Meta para evitar bloqueos
     res.status(HttpStatus.OK).send('EVENT_RECEIVED');
 
