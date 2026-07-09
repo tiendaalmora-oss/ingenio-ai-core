@@ -9,14 +9,21 @@ export class WahaAdapterService {
     
     const wahaUrl = process.env.WAHA_API_URL || 'http://localhost:3001';
     const session = process.env.WAHA_SESSION || 'default';
+    const apiKey = process.env.WAHA_API_KEY || '';
+
+    const headers: any = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    };
+    
+    if (apiKey) {
+      headers['X-Api-Key'] = apiKey;
+    }
 
     try {
       const response = await fetch(`${wahaUrl}/api/sendText`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
+        headers: headers,
         body: JSON.stringify({
           chatId: contactId,
           text: content,
