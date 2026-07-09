@@ -27,6 +27,8 @@ let MetaWebhookController = class MetaWebhookController {
         return res.status(common_1.HttpStatus.BAD_REQUEST).send('Bad Request');
     }
     async receiveMessage(body, res) {
+        console.log("WEBHOOK RECIBIDO");
+        console.log(JSON.stringify(body, null, 2));
         res.status(common_1.HttpStatus.OK).send('EVENT_RECEIVED');
         try {
             let tenantId = 'tenant-demo-123';
