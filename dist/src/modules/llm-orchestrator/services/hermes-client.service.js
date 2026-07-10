@@ -11,7 +11,7 @@ exports.HermesClientService = void 0;
 const common_1 = require("@nestjs/common");
 let HermesClientService = HermesClientService_1 = class HermesClientService {
     logger = new common_1.Logger(HermesClientService_1.name);
-    async generateResponse(prompt) {
+    async generateResponse(messages) {
         const hermesUrl = process.env.HERMES_BASE_URL || 'http://localhost:4000/api/v1/hermes';
         const apiKey = process.env.HERMES_API_KEY || '';
         this.logger.log(`LLM Inference Triggered contra Hermes API real en ${hermesUrl}...`);
@@ -26,7 +26,7 @@ let HermesClientService = HermesClientService_1 = class HermesClientService {
                 },
                 body: JSON.stringify({
                     model,
-                    messages: [{ role: 'user', content: prompt }]
+                    messages: messages
                 })
             });
             if (!response.ok) {

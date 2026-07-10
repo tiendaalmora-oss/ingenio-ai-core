@@ -27,7 +27,7 @@ export class MetaWebhookController {
     // 2. Procesamiento Asíncrono
     try {
       // Parsing real de WAHA
-      let tenantId = 'tenant-demo-123'; // Asumimos un tenant por defecto por ahora
+      let tenantId = body.session || 'default'; // Multi-tenant resuelto por sesión de WAHA
       let contactId = '';
       let content = '';
 

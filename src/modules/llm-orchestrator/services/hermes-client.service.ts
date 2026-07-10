@@ -12,7 +12,7 @@ export interface LLMResponse {
 export class HermesClientService {
   private readonly logger = new Logger(HermesClientService.name);
 
-  async generateResponse(prompt: string): Promise<LLMResponse> {
+  async generateResponse(messages: any[]): Promise<LLMResponse> {
     const hermesUrl = process.env.HERMES_BASE_URL || 'http://localhost:4000/api/v1/hermes';
     const apiKey = process.env.HERMES_API_KEY || '';
 
@@ -30,7 +30,7 @@ export class HermesClientService {
         },
         body: JSON.stringify({
           model,
-          messages: [{ role: 'user', content: prompt }]
+          messages: messages
         })
       });
 

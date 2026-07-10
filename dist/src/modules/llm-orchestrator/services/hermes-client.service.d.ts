@@ -7,5 +7,5 @@ export interface LLMResponse {
 }
 export declare class HermesClientService {
     private readonly logger;
-    generateResponse(prompt: string): Promise<LLMResponse>;
+    generateResponse(messages: any[]): Promise<LLMResponse>;
 }

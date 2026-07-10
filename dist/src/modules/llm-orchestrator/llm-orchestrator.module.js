@@ -11,13 +11,14 @@ const common_1 = require("@nestjs/common");
 const context_builder_service_1 = require("./services/context-builder.service");
 const hermes_client_service_1 = require("./services/hermes-client.service");
 const llm_listener_service_1 = require("./services/llm-listener.service");
+const kos_loader_service_1 = require("./services/kos-loader.service");
 let LlmOrchestratorModule = class LlmOrchestratorModule {
 };
 exports.LlmOrchestratorModule = LlmOrchestratorModule;
 exports.LlmOrchestratorModule = LlmOrchestratorModule = __decorate([
     (0, common_1.Module)({
         imports: [],
-        providers: [context_builder_service_1.ContextBuilderService, hermes_client_service_1.HermesClientService, llm_listener_service_1.LlmListenerService],
+        providers: [context_builder_service_1.ContextBuilderService, hermes_client_service_1.HermesClientService, llm_listener_service_1.LlmListenerService, kos_loader_service_1.KosLoaderService],
         exports: [],
     })
 ], LlmOrchestratorModule);

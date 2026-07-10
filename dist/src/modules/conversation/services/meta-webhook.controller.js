@@ -31,10 +31,17 @@ let MetaWebhookController = class MetaWebhookController {
         console.log(JSON.stringify(body, null, 2));
         res.status(common_1.HttpStatus.OK).send('EVENT_RECEIVED');
         try {
-            let tenantId = 'tenant-demo-123';
+            let tenantId = body.session || 'default';
             let contactId = '';
             let content = '';
             if (body.event === 'message' || body.event === 'message.any') {
+                if (body.payload.fromMe) {
+                    console.log('Ignorando mensaje saliente (fromMe: true)');
+                    return;
+                }
+                if (body.event === 'message.any') {
+                    return;
+                }
                 contactId = body.payload.from;
                 content = body.payload.body;
             }
@@ -43,7 +50,7 @@ let MetaWebhookController = class MetaWebhookController {
                 content = body.content || 'Mensaje de prueba desde webhook';
             }
             if (!contactId || !content) {
-                console.warn('Ignorando evento webhook sin contactId o content', body);
+                console.warn('Ignorando evento webhook sin contactId o content');
                 return;
             }
             await this.receiveMessageService.execute(tenantId, contactId, content);
