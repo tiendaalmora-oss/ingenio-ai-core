@@ -32,6 +32,17 @@ export class MetaWebhookController {
       let content = '';
 
       if (body.event === 'message' || body.event === 'message.any') {
+        // Ignorar mensajes enviados por el propio bot (outbound) para evitar bucles
+        if (body.payload.fromMe) {
+          console.log('Ignorando mensaje saliente (fromMe: true)');
+          return;
+        }
+        
+        // Para evitar procesar el mismo mensaje dos veces si WAHA envía 'message' y 'message.any'
+        if (body.event === 'message.any') {
+          return; 
+        }
+
         contactId = body.payload.from;
         content = body.payload.body;
       } else {
@@ -41,7 +52,7 @@ export class MetaWebhookController {
       }
 
       if (!contactId || !content) {
-        console.warn('Ignorando evento webhook sin contactId o content', body);
+        console.warn('Ignorando evento webhook sin contactId o content');
         return;
       }
 
