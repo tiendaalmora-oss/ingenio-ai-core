@@ -65,18 +65,17 @@ export class ContextBuilderService {
 
     // Añadir el historial
     for (const msg of history) {
-      messages.push({
-        role: msg.direction === 'INBOUND' ? 'user' : 'assistant',
-        content: msg.content
-      });
+      if (msg.role === 'tool') {
+        messages.push({ role: msg.role, content: msg.content, tool_call_id: msg.toolCallId });
+      } else if (msg.role === 'assistant' && msg.toolCalls) {
+        messages.push({ role: msg.role, content: msg.content || null, tool_calls: msg.toolCalls });
+      } else {
+        messages.push({
+          role: msg.role || (msg.direction === 'INBOUND' ? 'user' : 'assistant'),
+          content: msg.content
+        });
+      }
     }
-
-    // Añadir el mensaje actual (si no está ya en el historial, usualmente ya se guardó antes de emitir el evento, pero nos aseguramos)
-    // Asumiendo que el ReceiveMessageService ya guardó la interacción en la BD, el mensaje actual YA está en 'history'.
-    // Si la arquitectura dicta que el payload.content es extra o más rápido, podemos evitar duplicados comparando IDs,
-    // pero por seguridad, confiaremos en el historial de DB. Si la latencia es un problema, se enviaría payload.content.
-    // Revisando cómo funciona ReceiveMessageService, la interacción SE GUARDA ANTES de emitir el evento.
-    // Por ende, payload.content ya es el último mensaje en history. No lo añadimos de nuevo.
 
     return messages;
   }

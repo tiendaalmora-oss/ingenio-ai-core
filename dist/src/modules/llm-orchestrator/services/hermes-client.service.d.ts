@@ -1,6 +1,7 @@
 export interface LLMResponse {
     content?: string;
     toolCalls?: {
+        id: string;
         name: string;
         arguments: any;
     }[];

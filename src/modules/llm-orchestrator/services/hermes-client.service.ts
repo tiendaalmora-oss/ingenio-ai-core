@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 export interface LLMResponse {
   content?: string;
   toolCalls?: {
+    id: string;
     name: string;
     arguments: any;
   }[];
@@ -49,6 +50,7 @@ export class HermesClientService {
             args = typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments;
           } catch(e) {}
           return {
+            id: tc.id,
             name: tc.function.name,
             arguments: args
           };

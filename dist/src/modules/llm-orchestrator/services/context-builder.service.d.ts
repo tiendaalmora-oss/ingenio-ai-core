@@ -5,5 +5,5 @@ export declare class ContextBuilderService {
     private readonly kosLoader;
     private readonly logger;
     constructor(prisma: PrismaService, kosLoader: KosLoaderService);
-    buildContext(tenantId: string, contactId: string, content: string): Promise<any[]>;
+    buildContext(tenantId: string, contactId: string, conversationId: string, content: string): Promise<any[]>;
 }

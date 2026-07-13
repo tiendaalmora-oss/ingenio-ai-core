@@ -6,6 +6,7 @@ import { HermesClientService } from './hermes-client.service';
 import { InteractionReceivedEvent } from '../../conversation';
 import { ResponseGeneratedEvent } from '../events/out/response-generated.event';
 import { ToolCalledEvent } from '../events/out/tool-called.event';
+import { PrismaService } from '../../../shared/database/prisma.service';
 
 @Injectable()
 export class LlmListenerService {
@@ -15,6 +16,7 @@ export class LlmListenerService {
     private readonly contextBuilder: ContextBuilderService,
     private readonly hermesClient: HermesClientService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly prisma: PrismaService,
   ) {}
 
   @OnEvent('interaction.received', { async: true })
@@ -36,6 +38,17 @@ export class LlmListenerService {
       // 3. Emitir eventos
       // Si el LLM devolvió texto, generamos respuesta al usuario
       if (response.content) {
+        // Guardar la respuesta del assistant en la DB (Texto puro)
+        await this.prisma.interaction.create({
+          data: {
+            conversationId: payload.conversationId,
+            direction: 'OUTBOUND',
+            type: 'TEXT',
+            content: response.content,
+            role: 'assistant'
+          }
+        });
+
         const outEvent = new ResponseGeneratedEvent(
           payload.tenantId,
           payload.conversationId,
@@ -45,16 +58,33 @@ export class LlmListenerService {
         this.logger.log(`Evento response.generated despachado al Event Bus.`);
       }
 
-      // Si el LLM devolvió tool calls, activamos el Skill Engine
+      // Si el LLM devolvió tool calls, los guardamos en la DB y activamos el Skill Engine
       if (response.toolCalls && response.toolCalls.length > 0) {
+        // Guardar el assistant tool call en la DB
+        await this.prisma.interaction.create({
+          data: {
+            conversationId: payload.conversationId,
+            direction: 'OUTBOUND',
+            type: 'TOOL_CALL',
+            content: '',
+            role: 'assistant',
+            toolCalls: response.toolCalls
+          }
+        });
+
         for (const call of response.toolCalls) {
           const toolEvent = new ToolCalledEvent(
             payload.tenantId,
             payload.conversationId,
             payload.contactId,
+            call.id,
             call.name,
             call.arguments
           );
+          // Podemos extender ToolCalledEvent para pasar el tool_call_id real si la API lo expone,
+          // pero por simplicidad de este MVP, lo pasaremos si lo tenemos. Aquí asumo que la API lo mapea.
+          // Como HermesClientService formatea a `name` y `arguments`, agregaremos `id` temporalmente si existiera.
+          // Por ahora, asumiremos que el ID se pasa, o generaremos uno localmente.
           this.eventEmitter.emit('tool.called', toolEvent);
           this.logger.log(`Evento tool.called despachado para la tool: ${call.name}`);
         }

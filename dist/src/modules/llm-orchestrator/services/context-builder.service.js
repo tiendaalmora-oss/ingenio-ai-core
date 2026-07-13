@@ -22,7 +22,7 @@ let ContextBuilderService = ContextBuilderService_1 = class ContextBuilderServic
         this.prisma = prisma;
         this.kosLoader = kosLoader;
     }
-    async buildContext(tenantId, contactId, content) {
+    async buildContext(tenantId, contactId, conversationId, content) {
         const kosBundle = await this.kosLoader.load(tenantId);
         let systemInstructions = `[SYSTEM KOS]\n`;
         for (const [key, value] of Object.entries(kosBundle)) {
@@ -51,16 +51,32 @@ let ContextBuilderService = ContextBuilderService_1 = class ContextBuilderServic
         else {
             this.logger.log(`No se encontró Business Memory para el contacto ${contactId}. Procediendo en blanco.`);
         }
+        const rawHistory = await this.prisma.interaction.findMany({
+            where: { conversationId },
+            orderBy: { timestamp: 'desc' },
+            take: 10,
+        });
+        const history = rawHistory.reverse();
         const messages = [
             {
                 role: "system",
                 content: `${systemInstructions}\n\n${memoryContext}\n\nActúa de acuerdo a las instrucciones del KOS. No inventes información que no esté en tu configuración.`
-            },
-            {
-                role: "user",
-                content: content
             }
         ];
+        for (const msg of history) {
+            if (msg.role === 'tool') {
+                messages.push({ role: msg.role, content: msg.content, tool_call_id: msg.toolCallId });
+            }
+            else if (msg.role === 'assistant' && msg.toolCalls) {
+                messages.push({ role: msg.role, content: msg.content || null, tool_calls: msg.toolCalls });
+            }
+            else {
+                messages.push({
+                    role: msg.role || (msg.direction === 'INBOUND' ? 'user' : 'assistant'),
+                    content: msg.content
+                });
+            }
+        }
         return messages;
     }
 };

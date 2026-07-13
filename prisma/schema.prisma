@@ -47,6 +47,9 @@ model Interaction {
   direction      String       // INBOUND, OUTBOUND
   type           String       // TEXT, AUDIO, IMAGE
   content        String
+  role           String?      // user, assistant, tool
+  toolCalls      Json?
+  toolCallId     String?
   timestamp      DateTime     @default(now())
 }
 

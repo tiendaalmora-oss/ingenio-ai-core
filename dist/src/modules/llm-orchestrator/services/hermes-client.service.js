@@ -43,6 +43,7 @@ let HermesClientService = HermesClientService_1 = class HermesClientService {
                     }
                     catch (e) { }
                     return {
+                        id: tc.id,
                         name: tc.function.name,
                         arguments: args
                     };
