@@ -13,11 +13,12 @@ datasource db {
 }
 
 model Tenant {
-  id              String           @id @default(uuid())
-  name            String
-  contacts        Contact[]
-  knowledgeBundle KnowledgeBundle?
-  createdAt       DateTime         @default(now())
+  id                   String           @id @default(uuid())
+  name                 String
+  contacts             Contact[]
+  knowledgeBundle      KnowledgeBundle?
+  currentBundleVersion String?
+  createdAt            DateTime         @default(now())
 }
 
 model Contact {
