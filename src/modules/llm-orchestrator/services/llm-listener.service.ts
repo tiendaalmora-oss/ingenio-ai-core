@@ -26,6 +26,7 @@ export class LlmListenerService {
       const masterPrompt = await this.contextBuilder.buildContext(
         payload.tenantId, 
         payload.contactId, 
+        payload.conversationId,
         payload.content
       );
 

@@ -28,9 +28,7 @@ export class KosLoaderService {
 
   private getFallbackBundle(): any {
     return {
-      empresa: "Desconocida",
-      tono: "Formal, neutral y de asistencia técnica",
-      instrucciones: "Eres un asistente de configuración. Dile al usuario amablemente que el sistema está funcionando pero que el Tenant aún no tiene configurado su Knowledge Bundle en la base de datos. No intentes vender ningún producto ni inventes información comercial."
+      instrucciones: "El Knowledge Bundle del tenant aún no fue configurado."
     };
   }
 }
