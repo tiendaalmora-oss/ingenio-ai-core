@@ -18,6 +18,7 @@ const llm_orchestrator_module_1 = require("./modules/llm-orchestrator/llm-orches
 const outbound_engine_module_1 = require("./modules/outbound-engine/outbound-engine.module");
 const skill_engine_module_1 = require("./modules/skill-engine/skill-engine.module");
 const database_module_1 = require("./shared/database/database.module");
+const business_studio_module_1 = require("./modules/business-studio/business-studio.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -35,6 +36,7 @@ exports.AppModule = AppModule = __decorate([
             outbound_engine_module_1.OutboundEngineModule,
             skill_engine_module_1.SkillEngineModule,
             fake_module_1.FakeModule,
+            business_studio_module_1.BusinessStudioModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

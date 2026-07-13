@@ -9,6 +9,7 @@ import { LlmOrchestratorModule } from './modules/llm-orchestrator/llm-orchestrat
 import { OutboundEngineModule } from './modules/outbound-engine/outbound-engine.module';
 import { SkillEngineModule } from './modules/skill-engine/skill-engine.module';
 import { DatabaseModule } from './shared/database/database.module';
+import { BusinessStudioModule } from './modules/business-studio/business-studio.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { DatabaseModule } from './shared/database/database.module';
     OutboundEngineModule,
     SkillEngineModule,
     FakeModule,
+    BusinessStudioModule,
   ],
   controllers: [AppController],
   providers: [AppService],
