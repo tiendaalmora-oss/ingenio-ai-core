@@ -8,18 +8,24 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LlmOrchestratorModule = void 0;
 const common_1 = require("@nestjs/common");
+const llm_listener_service_1 = require("./services/llm-listener.service");
 const context_builder_service_1 = require("./services/context-builder.service");
 const hermes_client_service_1 = require("./services/hermes-client.service");
-const llm_listener_service_1 = require("./services/llm-listener.service");
 const kos_loader_service_1 = require("./services/kos-loader.service");
+const database_module_1 = require("../../shared/database/database.module");
+const funnel_engine_module_1 = require("../funnel-engine/funnel-engine.module");
 let LlmOrchestratorModule = class LlmOrchestratorModule {
 };
 exports.LlmOrchestratorModule = LlmOrchestratorModule;
 exports.LlmOrchestratorModule = LlmOrchestratorModule = __decorate([
     (0, common_1.Module)({
-        imports: [],
-        providers: [context_builder_service_1.ContextBuilderService, hermes_client_service_1.HermesClientService, llm_listener_service_1.LlmListenerService, kos_loader_service_1.KosLoaderService],
-        exports: [],
+        imports: [database_module_1.DatabaseModule, funnel_engine_module_1.FunnelEngineModule],
+        providers: [
+            llm_listener_service_1.LlmListenerService,
+            context_builder_service_1.ContextBuilderService,
+            hermes_client_service_1.HermesClientService,
+            kos_loader_service_1.KosLoaderService
+        ]
     })
 ], LlmOrchestratorModule);
 //# sourceMappingURL=llm-orchestrator.module.js.map

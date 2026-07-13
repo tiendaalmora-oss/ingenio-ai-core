@@ -19,6 +19,8 @@ const outbound_engine_module_1 = require("./modules/outbound-engine/outbound-eng
 const skill_engine_module_1 = require("./modules/skill-engine/skill-engine.module");
 const database_module_1 = require("./shared/database/database.module");
 const business_studio_module_1 = require("./modules/business-studio/business-studio.module");
+const health_module_1 = require("./modules/health/health.module");
+const funnel_engine_module_1 = require("./modules/funnel-engine/funnel-engine.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -32,11 +34,13 @@ exports.AppModule = AppModule = __decorate([
             database_module_1.DatabaseModule,
             crm_module_1.CrmModule,
             conversation_module_1.ConversationModule,
+            funnel_engine_module_1.FunnelEngineModule,
             llm_orchestrator_module_1.LlmOrchestratorModule,
             outbound_engine_module_1.OutboundEngineModule,
             skill_engine_module_1.SkillEngineModule,
             fake_module_1.FakeModule,
             business_studio_module_1.BusinessStudioModule,
+            health_module_1.HealthModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

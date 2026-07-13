@@ -10,6 +10,8 @@ import { OutboundEngineModule } from './modules/outbound-engine/outbound-engine.
 import { SkillEngineModule } from './modules/skill-engine/skill-engine.module';
 import { DatabaseModule } from './shared/database/database.module';
 import { BusinessStudioModule } from './modules/business-studio/business-studio.module';
+import { HealthModule } from './modules/health/health.module';
+import { FunnelEngineModule } from './modules/funnel-engine/funnel-engine.module';
 
 @Module({
   imports: [
@@ -20,11 +22,13 @@ import { BusinessStudioModule } from './modules/business-studio/business-studio.
     DatabaseModule,
     CrmModule,
     ConversationModule,
+    FunnelEngineModule,
     LlmOrchestratorModule,
     OutboundEngineModule,
     SkillEngineModule,
     FakeModule,
     BusinessStudioModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -22,7 +22,7 @@ let ContextBuilderService = ContextBuilderService_1 = class ContextBuilderServic
         this.prisma = prisma;
         this.kosLoader = kosLoader;
     }
-    async buildContext(tenantId, contactId, conversationId, content) {
+    async buildContext(tenantId, contactId, conversationId, content, funnelInstruction = null) {
         const kosBundle = await this.kosLoader.load(tenantId);
         let systemInstructions = `[SYSTEM KOS]\n`;
         for (const [key, value] of Object.entries(kosBundle)) {
@@ -32,6 +32,9 @@ let ContextBuilderService = ContextBuilderService_1 = class ContextBuilderServic
             else {
                 systemInstructions += `- ${key.toUpperCase()}: ${value}\n`;
             }
+        }
+        if (funnelInstruction) {
+            systemInstructions += `\n\n${funnelInstruction}\n\n`;
         }
         const memory = await this.prisma.businessMemory.findUnique({
             where: { contactId },

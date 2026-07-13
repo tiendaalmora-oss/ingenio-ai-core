@@ -11,7 +11,13 @@ export class ContextBuilderService {
     private readonly kosLoader: KosLoaderService
   ) {}
 
-  async buildContext(tenantId: string, contactId: string, conversationId: string, content: string): Promise<any[]> {
+  async buildContext(
+    tenantId: string, 
+    contactId: string, 
+    conversationId: string, 
+    content: string,
+    funnelInstruction: string | null = null
+  ): Promise<any[]> {
     // 1. Obtener KOS Bundle del tenant dinámicamente
     const kosBundle = await this.kosLoader.load(tenantId);
     
@@ -24,7 +30,11 @@ export class ContextBuilderService {
         systemInstructions += `- ${key.toUpperCase()}: ${value}\n`;
       }
     }
-    
+
+    if (funnelInstruction) {
+      systemInstructions += `\n\n${funnelInstruction}\n\n`;
+    }
+
     // 2. Obtener Business Memory del contacto
     const memory = await this.prisma.businessMemory.findUnique({
       where: { contactId },

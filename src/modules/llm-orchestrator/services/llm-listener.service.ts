@@ -7,6 +7,7 @@ import { InteractionReceivedEvent } from '../../conversation';
 import { ResponseGeneratedEvent } from '../events/out/response-generated.event';
 import { ToolCalledEvent } from '../events/out/tool-called.event';
 import { PrismaService } from '../../../shared/database/prisma.service';
+import { FunnelEngineService } from '../../funnel-engine/funnel-engine.service';
 
 @Injectable()
 export class LlmListenerService {
@@ -17,6 +18,7 @@ export class LlmListenerService {
     private readonly hermesClient: HermesClientService,
     private readonly eventEmitter: EventEmitter2,
     private readonly prisma: PrismaService,
+    private readonly funnelEngine: FunnelEngineService,
   ) {}
 
   @OnEvent('interaction.received', { async: true })
@@ -24,12 +26,16 @@ export class LlmListenerService {
     this.logger.log(`LLM Orchestrator atrapó interacción entrante (Conv: ${payload.conversationId})`);
     
     try {
-      // 1. Context Builder
+      // 0. ¿Existe un Funnel para esta conversación o mensaje?
+      const funnelInstruction = await this.funnelEngine.evaluateInteraction(payload);
+
+      // 1. Context Builder (Agente Universal + Instrucciones de Funnel si existen)
       const masterPrompt = await this.contextBuilder.buildContext(
         payload.tenantId, 
         payload.contactId, 
         payload.conversationId,
-        payload.content
+        payload.content,
+        funnelInstruction
       );
 
       // 2. Llamar a Hermes
