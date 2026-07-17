@@ -23,6 +23,7 @@ export class ReceiveMessageService {
   ) {}
 
   async execute(tenantId: string, contactId: string, content: string): Promise<void> {
+    console.log('[2] ReceiveMessageService ejecutado');
     // 0. Asegurar que el Contacto y Tenant existan (Fix FK Constraint)
     await this.conversationRepo.ensureContactExists(tenantId, contactId);
 
@@ -36,6 +37,7 @@ export class ReceiveMessageService {
     }
 
     await this.conversationRepo.save(conversation);
+    console.log('[4] Conversation creada');
 
     // 2. Emitir evento de conversación si hubo cambios
     if (conversationCreated) {
@@ -56,6 +58,7 @@ export class ReceiveMessageService {
     );
 
     await this.interactionRepo.save(interaction);
+    console.log('[3] Interaction creada');
 
     // 4. Emitir el evento de interacción
     this.eventEmitter.emit(
@@ -64,5 +67,6 @@ export class ReceiveMessageService {
     );
 
     this.logger.log(`Interaction ${interaction.id} received and broadcasted.`);
+    console.log('[9] Conversation Hub actualizado');
   }
 }

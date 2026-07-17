@@ -1,69 +1,92 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
+import { IAiProvider } from '../providers/ai-provider.interface';
+import type { AiMessage, AiResponse } from '../providers/ai-provider.interface';
+import { AI_PROVIDER_TOKEN } from '../providers/ai-provider.factory';
+
+// Herramientas disponibles para el Agente Universal
+const HERMES_TOOLS = [
+  {
+    type: 'function' as const,
+    function: {
+      name: 'update_business_memory',
+      description: 'Actualiza la memoria del lead en el CRM con información detectada en la conversación. Úsala siempre que el cliente mencione su empresa, intereses, objeciones, o cualquier dato relevante.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Nombre completo del contacto' },
+          company: { type: 'string', description: 'Nombre de la empresa o negocio' },
+          interests: { type: 'array', items: { type: 'string' }, description: 'Productos o servicios de interés' },
+          objections: { type: 'array', items: { type: 'string' }, description: 'Objeciones o preocupaciones expresadas' },
+          leadStatus: { type: 'string', enum: ['NEW', 'CONTACTED', 'WARM', 'HOT', 'DEMO', 'OFFER', 'SALE', 'CLIENT'], description: 'Estado actual del lead' },
+          tags: { type: 'array', items: { type: 'string' }, description: 'Etiquetas relevantes' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'create_task',
+      description: 'Crea una tarea de seguimiento en el CRM para este contacto.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Descripción de la tarea' },
+          dueDate: { type: 'string', description: 'Fecha de vencimiento en formato ISO 8601' },
+        },
+        required: ['title'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'handoff_to_human',
+      description: 'Transfiere la conversación a un agente humano cuando la situación lo requiere.',
+      parameters: {
+        type: 'object',
+        properties: {
+          reason: { type: 'string', description: 'Motivo del traspaso' },
+        },
+        required: ['reason'],
+      },
+    },
+  },
+];
 
 export interface LLMResponse {
   content?: string;
-  toolCalls?: {
-    id: string;
-    name: string;
-    arguments: any;
-  }[];
+  toolCalls?: { id: string; name: string; arguments: any }[];
 }
 
 @Injectable()
 export class HermesClientService {
   private readonly logger = new Logger(HermesClientService.name);
 
-  async generateResponse(messages: any[]): Promise<LLMResponse> {
-    const hermesUrl = process.env.HERMES_BASE_URL || 'http://localhost:4000/api/v1/hermes';
-    const apiKey = process.env.HERMES_API_KEY || '';
+  constructor(
+    @Inject(AI_PROVIDER_TOKEN)
+    private readonly aiProvider: IAiProvider,
+  ) {}
 
-    this.logger.log(`LLM Inference Triggered contra Hermes API real en ${hermesUrl}...`);
-
-    const model = process.env.HERMES_MODEL || 'hermes';
-
+  async generateResponse(messages: AiMessage[]): Promise<LLMResponse> {
     try {
-      const response = await fetch(`${hermesUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-          'X-Hermes-Session-Id': 'ingenio-core-default-session'
-        },
-        body: JSON.stringify({
-          model,
-          messages: messages
-        })
+      const response: AiResponse = await this.aiProvider.chat(messages, {
+        tools: HERMES_TOOLS,
+        temperature: 0.4,
       });
 
-      if (!response.ok) {
-        throw new Error(`Hermes API respondió con error: ${response.status} ${response.statusText}`);
-      }
-
-      const result = await response.json();
-      const choice = result.choices?.[0]?.message;
-      
-      let parsedToolCalls = undefined;
-      if (choice?.tool_calls && choice.tool_calls.length > 0) {
-        parsedToolCalls = choice.tool_calls.map((tc: any) => {
-          let args = {};
-          try {
-            args = typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments;
-          } catch(e) {}
-          return {
-            id: tc.id,
-            name: tc.function.name,
-            arguments: args
-          };
-        });
-      }
+      this.logger.log(`Response received from ${response.provider} | model: ${response.model}`);
 
       return {
-        content: choice?.content || undefined,
-        toolCalls: parsedToolCalls
+        content: response.content,
+        toolCalls: response.toolCalls,
       };
     } catch (error: any) {
-      this.logger.error('Error llamando a la API de Hermes', error.message);
-      return { content: `(Hermes Auto-Response Fallback): Ocurrió un error conectando con la API de Hermes.` };
+      this.logger.error('Error calling AI provider', error.message);
+      return {
+        content: `Hermes no pudo procesar tu consulta en este momento. Por favor intenta de nuevo.`,
+      };
     }
   }
 }

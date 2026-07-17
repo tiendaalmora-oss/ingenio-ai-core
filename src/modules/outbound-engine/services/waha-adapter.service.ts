@@ -1,14 +1,24 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../../../shared/database/prisma.service';
 
 @Injectable()
 export class WahaAdapterService {
   private readonly logger = new Logger(WahaAdapterService.name);
 
-  async sendMessage(contactId: string, content: string): Promise<string> {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async sendMessage(tenantId: string, contactId: string, content: string): Promise<string> {
     this.logger.log(`Enviando mensaje vía WAHA a ${contactId}...`);
     
-    const wahaUrl = process.env.WAHA_API_URL || 'http://localhost:3001';
-    const session = process.env.WAHA_SESSION || 'default';
+    const wahaUrl = process.env.WAHA_API_URL;
+    if (!wahaUrl) {
+      throw new Error('WAHA_API_URL is not configured');
+    }
+    
+    // Buscar wahaSession real
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    const session = tenant?.wahaSession || 'default';
+    
     const apiKey = process.env.WAHA_API_KEY || '';
 
     const headers: any = {

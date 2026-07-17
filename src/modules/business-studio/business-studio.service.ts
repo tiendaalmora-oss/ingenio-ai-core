@@ -21,6 +21,13 @@ export class BusinessStudioService {
   }
 
   async updateSection(tenantId: string, section: string, data: any) {
+    // 1. Ensure Tenant exists to avoid FK error
+    await this.prisma.tenant.upsert({
+      where: { id: tenantId },
+      update: {},
+      create: { id: tenantId, name: tenantId }
+    });
+
     const bundle = await this.prisma.knowledgeBundle.findUnique({
       where: { tenantId }
     });

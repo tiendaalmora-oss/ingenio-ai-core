@@ -1,10 +1,14 @@
 import { Controller, Get, Post, Body, Query, Res, HttpStatus } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { ReceiveMessageService } from './receive-message.service';
+import { TenantResolverService } from '../../tenant/services/tenant-resolver.service';
 
 @Controller('webhooks/meta')
 export class MetaWebhookController {
-  constructor(private readonly receiveMessageService: ReceiveMessageService) {}
+  constructor(
+    private readonly receiveMessageService: ReceiveMessageService,
+    private readonly tenantResolver: TenantResolverService
+  ) {}
 
   @Get()
   verifyToken(@Query() query: any, @Res() res: FastifyReply) {
@@ -18,6 +22,7 @@ export class MetaWebhookController {
 
   @Post()
   async receiveMessage(@Body() body: any, @Res() res: FastifyReply) {
+    console.log('[1] Webhook recibido');
     console.log("WEBHOOK RECIBIDO");
     console.log(JSON.stringify(body, null, 2));
 
@@ -26,8 +31,8 @@ export class MetaWebhookController {
 
     // 2. Procesamiento Asíncrono
     try {
-      // Parsing real de WAHA
-      let tenantId = body.session || 'default'; // Multi-tenant resuelto por sesión de WAHA
+      // Multi-tenant resuelto dinámicamente por la sesión de WAHA
+      let tenantId = await this.tenantResolver.resolveFromWahaSession(body.session);
       let contactId = '';
       let content = '';
 

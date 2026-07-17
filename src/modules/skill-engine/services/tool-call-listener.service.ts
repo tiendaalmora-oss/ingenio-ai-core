@@ -25,6 +25,7 @@ export class ToolCallListenerService {
       switch (payload.toolName) {
         case 'update_business_memory':
           this.logger.log(`Actualizando memoria de ${payload.contactId} con: ${JSON.stringify(payload.toolArguments)}`);
+          console.log('[6] Evento memory.updated emitido');
           this.eventEmitter.emit(
             'memory.updated',
             new MemoryUpdatedEvent(payload.tenantId, payload.contactId, payload.toolArguments)
@@ -59,11 +60,11 @@ export class ToolCallListenerService {
       await this.prisma.interaction.create({
         data: {
           conversationId: payload.conversationId,
-          direction: 'INBOUND', // Es interno, pero entra al LLM
+          direction: 'INBOUND',
           type: 'TOOL_RESULT',
           content: toolResultStr,
           role: 'tool',
-          toolCallId: payload.toolName // MVP: Usamos el nombre como ID si la API no provee tool_call_id
+          toolCallId: payload.toolCallId, // Real tool_call_id from the LLM
         }
       });
 

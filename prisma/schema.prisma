@@ -15,6 +15,7 @@ datasource db {
 model Tenant {
   id                   String           @id @default(uuid())
   name                 String
+  wahaSession          String?          @unique
   contacts             Contact[]
   knowledgeBundle      KnowledgeBundle?
   currentBundleVersion String?
@@ -56,9 +57,9 @@ model Interaction {
 }
 
 model BusinessMemory {
-  id              String   @id @default(uuid())
-  contactId       String   @unique
-  contact         Contact  @relation(fields: [contactId], references: [id])
+  id              String           @id @default(uuid())
+  contactId       String           @unique
+  contact         Contact          @relation(fields: [contactId], references: [id])
   name            String?
   company         String?
   interests       String[]
@@ -66,7 +67,23 @@ model BusinessMemory {
   objections      String[]
   leadStatus      String?
   tags            String[]
-  updatedAt       DateTime @updatedAt
+  updatedAt       DateTime         @updatedAt
+  auditLogs       MemoryAuditLog[]
+}
+
+model MemoryAuditLog {
+  id             String   @id @default(uuid())
+  contactId      String
+  tenantId       String?
+  field          String   // which field changed: name, company, interests, etc.
+  previousValue  String?  // JSON-serialized previous value
+  newValue       String?  // JSON-serialized new value
+  source         String   @default("hermes") // hermes | human | import | webhook
+  skill          String?  // e.g. update_business_memory
+  confidence     Float    @default(0.85)
+  conversationId String?
+  createdAt      DateTime @default(now())
+  memory         BusinessMemory @relation(fields: [contactId], references: [contactId])
 }
 
 model Task {

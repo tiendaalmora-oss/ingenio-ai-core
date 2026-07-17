@@ -26,17 +26,18 @@ export class OutboundListenerService {
       // Por practicidad técnica, leemos directamente el contactId.
       const conversation = await this.prisma.conversation.findUnique({
         where: { id: payload.conversationId },
-        select: { contactId: true },
+        select: { contactId: true, contact: { select: { tenantId: true } } },
       });
 
       if (!conversation) {
-        throw new Error(`Conversación ${payload.conversationId} no encontrada.`);
+        throw new Error(`Conversacin ${payload.conversationId} no encontrada.`);
       }
 
       const channel = 'WAHA'; // Hardcodeado a WAHA por orden del RFC-0005
 
       // 2. Enviar usando el adaptador
       const messageId = await this.wahaAdapter.sendMessage(
+        conversation.contact.tenantId,
         conversation.contactId,
         payload.generatedContent
       );

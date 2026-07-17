@@ -12,6 +12,8 @@ import { DatabaseModule } from './shared/database/database.module';
 import { BusinessStudioModule } from './modules/business-studio/business-studio.module';
 import { HealthModule } from './modules/health/health.module';
 import { FunnelEngineModule } from './modules/funnel-engine/funnel-engine.module';
+import { MemoryModule } from './modules/memory/memory.module';
+import { TenantModule } from './modules/tenant/tenant.module';
 
 @Module({
   imports: [
@@ -29,6 +31,8 @@ import { FunnelEngineModule } from './modules/funnel-engine/funnel-engine.module
     FakeModule,
     BusinessStudioModule,
     HealthModule,
+    MemoryModule,
+    TenantModule,
   ],
   controllers: [AppController],
   providers: [AppService],
