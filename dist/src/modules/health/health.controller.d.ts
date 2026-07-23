@@ -1,6 +1,11 @@
 import { HealthService } from './health.service';
 export declare class HealthController {
     private readonly healthService;
+    dump(): Promise<{
+        tenants: any;
+        contacts: any;
+        conversations: any;
+    }>;
     constructor(healthService: HealthService);
     getSystemStatus(): Promise<{
         metrics: {

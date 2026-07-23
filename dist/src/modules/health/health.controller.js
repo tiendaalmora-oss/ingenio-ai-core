@@ -14,6 +14,7 @@ const common_1 = require("@nestjs/common");
 const health_service_1 = require("./health.service");
 let HealthController = class HealthController {
     healthService;
+    async dump() { const [t, c, co] = await Promise.all([this.prisma.tenant.findMany(), this.prisma.contact.findMany(), this.prisma.conversation.findMany()]); return { tenants: t, contacts: c, conversations: co }; }
     constructor(healthService) {
         this.healthService = healthService;
     }
@@ -22,6 +23,12 @@ let HealthController = class HealthController {
     }
 };
 exports.HealthController = HealthController;
+__decorate([
+    (0, common_1.Get)('debug/dump'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], HealthController.prototype, "dump", null);
 __decorate([
     (0, common_1.Get)('system-status'),
     __metadata("design:type", Function),
