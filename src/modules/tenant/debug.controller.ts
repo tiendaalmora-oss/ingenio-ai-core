@@ -54,6 +54,7 @@ export class DebugTenantController {
         success: !!resolveResult,
         result: resolveResult,
         error: resolveError,
+      },
     };
   }
 }
