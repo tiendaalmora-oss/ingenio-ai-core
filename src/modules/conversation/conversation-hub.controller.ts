@@ -32,6 +32,28 @@ export class ConversationHubController {
       };
     }
 
+    console.log('tenant recibido:', tenantId);
+    console.log(where);
+    
+    const totalCount = await this.prisma.conversation.count();
+    console.log('Conversaciones totales:', totalCount);
+    
+    // El groupBy lo hacemos a nivel de contactId o usando findMany si tenantId no está directamente en conversation
+    // Sin embargo, como el schema puede no tener tenantId directo en conversation, veamos:
+    // conversation -> contact -> tenantId
+    const conversacionesRaw = await this.prisma.conversation.findMany({ take: 5, include: { contact: true } });
+    const porTenantMap = conversacionesRaw.reduce((acc, c) => {
+      const t = c.contact?.tenantId || 'NO_TENANT';
+      acc[t] = (acc[t] || 0) + 1;
+      return acc;
+    }, {});
+    console.log('porTenant (calculado de las ultimas 5 o total real):', porTenantMap);
+    
+    const conversaciones = await this.prisma.conversation.findMany({
+      take: 5
+    });
+    console.log(conversaciones);
+
     const [total, conversations] = await Promise.all([
       this.prisma.conversation.count({ where }),
       this.prisma.conversation.findMany({
