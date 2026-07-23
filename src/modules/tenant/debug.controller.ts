@@ -21,7 +21,7 @@ export class DebugTenantController {
     });
 
     // 2. Counts per tenant
-    const counts = [];
+    const counts: any[] = [];
     for (const tenant of tenants) {
       const contacts = await this.prisma.contact.count({ where: { tenantId: tenant.id } });
       const conversations = await this.prisma.conversation.count({ where: { contact: { tenantId: tenant.id } } });
