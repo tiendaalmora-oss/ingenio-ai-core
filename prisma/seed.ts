@@ -11,9 +11,17 @@ async function main() {
   let mainTenantId;
 
   if (existingTenants.length > 0) {
-    console.log('Tenants already exist. Skipping tenant creation.');
-    // Usamos el primero que exista para asegurar que haya un KnowledgeBundle básico
+    console.log('Tenants already exist. Reusing the first tenant.');
     mainTenantId = existingTenants[0].id;
+
+    // Ensure the existing tenant has the correct wahaSession
+    if (existingTenants[0].wahaSession !== 'ferreos') {
+      console.log('Updating existing tenant to have wahaSession: ferreos');
+      await prisma.tenant.update({
+        where: { id: mainTenantId },
+        data: { wahaSession: 'ferreos' }
+      });
+    }
   } else {
     console.log('No tenants found. Creating the main default tenant...');
     const newTenant = await prisma.tenant.create({
