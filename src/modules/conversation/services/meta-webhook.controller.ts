@@ -50,6 +50,12 @@ export class MetaWebhookController {
 
         contactId = body.payload.from;
         content = body.payload.body;
+
+        // Ignorar mensajes de grupos (los IDs de grupos terminan en @g.us)
+        if (contactId && contactId.endsWith('@g.us')) {
+          console.log(`Ignorando mensaje de grupo: ${contactId}`);
+          return;
+        }
       } else {
         // Fallback por si usamos un payload de prueba directo
         contactId = body.contactId || 'contact-demo-123';
