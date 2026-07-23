@@ -57,4 +57,24 @@ export class DebugTenantController {
       },
     };
   }
+
+  @Get('fix')
+  async fixTenantSession() {
+    try {
+      const updatedTenant = await this.prisma.tenant.update({
+        where: { id: 'tenant-demo-123' },
+        data: { wahaSession: 'ferreos' },
+      });
+      return {
+        success: true,
+        message: "¡Tenant actualizado exitosamente!",
+        tenant: updatedTenant
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
 }
