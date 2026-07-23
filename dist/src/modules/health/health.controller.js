@@ -12,11 +12,21 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.HealthController = void 0;
 const common_1 = require("@nestjs/common");
 const health_service_1 = require("./health.service");
+const prisma_service_1 = require("../../shared/database/prisma.service");
 let HealthController = class HealthController {
     healthService;
-    async dump() { const [t, c, co] = await Promise.all([this.prisma.tenant.findMany(), this.prisma.contact.findMany(), this.prisma.conversation.findMany()]); return { tenants: t, contacts: c, conversations: co }; }
-    constructor(healthService) {
+    prisma;
+    constructor(healthService, prisma) {
         this.healthService = healthService;
+        this.prisma = prisma;
+    }
+    async dump() {
+        const [t, c, co] = await Promise.all([
+            this.prisma.tenant.findMany(),
+            this.prisma.contact.findMany(),
+            this.prisma.conversation.findMany()
+        ]);
+        return { tenants: t, contacts: c, conversations: co };
     }
     async getSystemStatus() {
         return this.healthService.getSystemStatus();
@@ -37,6 +47,7 @@ __decorate([
 ], HealthController.prototype, "getSystemStatus", null);
 exports.HealthController = HealthController = __decorate([
     (0, common_1.Controller)('health'),
-    __metadata("design:paramtypes", [health_service_1.HealthService])
+    __metadata("design:paramtypes", [health_service_1.HealthService,
+        prisma_service_1.PrismaService])
 ], HealthController);
 //# sourceMappingURL=health.controller.js.map
