@@ -34,6 +34,7 @@ let ReceiveMessageService = ReceiveMessageService_1 = class ReceiveMessageServic
         this.eventEmitter = eventEmitter;
     }
     async execute(tenantId, contactId, content) {
+        console.log('[2] ReceiveMessageService ejecutado');
         await this.conversationRepo.ensureContactExists(tenantId, contactId);
         let conversation = await this.conversationRepo.findActiveByContact(contactId);
         let conversationCreated = false;
@@ -42,13 +43,16 @@ let ReceiveMessageService = ReceiveMessageService_1 = class ReceiveMessageServic
             conversationCreated = true;
         }
         await this.conversationRepo.save(conversation);
+        console.log('[4] Conversation creada');
         if (conversationCreated) {
             this.eventEmitter.emit('conversation.updated', new conversation_updated_event_1.ConversationUpdatedEvent(tenantId, conversation.id, conversation.status));
         }
         const interaction = new interaction_entity_1.Interaction((0, crypto_1.randomUUID)(), conversation.id, 'INBOUND', 'TEXT', content, new Date());
         await this.interactionRepo.save(interaction);
+        console.log('[3] Interaction creada');
         this.eventEmitter.emit('interaction.received', new interaction_received_event_1.InteractionReceivedEvent(tenantId, conversation.id, interaction.id, contactId, content));
         this.logger.log(`Interaction ${interaction.id} received and broadcasted.`);
+        console.log('[9] Conversation Hub actualizado');
     }
 };
 exports.ReceiveMessageService = ReceiveMessageService;

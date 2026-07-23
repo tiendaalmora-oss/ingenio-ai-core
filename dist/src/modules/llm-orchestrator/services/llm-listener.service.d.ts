@@ -4,13 +4,15 @@ import { HermesClientService } from './hermes-client.service';
 import { InteractionReceivedEvent } from '../../conversation';
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { FunnelEngineService } from '../../funnel-engine/funnel-engine.service';
+import { RuntimeEngineService } from '../../funnel-engine/runtime/runtime-engine.service';
 export declare class LlmListenerService {
     private readonly contextBuilder;
     private readonly hermesClient;
     private readonly eventEmitter;
     private readonly prisma;
     private readonly funnelEngine;
+    private readonly runtimeEngine;
     private readonly logger;
-    constructor(contextBuilder: ContextBuilderService, hermesClient: HermesClientService, eventEmitter: EventEmitter2, prisma: PrismaService, funnelEngine: FunnelEngineService);
+    constructor(contextBuilder: ContextBuilderService, hermesClient: HermesClientService, eventEmitter: EventEmitter2, prisma: PrismaService, funnelEngine: FunnelEngineService, runtimeEngine: RuntimeEngineService);
     handleInteraction(payload: InteractionReceivedEvent): Promise<void>;
 }

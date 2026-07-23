@@ -21,6 +21,8 @@ const database_module_1 = require("./shared/database/database.module");
 const business_studio_module_1 = require("./modules/business-studio/business-studio.module");
 const health_module_1 = require("./modules/health/health.module");
 const funnel_engine_module_1 = require("./modules/funnel-engine/funnel-engine.module");
+const memory_module_1 = require("./modules/memory/memory.module");
+const tenant_module_1 = require("./modules/tenant/tenant.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -41,6 +43,8 @@ exports.AppModule = AppModule = __decorate([
             fake_module_1.FakeModule,
             business_studio_module_1.BusinessStudioModule,
             health_module_1.HealthModule,
+            memory_module_1.MemoryModule,
+            tenant_module_1.TenantModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

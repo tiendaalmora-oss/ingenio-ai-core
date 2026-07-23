@@ -31,6 +31,11 @@ let BusinessStudioService = class BusinessStudioService {
         return bundle.systemPrompt || {};
     }
     async updateSection(tenantId, section, data) {
+        await this.prisma.tenant.upsert({
+            where: { id: tenantId },
+            update: {},
+            create: { id: tenantId, name: tenantId }
+        });
         const bundle = await this.prisma.knowledgeBundle.findUnique({
             where: { tenantId }
         });

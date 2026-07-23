@@ -21,25 +21,42 @@ const response_generated_event_1 = require("../events/out/response-generated.eve
 const tool_called_event_1 = require("../events/out/tool-called.event");
 const prisma_service_1 = require("../../../shared/database/prisma.service");
 const funnel_engine_service_1 = require("../../funnel-engine/funnel-engine.service");
+const runtime_engine_service_1 = require("../../funnel-engine/runtime/runtime-engine.service");
 let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
     contextBuilder;
     hermesClient;
     eventEmitter;
     prisma;
     funnelEngine;
+    runtimeEngine;
     logger = new common_1.Logger(LlmListenerService_1.name);
-    constructor(contextBuilder, hermesClient, eventEmitter, prisma, funnelEngine) {
+    constructor(contextBuilder, hermesClient, eventEmitter, prisma, funnelEngine, runtimeEngine) {
         this.contextBuilder = contextBuilder;
         this.hermesClient = hermesClient;
         this.eventEmitter = eventEmitter;
         this.prisma = prisma;
         this.funnelEngine = funnelEngine;
+        this.runtimeEngine = runtimeEngine;
     }
     async handleInteraction(payload) {
-        this.logger.log(`LLM Orchestrator atrapó interacción entrante (Conv: ${payload.conversationId})`);
+        this.logger.log(`Executive Loop atrapó interacción entrante (Conv: ${payload.conversationId})`);
         try {
-            const funnelInstruction = await this.funnelEngine.evaluateInteraction(payload);
-            const masterPrompt = await this.contextBuilder.buildContext(payload.tenantId, payload.contactId, payload.conversationId, payload.content, funnelInstruction);
+            const funnel = await this.funnelEngine.findMatchingFunnel(payload);
+            if (funnel) {
+                this.logger.log(`Ejecutando Automation Runtime para el funnel: ${funnel.name}`);
+                const dsl = this.runtimeEngine.parseReactFlowToDsl(funnel.steps);
+                const context = {
+                    tenantId: payload.tenantId,
+                    sessionId: payload.conversationId,
+                    triggerEvent: payload,
+                    state: {},
+                    logs: []
+                };
+                await this.runtimeEngine.executeFlow(dsl, context);
+                return;
+            }
+            this.logger.log(`No hay automatización, ejecutando Agente Universal...`);
+            const masterPrompt = await this.contextBuilder.buildContext(payload.tenantId, payload.contactId, payload.conversationId, payload.content, null);
             const response = await this.hermesClient.generateResponse(masterPrompt);
             if (response.content) {
                 await this.prisma.interaction.create({
@@ -51,9 +68,7 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                         role: 'assistant'
                     }
                 });
-                const outEvent = new response_generated_event_1.ResponseGeneratedEvent(payload.tenantId, payload.conversationId, response.content);
-                this.eventEmitter.emit('response.generated', outEvent);
-                this.logger.log(`Evento response.generated despachado al Event Bus.`);
+                this.eventEmitter.emit('response.generated', new response_generated_event_1.ResponseGeneratedEvent(payload.tenantId, payload.conversationId, response.content));
             }
             if (response.toolCalls && response.toolCalls.length > 0) {
                 await this.prisma.interaction.create({
@@ -67,9 +82,7 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                     }
                 });
                 for (const call of response.toolCalls) {
-                    const toolEvent = new tool_called_event_1.ToolCalledEvent(payload.tenantId, payload.conversationId, payload.contactId, call.id, call.name, call.arguments);
-                    this.eventEmitter.emit('tool.called', toolEvent);
-                    this.logger.log(`Evento tool.called despachado para la tool: ${call.name}`);
+                    this.eventEmitter.emit('tool.called', new tool_called_event_1.ToolCalledEvent(payload.tenantId, payload.conversationId, payload.contactId, call.id, call.name, call.arguments));
                 }
             }
         }
@@ -91,6 +104,7 @@ exports.LlmListenerService = LlmListenerService = LlmListenerService_1 = __decor
         hermes_client_service_1.HermesClientService,
         event_emitter_2.EventEmitter2,
         prisma_service_1.PrismaService,
-        funnel_engine_service_1.FunnelEngineService])
+        funnel_engine_service_1.FunnelEngineService,
+        runtime_engine_service_1.RuntimeEngineService])
 ], LlmListenerService);
 //# sourceMappingURL=llm-listener.service.js.map

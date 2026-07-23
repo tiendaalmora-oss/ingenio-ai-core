@@ -15,10 +15,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.MetaWebhookController = void 0;
 const common_1 = require("@nestjs/common");
 const receive_message_service_1 = require("./receive-message.service");
+const tenant_resolver_service_1 = require("../../tenant/services/tenant-resolver.service");
 let MetaWebhookController = class MetaWebhookController {
     receiveMessageService;
-    constructor(receiveMessageService) {
+    tenantResolver;
+    constructor(receiveMessageService, tenantResolver) {
         this.receiveMessageService = receiveMessageService;
+        this.tenantResolver = tenantResolver;
     }
     verifyToken(query, res) {
         if (query['hub.mode'] === 'subscribe' && query['hub.challenge']) {
@@ -27,11 +30,12 @@ let MetaWebhookController = class MetaWebhookController {
         return res.status(common_1.HttpStatus.BAD_REQUEST).send('Bad Request');
     }
     async receiveMessage(body, res) {
+        console.log('[1] Webhook recibido');
         console.log("WEBHOOK RECIBIDO");
         console.log(JSON.stringify(body, null, 2));
         res.status(common_1.HttpStatus.OK).send('EVENT_RECEIVED');
         try {
-            let tenantId = body.session || 'default';
+            let tenantId = await this.tenantResolver.resolveFromWahaSession(body.session);
             let contactId = '';
             let content = '';
             if (body.event === 'message' || body.event === 'message.any') {
@@ -79,6 +83,7 @@ __decorate([
 ], MetaWebhookController.prototype, "receiveMessage", null);
 exports.MetaWebhookController = MetaWebhookController = __decorate([
     (0, common_1.Controller)('webhooks/meta'),
-    __metadata("design:paramtypes", [receive_message_service_1.ReceiveMessageService])
+    __metadata("design:paramtypes", [receive_message_service_1.ReceiveMessageService,
+        tenant_resolver_service_1.TenantResolverService])
 ], MetaWebhookController);
 //# sourceMappingURL=meta-webhook.controller.js.map

@@ -20,12 +20,14 @@ let BusinessStudioController = class BusinessStudioController {
     constructor(studioService) {
         this.studioService = studioService;
     }
-    async getBundle(headerTenant) {
-        const tenantId = headerTenant || 'ferreos';
+    async getBundle(tenantId) {
+        if (!tenantId)
+            throw new common_1.BadRequestException('x-tenant-id header is required');
         return this.studioService.getBundle(tenantId);
     }
-    async updateSection(section, data, headerTenant) {
-        const tenantId = headerTenant || 'ferreos';
+    async updateSection(section, data, tenantId) {
+        if (!tenantId)
+            throw new common_1.BadRequestException('x-tenant-id header is required');
         return this.studioService.updateSection(tenantId, section, data);
     }
 };

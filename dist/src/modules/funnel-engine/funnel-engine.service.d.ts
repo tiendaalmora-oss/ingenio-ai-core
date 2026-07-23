@@ -4,6 +4,5 @@ export declare class FunnelEngineService {
     private readonly prisma;
     private readonly logger;
     constructor(prisma: PrismaService);
-    evaluateInteraction(payload: InteractionReceivedEvent): Promise<string | null>;
-    private processActiveFunnel;
+    findMatchingFunnel(payload: InteractionReceivedEvent): Promise<any | null>;
 }

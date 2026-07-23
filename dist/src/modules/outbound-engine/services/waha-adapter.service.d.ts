@@ -1,4 +1,7 @@
+import { PrismaService } from '../../../shared/database/prisma.service';
 export declare class WahaAdapterService {
+    private readonly prisma;
     private readonly logger;
-    sendMessage(contactId: string, content: string): Promise<string>;
+    constructor(prisma: PrismaService);
+    sendMessage(tenantId: string, contactId: string, content: string): Promise<string>;
 }

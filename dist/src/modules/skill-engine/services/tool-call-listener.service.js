@@ -34,6 +34,7 @@ let ToolCallListenerService = ToolCallListenerService_1 = class ToolCallListener
             switch (payload.toolName) {
                 case 'update_business_memory':
                     this.logger.log(`Actualizando memoria de ${payload.contactId} con: ${JSON.stringify(payload.toolArguments)}`);
+                    console.log('[6] Evento memory.updated emitido');
                     this.eventEmitter.emit('memory.updated', new memory_updated_event_1.MemoryUpdatedEvent(payload.tenantId, payload.contactId, payload.toolArguments));
                     toolResultStr = JSON.stringify({ status: 'success', message: 'Business Memory actualizada en CRM.' });
                     break;
@@ -58,7 +59,7 @@ let ToolCallListenerService = ToolCallListenerService_1 = class ToolCallListener
                     type: 'TOOL_RESULT',
                     content: toolResultStr,
                     role: 'tool',
-                    toolCallId: payload.toolName
+                    toolCallId: payload.toolCallId,
                 }
             });
             this.logger.log(`Tool ejecutada. Re-activando Executive Loop para conversación ${payload.conversationId}`);

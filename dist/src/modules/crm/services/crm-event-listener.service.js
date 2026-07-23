@@ -21,18 +21,22 @@ let CrmEventListenerService = CrmEventListenerService_1 = class CrmEventListener
         this.prisma = prisma;
     }
     async handleMemoryUpdated(payload) {
+        console.log('[7] CrmEventListener ejecutado');
         this.logger.log(`[CRM] Actualizando Business Memory para Contacto: ${payload.contactId}`);
         try {
             const updates = payload.updates;
+            const before = await this.prisma.businessMemory.findUnique({
+                where: { contactId: payload.contactId },
+            });
             await this.prisma.businessMemory.upsert({
                 where: { contactId: payload.contactId },
                 update: {
-                    name: updates.name,
-                    company: updates.company,
-                    interests: updates.interests,
-                    objections: updates.objections,
-                    leadStatus: updates.leadStatus,
-                    tags: updates.tags,
+                    ...(updates.name !== undefined && { name: updates.name }),
+                    ...(updates.company !== undefined && { company: updates.company }),
+                    ...(updates.interests !== undefined && { interests: updates.interests }),
+                    ...(updates.objections !== undefined && { objections: updates.objections }),
+                    ...(updates.leadStatus !== undefined && { leadStatus: updates.leadStatus }),
+                    ...(updates.tags !== undefined && { tags: updates.tags }),
                 },
                 create: {
                     contactId: payload.contactId,
@@ -44,11 +48,40 @@ let CrmEventListenerService = CrmEventListenerService_1 = class CrmEventListener
                     tags: updates.tags || [],
                 },
             });
+            console.log('[5] BusinessMemory creada o actualizada');
+            console.log('[8] Lead creado');
             if (updates.name) {
                 await this.prisma.contact.update({
                     where: { id: payload.contactId },
-                    data: { name: updates.name }
+                    data: { name: updates.name },
                 });
+            }
+            const auditEntries = [];
+            const trackedFields = ['name', 'company', 'interests', 'objections', 'leadStatus', 'tags'];
+            for (const field of trackedFields) {
+                if (updates[field] === undefined)
+                    continue;
+                const prevRaw = before ? before[field] : null;
+                const newRaw = updates[field];
+                const prevStr = JSON.stringify(prevRaw ?? null);
+                const newStr = JSON.stringify(newRaw ?? null);
+                if (prevStr === newStr)
+                    continue;
+                auditEntries.push({
+                    contactId: payload.contactId,
+                    tenantId: payload.tenantId ?? null,
+                    field,
+                    previousValue: prevStr,
+                    newValue: newStr,
+                    source: 'hermes',
+                    skill: 'update_business_memory',
+                    confidence: 0.85,
+                    conversationId: payload.conversationId ?? null,
+                });
+            }
+            if (auditEntries.length > 0) {
+                await this.prisma.memoryAuditLog.createMany({ data: auditEntries });
+                this.logger.log(`[CRM] ${auditEntries.length} audit entries guardadas para ${payload.contactId}`);
             }
         }
         catch (error) {

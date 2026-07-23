@@ -33,13 +33,13 @@ let OutboundListenerService = OutboundListenerService_1 = class OutboundListener
         try {
             const conversation = await this.prisma.conversation.findUnique({
                 where: { id: payload.conversationId },
-                select: { contactId: true },
+                select: { contactId: true, contact: { select: { tenantId: true } } },
             });
             if (!conversation) {
-                throw new Error(`Conversación ${payload.conversationId} no encontrada.`);
+                throw new Error(`Conversacin ${payload.conversationId} no encontrada.`);
             }
             const channel = 'WAHA';
-            const messageId = await this.wahaAdapter.sendMessage(conversation.contactId, payload.generatedContent);
+            const messageId = await this.wahaAdapter.sendMessage(conversation.contact.tenantId, conversation.contactId, payload.generatedContent);
             this.eventEmitter.emit('message.sent', new message_sent_event_1.MessageSentEvent(payload.tenantId, payload.conversationId, messageId, channel));
         }
         catch (error) {

@@ -21,25 +21,21 @@ export class DebugTenantController {
     });
 
     // 2. Counts per tenant
-    const contactCounts = await this.prisma.contact.groupBy({
-      by: ['tenantId'],
-      _count: true,
-    });
-
-    const conversationCounts = await this.prisma.conversation.groupBy({
-      by: ['tenantId'],
-      _count: true,
-    });
-
-    const businessMemoryCounts = await this.prisma.businessMemory.groupBy({
-      by: ['tenantId'],
-      _count: true,
-    });
-
-    const knowledgeBundleCounts = await this.prisma.knowledgeBundle.groupBy({
-      by: ['tenantId'],
-      _count: true,
-    });
+    const counts = [];
+    for (const tenant of tenants) {
+      const contacts = await this.prisma.contact.count({ where: { tenantId: tenant.id } });
+      const conversations = await this.prisma.conversation.count({ where: { contact: { tenantId: tenant.id } } });
+      const businessMemories = await this.prisma.businessMemory.count({ where: { contact: { tenantId: tenant.id } } });
+      const knowledgeBundles = await this.prisma.knowledgeBundle.count({ where: { tenantId: tenant.id } });
+      
+      counts.push({
+        tenantId: tenant.id,
+        contacts,
+        conversations,
+        businessMemories,
+        knowledgeBundles
+      });
+    }
 
     // 3 & 4. Resolve 'ferreos'
     let resolveResult: string | null = null;
@@ -52,12 +48,7 @@ export class DebugTenantController {
 
     return {
       tenants,
-      counts: {
-        contacts: contactCounts.map(c => ({ tenantId: c.tenantId, count: c._count })),
-        conversations: conversationCounts.map(c => ({ tenantId: c.tenantId, count: c._count })),
-        businessMemories: businessMemoryCounts.map(c => ({ tenantId: c.tenantId, count: c._count })),
-        knowledgeBundles: knowledgeBundleCounts.map(c => ({ tenantId: c.tenantId, count: c._count })),
-      },
+      counts,
       resolutionTest: {
         session: 'ferreos',
         success: !!resolveResult,

@@ -3,25 +3,18 @@ export declare class HealthService {
     private prisma;
     constructor(prisma: PrismaService);
     getSystemStatus(): Promise<{
-        status: {
-            waha: string;
-            hermes: string;
-            executiveLoop: string;
-            skillEngine: string;
-            knowledgeBundle: string;
-            postgresql: string;
-            webhook: string;
-            openai: string;
-            crm: string;
-            businessStudio: string;
-        };
         metrics: {
-            conversaciones: number;
-            skills: number;
+            conversations: number;
             leads: number;
-            tokens: string;
-            costo: string;
-            errores: number;
+            knowledgeBundles: number;
+            automations: number;
+            skillsExecuted: number;
         };
+        services: {
+            name: string;
+            status: string;
+            latency: string;
+            detail: string;
+        }[];
     }>;
 }

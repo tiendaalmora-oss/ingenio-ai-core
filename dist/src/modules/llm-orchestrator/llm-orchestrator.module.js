@@ -14,6 +14,7 @@ const hermes_client_service_1 = require("./services/hermes-client.service");
 const kos_loader_service_1 = require("./services/kos-loader.service");
 const database_module_1 = require("../../shared/database/database.module");
 const funnel_engine_module_1 = require("../funnel-engine/funnel-engine.module");
+const ai_provider_factory_1 = require("./providers/ai-provider.factory");
 let LlmOrchestratorModule = class LlmOrchestratorModule {
 };
 exports.LlmOrchestratorModule = LlmOrchestratorModule;
@@ -21,11 +22,17 @@ exports.LlmOrchestratorModule = LlmOrchestratorModule = __decorate([
     (0, common_1.Module)({
         imports: [database_module_1.DatabaseModule, funnel_engine_module_1.FunnelEngineModule],
         providers: [
+            ai_provider_factory_1.AiProviderFactory,
+            {
+                provide: ai_provider_factory_1.AI_PROVIDER_TOKEN,
+                useFactory: (factory) => factory.create(),
+                inject: [ai_provider_factory_1.AiProviderFactory],
+            },
             llm_listener_service_1.LlmListenerService,
             context_builder_service_1.ContextBuilderService,
             hermes_client_service_1.HermesClientService,
-            kos_loader_service_1.KosLoaderService
-        ]
+            kos_loader_service_1.KosLoaderService,
+        ],
     })
 ], LlmOrchestratorModule);
 //# sourceMappingURL=llm-orchestrator.module.js.map
