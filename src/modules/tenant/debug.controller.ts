@@ -1,5 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
-import { PrismaService } from '../../../shared/database/prisma.service';
+import { PrismaService } from '../../shared/database/prisma.service';
 import { TenantResolverService } from './services/tenant-resolver.service';
 
 @Controller('debug/tenant')
@@ -42,8 +42,8 @@ export class DebugTenantController {
     });
 
     // 3 & 4. Resolve 'ferreos'
-    let resolveResult = null;
-    let resolveError = null;
+    let resolveResult: string | null = null;
+    let resolveError: string | null = null;
     try {
       resolveResult = await this.tenantResolverService.resolveFromWahaSession('ferreos');
     } catch (err: any) {
