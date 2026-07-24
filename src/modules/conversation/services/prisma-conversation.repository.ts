@@ -24,13 +24,24 @@ export class PrismaConversationRepository implements IConversationRepository {
     return new Conversation(raw.id, raw.contactId, raw.status);
   }
 
-  async ensureContactExists(tenantId: string, contactId: string): Promise<void> {
-    await this.prisma.contact.upsert({
-      where: { id: contactId },
-      update: {},
+  async ensureContactExists(tenantId: string, externalId: string): Promise<string> {
+    // Normalize: strip WAHA suffixes (@c.us, @lid, @s.whatsapp.net)
+    const phoneNormalized = externalId.replace(/@(c\.us|lid|s\.whatsapp\.net)$/, '');
+    const phone = phoneNormalized; // same for now; can diverge if we add country-code logic
+
+    const contact = await this.prisma.contact.upsert({
+      where: {
+        tenantId_phoneNormalized: { tenantId, phoneNormalized },
+      },
+      update: {
+        // Keep externalId up to date in case WAHA changes suffix format
+        externalId,
+      },
       create: {
-        id: contactId,
-        name: contactId,
+        externalId,
+        phone,
+        phoneNormalized,
+        name: phoneNormalized,
         tenant: {
           connectOrCreate: {
             where: { id: tenantId },
@@ -38,8 +49,12 @@ export class PrismaConversationRepository implements IConversationRepository {
           },
         },
       },
+      select: { id: true },
     });
+
+    return contact.id;
   }
+
 
   async save(conversation: Conversation): Promise<void> {
     await this.prisma.conversation.upsert({

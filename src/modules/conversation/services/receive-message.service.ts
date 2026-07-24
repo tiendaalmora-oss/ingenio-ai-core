@@ -22,24 +22,25 @@ export class ReceiveMessageService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async execute(tenantId: string, contactId: string, content: string): Promise<void> {
+  async execute(tenantId: string, externalId: string, content: string): Promise<void> {
     console.log('[2] ReceiveMessageService ejecutado');
-    // 0. Asegurar que el Contacto y Tenant existan (Fix FK Constraint)
-    await this.conversationRepo.ensureContactExists(tenantId, contactId);
+    // 0. Ensure Contact exists for (tenantId, phoneNormalized) → get internal UUID
+    const contactUuid = await this.conversationRepo.ensureContactExists(tenantId, externalId);
+    console.log(`[2.1] Contact UUID: ${contactUuid} (externalId: ${externalId})`);
 
-    // 1. Encontrar o crear la Conversación
-    let conversation = await this.conversationRepo.findActiveByContact(contactId);
+    // 1. Find or create the Conversation using the internal UUID
+    let conversation = await this.conversationRepo.findActiveByContact(contactUuid);
     let conversationCreated = false;
 
     if (!conversation) {
-      conversation = new Conversation(randomUUID(), contactId, 'NEW');
+      conversation = new Conversation(randomUUID(), contactUuid, 'NEW');
       conversationCreated = true;
     }
 
     await this.conversationRepo.save(conversation);
-    console.log('[4] Conversation creada');
+    console.log('[4] Conversation creada/actualizada:', conversation.id);
 
-    // 2. Emitir evento de conversación si hubo cambios
+    // 2. Emit conversation event if new
     if (conversationCreated) {
       this.eventEmitter.emit(
         'conversation.updated',
@@ -47,7 +48,7 @@ export class ReceiveMessageService {
       );
     }
 
-    // 3. Crear y guardar la Interacción
+    // 3. Create and save the Interaction
     const interaction = new Interaction(
       randomUUID(),
       conversation.id,
@@ -60,10 +61,10 @@ export class ReceiveMessageService {
     await this.interactionRepo.save(interaction);
     console.log('[3] Interaction creada');
 
-    // 4. Emitir el evento de interacción
+    // 4. Emit interaction event — pass contactUuid (internal), not the raw externalId
     this.eventEmitter.emit(
       'interaction.received',
-      new InteractionReceivedEvent(tenantId, conversation.id, interaction.id, contactId, content)
+      new InteractionReceivedEvent(tenantId, conversation.id, interaction.id, contactUuid, content)
     );
 
     this.logger.log(`Interaction ${interaction.id} received and broadcasted.`);

@@ -24,14 +24,21 @@ model Tenant {
 }
 
 model Contact {
-  id            String         @id @default(uuid())
-  tenantId      String
-  tenant        Tenant         @relation(fields: [tenantId], references: [id])
-  phone         String?
-  name          String
-  conversations Conversation[]
-  memory        BusinessMemory?
-  tasks         Task[]
+  id               String         @id @default(uuid())
+  tenantId         String
+  tenant           Tenant         @relation(fields: [tenantId], references: [id])
+  /// Raw phone number as received (e.g. "5215551234567@c.us")
+  externalId       String?
+  /// Digits-only phone, e.g. "5215551234567"
+  phone            String?
+  /// Normalized phone without WAHA suffixes – used for multi-tenant uniqueness
+  phoneNormalized  String?
+  name             String
+  conversations    Conversation[]
+  memory           BusinessMemory?
+  tasks            Task[]
+
+  @@unique([tenantId, phoneNormalized])
 }
 
 model Conversation {
