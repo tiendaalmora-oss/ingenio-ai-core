@@ -4,9 +4,9 @@
 --            The same WhatsApp phone number can now exist across different
 --            tenants as independent Contact rows, each with its own UUID PK.
 --
--- SAFETY STRATEGY (no ON UPDATE CASCADE assumed):
---   We rename the existing PK column, add the new UUID id column,
---   back-fill data, update all FK columns manually in other tables,
+-- SAFETY STRATEGY (ON UPDATE CASCADE assumed):
+--   We add the new UUID id column, back-fill data,
+--   update the PK directly, relying on ON UPDATE CASCADE to update all FK columns,
 --   then apply the new constraints — all inside a single transaction.
 -- ============================================================
 
@@ -27,28 +27,8 @@ SET
   "_newId"          = gen_random_uuid()::text
 WHERE "externalId" IS NULL;
 
--- 3. Update FK columns in every child table BEFORE touching the PK
---    (No CASCADE → must be done manually and explicitly)
+-- 3. (Skipped) ON UPDATE CASCADE will automatically propagate changes when we update the PK
 
-UPDATE "Conversation" conv
-SET "contactId" = c."_newId"
-FROM "Contact" c
-WHERE conv."contactId" = c."id";
-
-UPDATE "BusinessMemory" bm
-SET "contactId" = c."_newId"
-FROM "Contact" c
-WHERE bm."contactId" = c."id";
-
-UPDATE "MemoryAuditLog" mal
-SET "contactId" = c."_newId"
-FROM "Contact" c
-WHERE mal."contactId" = c."id";
-
-UPDATE "Task" t
-SET "contactId" = c."_newId"
-FROM "Contact" c
-WHERE t."contactId" = c."id";
 
 -- 4. Replace the PK value with the new UUID
 UPDATE "Contact"
