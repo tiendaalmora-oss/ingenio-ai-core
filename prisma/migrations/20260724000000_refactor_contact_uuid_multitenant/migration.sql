@@ -23,11 +23,11 @@ SELECT 'PASO 2: Back-fill externalId';
 -- 2. Back-fill externalId from the old id (which held the WAHA phone string)
 UPDATE "Contact"
 SET
-  "externalId"      = "id",
-  "phone"           = regexp_replace("id", '@(c\.us|lid|s\.whatsapp\.net)$', ''),
-  "phoneNormalized" = regexp_replace("id", '@(c\.us|lid|s\.whatsapp\.net)$', ''),
+  "externalId"      = COALESCE("externalId", "id"),
+  "phone"           = COALESCE("phone", regexp_replace("id", '@(c\.us|lid|s\.whatsapp\.net)$', '')),
+  "phoneNormalized" = COALESCE("phoneNormalized", regexp_replace("id", '@(c\.us|lid|s\.whatsapp\.net)$', '')),
   "_newId"          = gen_random_uuid()::text
-WHERE "externalId" IS NULL;
+WHERE "id" LIKE '%@%' AND "_newId" IS NULL;
 
 -- 3. (Skipped) ON UPDATE CASCADE will automatically propagate changes when we update the PK
 
@@ -35,7 +35,8 @@ WHERE "externalId" IS NULL;
 SELECT 'PASO 3: Replace the PK value with the new UUID';
 -- 4. Replace the PK value with the new UUID
 UPDATE "Contact"
-SET "id" = "_newId";
+SET "id" = "_newId"
+WHERE "_newId" IS NOT NULL;
 
 SELECT 'PASO 4: Drop staging column';
 -- 5. Drop staging column
