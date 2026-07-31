@@ -377,12 +377,19 @@ async function run() {
 
         // ── Verify zero references remain ─────────────────────────────────
         let remaining = 0;
+        const remainingByTable = {};
         for (const { child_table, child_column } of fkTables) {
-          remaining += await countRefs(tx, child_table, child_column, old.id);
+          const cnt = await countRefs(tx, child_table, child_column, old.id);
+          remaining += cnt;
+          if (cnt > 0) remainingByTable[`${child_table}.${child_column}`] = cnt;
         }
 
         if (remaining > 0) {
           console.warn(`  ⚠ ${remaining} reference(s) still remain — NOT deleting old contact.`);
+          console.warn(`  Remaining references:`);
+          for (const [tableCol, cnt] of Object.entries(remainingByTable)) {
+            console.warn(`    ${tableCol.padEnd(36)} ${cnt}`);
+          }
           report.contactsSkipped++;
           return;
         }
