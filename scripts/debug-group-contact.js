@@ -120,11 +120,17 @@ async function diagnoseContact(contactId) {
   console.log(`    Total references : ${totalRefs}`);
 
   // ── 5. Sample child data (first 3 rows per table with refs) ───────────────
-  for (const { child_table, child_column, rows } of refDetail) {
+  for (const { table, column, rows } of refDetail) {
     if (rows === 0) continue;
-    console.log(`\n[5] Sample rows from "${child_table}" (up to 3):`);
+    
+    if (!table) {
+      console.log(`\n[5] No sample rows available (table is undefined).`);
+      continue;
+    }
+
+    console.log(`\n[5] Sample rows from "${table}" (up to 3):`);
     const sample = await prisma.$queryRawUnsafe(
-      `SELECT * FROM "${child_table}" WHERE "${child_column}" = $1 LIMIT 3`,
+      `SELECT * FROM "${table}" WHERE "${column}" = $1 LIMIT 3`,
       contactId
     );
     console.table(sample);
