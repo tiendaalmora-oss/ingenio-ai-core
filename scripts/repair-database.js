@@ -376,6 +376,10 @@ async function run() {
         }
 
         // ── Verify zero references remain ─────────────────────────────────
+        // NOTE (dry-run): redirectFk() counts but does NOT modify the DB.
+        // countRefs() below therefore reads the original (unmodified) data.
+        // Any non-zero count here is EXPECTED in dry-run and does NOT indicate
+        // a bug — it just means the rows would have been redirected in live mode.
         let remaining = 0;
         const remainingByTable = {};
         for (const { child_table, child_column } of fkTables) {
@@ -385,23 +389,38 @@ async function run() {
         }
 
         if (remaining > 0) {
-          console.warn(`  ⚠ ${remaining} reference(s) still remain — NOT deleting old contact.`);
-          console.warn(`  Remaining references:`);
-          for (const [tableCol, cnt] of Object.entries(remainingByTable)) {
-            console.warn(`    ${tableCol.padEnd(36)} ${cnt}`);
+          if (DRY_RUN) {
+            // In dry-run the DB was NOT modified, so "remaining" equals the rows
+            // that WOULD have been redirected. Cross-reference with the "moved" lines
+            // above: if a table appears in both it is fine — the redirect would clear it.
+            console.log(`  [dry-run] Pre-redirect snapshot (DB unchanged — these rows WOULD be cleared):`);
+            for (const [tableCol, cnt] of Object.entries(remainingByTable)) {
+              const table = tableCol.split('.')[0];
+              const wouldRedirect = (report.fkTablesUpdated[table] ?? 0) > 0;
+              const status = wouldRedirect ? '✓ would be redirected' : '⚠ no redirect planned';
+              console.log(`    ${tableCol.padEnd(36)} ${cnt}  ← ${status}`);
+            }
+            console.log(`  [dry-run] Old contact WOULD be deleted after redirect in live mode.`);
+            report.contactsDeleted++;
+          } else {
+            console.warn(`  ⚠ ${remaining} reference(s) still remain — NOT deleting old contact.`);
+            console.warn(`  Remaining references:`);
+            for (const [tableCol, cnt] of Object.entries(remainingByTable)) {
+              console.warn(`    ${tableCol.padEnd(36)} ${cnt}`);
+            }
+            report.contactsSkipped++;
+            return;
           }
-          report.contactsSkipped++;
-          return;
-        }
-
-        // ── Delete old Contact ─────────────────────────────────────────────
-        if (!DRY_RUN) {
-          await tx.$executeRawUnsafe(`DELETE FROM "Contact" WHERE "id" = $1`, old.id);
-          console.log(`  ✓ Old contact deleted.`);
         } else {
-          console.log(`  [dry-run] Would delete old contact.`);
+          // ── Delete old Contact ───────────────────────────────────────────
+          if (!DRY_RUN) {
+            await tx.$executeRawUnsafe(`DELETE FROM "Contact" WHERE "id" = $1`, old.id);
+            console.log(`  ✓ Old contact deleted.`);
+          } else {
+            console.log(`  [dry-run] Would delete old contact.`);
+          }
+          report.contactsDeleted++;
         }
-        report.contactsDeleted++;
       });
     } catch (err) {
       console.error(`  ✗ Error processing "${old.id}": ${err.message}`);
