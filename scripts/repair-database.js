@@ -169,6 +169,7 @@ async function mergeBusinessMemory(tx, oldContactId, uuidContactId) {
       report.bmAuditLogsMoved += auditCount;
       console.log(`  [dry-run] Would redirect 1 BusinessMemory + ${auditCount} MemoryAuditLog rows.`);
     }
+    report.fkTablesUpdated['BusinessMemory'] = (report.fkTablesUpdated['BusinessMemory'] || 0) + 1;
     report.bmMerged++;
     return true;
   }
@@ -280,6 +281,7 @@ async function mergeBusinessMemory(tx, oldContactId, uuidContactId) {
     report.bmOldDeleted++;
   }
 
+  report.fkTablesUpdated['BusinessMemory'] = (report.fkTablesUpdated['BusinessMemory'] || 0) + 1;
   report.bmMerged++;
   return true;
 }
