@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Patch, Query, Body, Headers, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Param, Patch, Query, Body, BadRequestException, UseGuards } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 
 const KANBAN_STAGES = ['Nuevo', 'Contactado', 'Interesado', 'Demo', 'Oferta', 'Venta', 'Cliente'];
@@ -21,8 +21,12 @@ function computeScore(memory: any, convCount: number, interactionCount: number):
   }
   return Math.max(0, Math.min(100, score));
 }
+import { AdminApiKeyGuard } from '../../shared/guards/admin-api-key.guard';
+import { TenantGuard } from '../../shared/guards/tenant.guard';
+import { TenantId } from '../../shared/decorators/tenant-id.decorator';
 
 @Controller('crm')
+@UseGuards(AdminApiKeyGuard, TenantGuard)
 export class CrmController {
   constructor(private readonly prisma: PrismaService) {}
 
@@ -33,13 +37,13 @@ export class CrmController {
    */
   @Get('leads')
   async getLeads(
-    @Headers('x-tenant-id') tenantId: string,
+    @TenantId() tenantId: string,
     @Query('search') search?: string,
     @Query('stage') stage?: string,
     @Query('page') page = '1',
     @Query('limit') limit = '50',
   ) {
-    if (!tenantId) throw new BadRequestException('x-tenant-id header is required');
+    if (!tenantId) throw new BadRequestException('tenantId is required');
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const take = parseInt(limit);
 
@@ -150,9 +154,9 @@ export class CrmController {
    * Detalle completo de un lead con historial de conversaciones y memoria.
    */
   @Get('leads/:id')
-  async getLead(@Param('id') id: string) {
-    const contact = await this.prisma.contact.findUnique({
-      where: { id },
+  async getLead(@Param('id') id: string, @TenantId() tenantId: string) {
+    const contact = await this.prisma.contact.findFirst({
+      where: { id, tenantId },
       include: {
         memory: true,
         conversations: {
@@ -216,7 +220,11 @@ export class CrmController {
   async patchStage(
     @Param('id') id: string,
     @Body() body: { stage: string },
+    @TenantId() tenantId: string,
   ) {
+    const contact = await this.prisma.contact.findFirst({ where: { id, tenantId } });
+    if (!contact) return { error: 'Lead not found' };
+
     const stageToStatus: Record<string, string> = {
       Nuevo: 'NEW',
       Contactado: 'CONTACTED',
@@ -246,7 +254,11 @@ export class CrmController {
   async patchOwner(
     @Param('id') id: string,
     @Body() body: { owner: string },
+    @TenantId() tenantId: string,
   ) {
+    const contact = await this.prisma.contact.findFirst({ where: { id, tenantId } });
+    if (!contact) return { error: 'Lead not found' };
+
     // Guardamos el owner como un tag especial hasta que el schema tenga campo owner
     const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: id } });
     const currentTags = memory?.tags ?? [];

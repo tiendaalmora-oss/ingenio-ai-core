@@ -5,7 +5,7 @@ import { PrismaService } from './prisma.service';
  * DatabaseInitService
  *
  * Runs once when the application boots.
- * - If NO tenant exists → creates the main tenant with wahaSession = 'ferreos'.
+ * - If NO tenant exists → creates the main tenant with wahaSession = 'default'.
  * - If tenant exists BUT wahaSession is wrong → patches it.
  * - Never creates a duplicate tenant.
  * - Never relies on ts-node or external seed scripts.
@@ -29,7 +29,7 @@ export class DatabaseInitService implements OnApplicationBootstrap {
         const tenant = await this.prisma.tenant.create({
           data: {
             name: 'Default Tenant',
-            wahaSession: 'ferreos',
+            wahaSession: 'default',
             currentBundleVersion: 'v1',
           },
         });
@@ -39,13 +39,13 @@ export class DatabaseInitService implements OnApplicationBootstrap {
         await this.ensureKnowledgeBundle(tenant.id);
       } else {
         const main = tenants[0];
-        if (main.wahaSession !== 'ferreos') {
+        if (main.wahaSession !== 'default') {
           await this.prisma.tenant.update({
             where: { id: main.id },
-            data: { wahaSession: 'ferreos' },
+            data: { wahaSession: 'default' },
           });
           this.logger.log(
-            `✅ Tenant "${main.name}" patched: wahaSession set to ferreos`,
+            `✅ Tenant "${main.name}" patched: wahaSession set to default`,
           );
         } else {
           this.logger.log(
@@ -68,11 +68,7 @@ export class DatabaseInitService implements OnApplicationBootstrap {
         data: {
           tenantId,
           systemPrompt: {
-            empresa: 'FerreOS',
-            descripcion: 'Sistema de gestión para ferreterías.',
-            tono: 'Profesional, conciso y vendedor.',
-            instrucciones:
-              'Eres el asistente virtual de FerreOS. Responde preguntas sobre precios y características. Si el usuario quiere comprar, pídele sus datos de contacto.',
+            instrucciones: 'El asistente se encuentra en modo configuración. No tiene conocimientos de negocio aún.',
           },
           version: 1,
         },

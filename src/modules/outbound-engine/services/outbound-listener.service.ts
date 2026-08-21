@@ -26,19 +26,28 @@ export class OutboundListenerService {
       // Por practicidad técnica, leemos directamente el contactId.
       const conversation = await this.prisma.conversation.findUnique({
         where: { id: payload.conversationId },
-        select: { contactId: true, contact: { select: { tenantId: true } } },
+        select: {
+          contactId: true,
+          contact: { select: { tenantId: true, phone: true, externalId: true } },
+        },
       });
 
       if (!conversation) {
-        throw new Error(`Conversacin ${payload.conversationId} no encontrada.`);
+        throw new Error(`Conversación ${payload.conversationId} no encontrada.`);
       }
 
       const channel = 'WAHA'; // Hardcodeado a WAHA por orden del RFC-0005
 
-      // 2. Enviar usando el adaptador
+      // 2. Obtener el destinatario WhatsApp (externalId o phone)
+      const targetChatId =
+        conversation.contact.externalId ||
+        conversation.contact.phone ||
+        conversation.contactId;
+
+      // 3. Enviar usando el adaptador
       const messageId = await this.wahaAdapter.sendMessage(
         conversation.contact.tenantId,
-        conversation.contactId,
+        targetChatId,
         payload.generatedContent
       );
 
