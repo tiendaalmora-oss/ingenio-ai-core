@@ -11,9 +11,52 @@ import { FunnelEngineService } from '../../funnel-engine/funnel-engine.service';
 import { RuntimeEngineService } from '../../funnel-engine/runtime/runtime-engine.service';
 import { ExecutionContext } from '../../funnel-engine/runtime/execution-context.interface';
 
+/**
+ * Tracks the recursive depth of the Executive Loop per conversation.
+ * Used by the Circuit Breaker to prevent infinite tool-call loops.
+ */
+interface LoopState {
+  /** Current nesting depth. Increments on each re-emitted interaction.received. */
+  depth: number;
+  /**
+   * Unix ms timestamp after which this entry is considered stale and resets.
+   * Prevents a conversation from being permanently blocked after a transient bug.
+   */
+  resetAt: number;
+}
+
 @Injectable()
 export class LlmListenerService {
   private readonly logger = new Logger(LlmListenerService.name);
+
+  // ── Circuit Breaker ───────────────────────────────────────────────────────────
+
+  /**
+   * In-memory map tracking the Executive Loop depth per conversation.
+   *
+   * Key:   conversationId (UUID string)
+   * Value: LoopState { depth, resetAt }
+   *
+   * Phase 1: In-memory Map (zero-latency, sufficient for single-instance).
+   * Phase 2: Replace with a Redis-backed LoopDepthService (no changes to callers).
+   */
+  private readonly loopDepths = new Map<string, LoopState>();
+
+  /**
+   * Maximum consecutive re-entries per conversation before the loop is aborted.
+   *
+   * Flow that hits the limit:
+   *   User msg → Hermes → tool.called → interaction.received (depth 1)
+   *            → Hermes → tool.called → interaction.received (depth 2) → ...
+   *            → depth 5 → ABORT
+   */
+  private readonly MAX_LOOP_DEPTH = 5;
+
+  /**
+   * After this many milliseconds of inactivity, the depth counter resets to 0.
+   * Prevents a conversation from being permanently throttled after a bug.
+   */
+  private readonly LOOP_RESET_MS = 30_000; // 30 seconds
 
   constructor(
     private readonly contextBuilder: ContextBuilderService,
@@ -27,7 +70,19 @@ export class LlmListenerService {
   @OnEvent('interaction.received', { async: true })
   async handleInteraction(payload: InteractionReceivedEvent) {
     this.logger.log(`Executive Loop atrapó interacción entrante (Conv: ${payload.conversationId})`);
-    
+
+    // ── Circuit Breaker Check ─────────────────────────────────────────────────
+    if (!this.canEnterLoop(payload.conversationId)) {
+      this.logger.warn(
+        `[CircuitBreaker] ABORT — Executive Loop depth exceeded MAX_LOOP_DEPTH (${this.MAX_LOOP_DEPTH}) ` +
+        `for conversation ${payload.conversationId}. ` +
+        `Dropping interaction to prevent infinite recursion.`,
+      );
+      return;
+    }
+
+    this.incrementDepth(payload.conversationId);
+
     try {
       // 1. Buscar si hay una automatización que coincida
       const funnel = await this.funnelEngine.findMatchingFunnel(payload);
@@ -103,6 +158,69 @@ export class LlmListenerService {
       }
     } catch (error) {
       this.logger.error(`Error orquestando LLM:`, error);
+    } finally {
+      // Always decrement depth — even on error — to avoid permanently blocking a conversation.
+      this.decrementDepth(payload.conversationId);
     }
+  }
+
+  // ── Circuit Breaker Internals ─────────────────────────────────────────────────
+
+  /**
+   * Returns true if the conversation is allowed to enter the Executive Loop.
+   * Stale entries (past their resetAt) are pruned before checking.
+   */
+  private canEnterLoop(conversationId: string): boolean {
+    this.pruneStaleEntries();
+    const state = this.loopDepths.get(conversationId);
+    if (!state) return true; // No entry → depth is 0 → allowed.
+    return state.depth < this.MAX_LOOP_DEPTH;
+  }
+
+  /** Increments the loop depth and refreshes the resetAt timer. */
+  private incrementDepth(conversationId: string): void {
+    const existing = this.loopDepths.get(conversationId);
+    const newDepth = (existing?.depth ?? 0) + 1;
+    this.loopDepths.set(conversationId, {
+      depth: newDepth,
+      resetAt: Date.now() + this.LOOP_RESET_MS,
+    });
+    this.logger.debug(`[CircuitBreaker] Conv ${conversationId}: depth → ${newDepth}`);
+  }
+
+  /** Decrements the loop depth. Removes entry when depth reaches 0. */
+  private decrementDepth(conversationId: string): void {
+    const state = this.loopDepths.get(conversationId);
+    if (!state) return;
+
+    const newDepth = state.depth - 1;
+    if (newDepth <= 0) {
+      this.loopDepths.delete(conversationId);
+    } else {
+      this.loopDepths.set(conversationId, { ...state, depth: newDepth });
+    }
+    this.logger.debug(`[CircuitBreaker] Conv ${conversationId}: depth → ${Math.max(0, newDepth)}`);
+  }
+
+  /**
+   * Lazy cleanup: removes entries whose resetAt has expired.
+   * Called before each canEnterLoop check. Avoids a background interval timer.
+   */
+  private pruneStaleEntries(): void {
+    const now = Date.now();
+    for (const [id, state] of this.loopDepths.entries()) {
+      if (state.resetAt <= now) {
+        this.loopDepths.delete(id);
+        this.logger.debug(`[CircuitBreaker] Pruned stale entry for conv ${id}`);
+      }
+    }
+  }
+
+  /**
+   * Returns the current loop depth for a conversation.
+   * @internal — Exposed for testing only.
+   */
+  getLoopDepth(conversationId: string): number {
+    return this.loopDepths.get(conversationId)?.depth ?? 0;
   }
 }

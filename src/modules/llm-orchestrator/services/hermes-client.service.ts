@@ -53,6 +53,22 @@ const HERMES_TOOLS = [
       },
     },
   },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'schedule_meeting',
+      description: 'Agenda una demo o reunión de ventas con el cliente. Úsala cuando el cliente acepte tener una reunión.',
+      parameters: {
+        type: 'object',
+        properties: {
+          date: { type: 'string', description: 'Fecha sugerida por el cliente (ej. Mañana, Lunes, 15 de Octubre)' },
+          time: { type: 'string', description: 'Hora sugerida o franja horaria (ej. Por la mañana, a las 15:00)' },
+          notes: { type: 'string', description: 'Notas adicionales sobre lo que se quiere ver en la demo' },
+        },
+        required: ['date', 'time'],
+      },
+    },
+  },
 ];
 
 export interface LLMResponse {

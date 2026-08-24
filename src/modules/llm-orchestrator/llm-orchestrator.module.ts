@@ -3,6 +3,7 @@ import { LlmListenerService } from './services/llm-listener.service';
 import { ContextBuilderService } from './services/context-builder.service';
 import { HermesClientService } from './services/hermes-client.service';
 import { KosLoaderService } from './services/kos-loader.service';
+import { PromptComposerService } from './services/prompt-composer.service';
 import { DatabaseModule } from '../../shared/database/database.module';
 import { FunnelEngineModule } from '../funnel-engine/funnel-engine.module';
 import { AiProviderFactory, AI_PROVIDER_TOKEN } from './providers/ai-provider.factory';
@@ -21,7 +22,9 @@ import { AiProviderFactory, AI_PROVIDER_TOKEN } from './providers/ai-provider.fa
     ContextBuilderService,
     HermesClientService,
     KosLoaderService,
+    PromptComposerService,
   ],
+  exports: [ContextBuilderService, HermesClientService]
 })
 export class LlmOrchestratorModule {}
 

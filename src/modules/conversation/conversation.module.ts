@@ -8,8 +8,10 @@ import { PrismaService } from '../../shared/database/prisma.service';
 import { CONVERSATION_REPOSITORY } from './ports/out/conversation-repository.interface';
 import { INTERACTION_REPOSITORY } from './ports/out/interaction-repository.interface';
 
+import { OutboundEngineModule } from '../outbound-engine/outbound-engine.module';
+
 @Module({
-  imports: [],
+  imports: [OutboundEngineModule],
   controllers: [MetaWebhookController, ConversationHubController],
   providers: [
     PrismaService,

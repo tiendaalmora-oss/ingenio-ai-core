@@ -13,7 +13,7 @@ export class CrmEventListenerService {
 
   @OnEvent('memory.updated', { async: true })
   async handleMemoryUpdated(payload: any) {
-    console.log('[7] CrmEventListener ejecutado');
+    this.logger.debug(`handleMemoryUpdated: contactId=${payload.contactId}`);
     this.logger.log(`[CRM] Actualizando Business Memory para Contacto: ${payload.contactId}`);
     try {
       const updates = payload.updates;
@@ -44,8 +44,7 @@ export class CrmEventListenerService {
           tags:        updates.tags       || [],
         },
       });
-      console.log('[5] BusinessMemory creada o actualizada');
-      console.log('[8] Lead creado');
+      this.logger.debug(`BusinessMemory upserted for contactId=${payload.contactId}`);
 
       // 3. Sincronizar nombre del contacto
       if (updates.name) {

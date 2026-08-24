@@ -37,11 +37,11 @@ export class DebugTenantController {
       });
     }
 
-    // 3 & 4. Resolve 'ferreos'
+    // 3 & 4. Resolve 'default'
     let resolveResult: string | null = null;
     let resolveError: string | null = null;
     try {
-      resolveResult = await this.tenantResolverService.resolveFromWahaSession('ferreos');
+      resolveResult = await this.tenantResolverService.resolveFromWahaSession('default');
     } catch (err: any) {
       resolveError = err.message || String(err);
     }
@@ -50,7 +50,7 @@ export class DebugTenantController {
       tenants,
       counts,
       resolutionTest: {
-        session: 'ferreos',
+        session: 'default',
         success: !!resolveResult,
         result: resolveResult,
         error: resolveError,

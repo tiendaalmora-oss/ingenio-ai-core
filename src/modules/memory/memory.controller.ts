@@ -1,7 +1,10 @@
-import { Controller, Get, Query, Param } from '@nestjs/common';
+import { Controller, Get, Query, Param, UseGuards, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { AdminApiKeyGuard } from '../../shared/guards/admin-api-key.guard';
+import { TenantId } from '../../shared/decorators/tenant-id.decorator';
 
 @Controller('memory')
+@UseGuards(AdminApiKeyGuard)
 export class MemoryController {
   constructor(private readonly prisma: PrismaService) {}
 
@@ -12,7 +15,7 @@ export class MemoryController {
    */
   @Get('timeline')
   async getTimeline(
-    @Query('tenantId') tenantId?: string,
+    @TenantId() tenantId: string,
     @Query('search') search?: string,
     @Query('field') field?: string,
     @Query('source') source?: string,
@@ -21,8 +24,7 @@ export class MemoryController {
   ) {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const where: any = {};
-    if (tenantId) where.tenantId = tenantId;
+    const where: any = { tenantId };
     if (field)   where.field = field;
     if (source)  where.source = source;
     if (search) {
@@ -79,7 +81,16 @@ export class MemoryController {
    * Full memory card + audit history for one lead.
    */
   @Get('contact/:contactId')
-  async getContactMemory(@Param('contactId') contactId: string) {
+  async getContactMemory(@Param('contactId') contactId: string, @TenantId() tenantId: string) {
+    // Verificar que el contacto pertenezca al tenant autenticado
+    const contactExists = await this.prisma.contact.findFirst({
+      where: { id: contactId, tenantId },
+    });
+    
+    if (!contactExists) {
+      throw new NotFoundException(`Contact ${contactId} not found`);
+    }
+
     const [memory, logs] = await Promise.all([
       this.prisma.businessMemory.findUnique({
         where: { contactId },
@@ -134,18 +145,16 @@ export class MemoryController {
    * Aggregate memory grouped by company.
    */
   @Get('company')
-  async getByCompany(@Query('tenantId') tenantId?: string) {
+  async getByCompany(@TenantId() tenantId: string) {
     const memories = await this.prisma.businessMemory.findMany({
-      where: { company: { not: null } },
+      where: { company: { not: null }, contact: { tenantId } },
       include: {
         contact: { select: { tenantId: true } },
         auditLogs: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
     });
 
-    const filtered = tenantId
-      ? memories.filter(m => m.contact.tenantId === tenantId)
-      : memories;
+    const filtered = memories;
 
     // Group by company
     const grouped: Record<string, any> = {};
@@ -174,11 +183,16 @@ export class MemoryController {
    * Dashboard-level metrics for the Memory Center header.
    */
   @Get('stats')
-  async getStats(@Query('tenantId') tenantId?: string) {
+  async getStats(@TenantId() tenantId: string) {
     const [totalMemories, totalLogs, recentLogs] = await Promise.all([
-      this.prisma.businessMemory.count(),
-      this.prisma.memoryAuditLog.count(),
+      this.prisma.businessMemory.count({
+        where: { contact: { tenantId } }
+      }),
+      this.prisma.memoryAuditLog.count({
+        where: { tenantId }
+      }),
       this.prisma.memoryAuditLog.findMany({
+        where: { tenantId },
         orderBy: { createdAt: 'desc' },
         take: 5,
         include: {
@@ -190,6 +204,7 @@ export class MemoryController {
     // Field frequency breakdown
     const fieldCounts = await this.prisma.memoryAuditLog.groupBy({
       by: ['field'],
+      where: { tenantId },
       _count: { field: true },
     });
 

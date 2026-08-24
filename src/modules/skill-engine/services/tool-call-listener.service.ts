@@ -25,7 +25,7 @@ export class ToolCallListenerService {
       switch (payload.toolName) {
         case 'update_business_memory':
           this.logger.log(`Actualizando memoria de ${payload.contactId} con: ${JSON.stringify(payload.toolArguments)}`);
-          console.log('[6] Evento memory.updated emitido');
+          this.logger.debug(`Emitting memory.updated for contactId=${payload.contactId}`);
           this.eventEmitter.emit(
             'memory.updated',
             new MemoryUpdatedEvent(payload.tenantId, payload.contactId, payload.toolArguments)
@@ -49,6 +49,18 @@ export class ToolCallListenerService {
             new HandoffRequestedEvent(payload.tenantId, payload.conversationId, payload.toolArguments.reason || 'Escalamiento manual')
           );
           toolResultStr = JSON.stringify({ status: 'success', message: 'Agente humano notificado. Handoff iniciado.' });
+          break;
+
+        case 'schedule_meeting':
+          this.logger.log(`Agendando reunión para contacto ${payload.contactId}. Detalles: ${JSON.stringify(payload.toolArguments)}`);
+          // Reutilizamos create_task internamente para que el equipo comercial la vea
+          this.eventEmitter.emit(
+            'task.created',
+            new TaskCreatedEvent(payload.tenantId, payload.contactId, {
+              title: `Reunión Comercial: ${payload.toolArguments.date} a las ${payload.toolArguments.time}. Notas: ${payload.toolArguments.notes || ''}`
+            })
+          );
+          toolResultStr = JSON.stringify({ status: 'success', message: 'Reunión agendada con éxito. Confirma la fecha y hora con el usuario en lenguaje natural.' });
           break;
 
         default:

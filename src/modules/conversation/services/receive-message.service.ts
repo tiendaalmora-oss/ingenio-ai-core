@@ -23,10 +23,10 @@ export class ReceiveMessageService {
   ) {}
 
   async execute(tenantId: string, externalId: string, content: string): Promise<void> {
-    console.log('[2] ReceiveMessageService ejecutado');
+    this.logger.debug(`ReceiveMessageService executing for tenant=${tenantId} externalId=${externalId}`);
     // 0. Ensure Contact exists for (tenantId, phoneNormalized) → get internal UUID
     const contactUuid = await this.conversationRepo.ensureContactExists(tenantId, externalId);
-    console.log(`[2.1] Contact UUID: ${contactUuid} (externalId: ${externalId})`);
+    this.logger.debug(`Contact resolved: uuid=${contactUuid} externalId=${externalId}`);
 
     // 1. Find or create the Conversation using the internal UUID
     let conversation = await this.conversationRepo.findActiveByContact(contactUuid);
@@ -38,7 +38,7 @@ export class ReceiveMessageService {
     }
 
     await this.conversationRepo.save(conversation);
-    console.log('[4] Conversation creada/actualizada:', conversation.id);
+    this.logger.debug(`Conversation ${conversationCreated ? 'created' : 'found'}: ${conversation.id}`);
 
     // 2. Emit conversation event if new
     if (conversationCreated) {
@@ -59,7 +59,7 @@ export class ReceiveMessageService {
     );
 
     await this.interactionRepo.save(interaction);
-    console.log('[3] Interaction creada');
+    this.logger.debug(`Interaction ${interaction.id} persisted`);
 
     // 4. Emit interaction event — pass contactUuid (internal), not the raw externalId
     this.eventEmitter.emit(
@@ -68,6 +68,6 @@ export class ReceiveMessageService {
     );
 
     this.logger.log(`Interaction ${interaction.id} received and broadcasted.`);
-    console.log('[9] Conversation Hub actualizado');
+    this.logger.debug(`Conversation Hub updated: interactionId=${interaction.id}`);
   }
 }
