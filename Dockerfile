@@ -3,26 +3,32 @@ FROM node:20.20.2-alpine AS builder
 
 WORKDIR /app
 
+# Instalar dependencias del sistema necesarias para Prisma
+RUN apk add --no-cache openssl libc6-compat
+
 # Archivos de dependencias
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Instalar TODAS las dependencias (necesario para compilar)
+# Instalar dependencias
 RUN npm install
 
-# Copiar el código fuente
+# Copiar el código fuente (respetando .dockerignore)
 COPY . .
 
-# Generar Prisma Client
+# Generar Prisma Client con soporte multi-plataforma
 RUN npx prisma generate
 
 # Compilar NestJS
 RUN npm run build
 
-# --- Imagen final (más ligera) ---
+# --- Imagen final (ligera y lista para producción) ---
 FROM node:20.20.2-alpine
 
 WORKDIR /app
+
+# Instalar dependencias nativas de runtime para Prisma
+RUN apk add --no-cache openssl libc6-compat
 
 # Copiar dependencias de producción, package.json, cliente Prisma y la build
 COPY --from=builder /app/package*.json ./

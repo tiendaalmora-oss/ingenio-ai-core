@@ -4,8 +4,9 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider   = "prisma-client-js"
-  engineType = "library"
+  provider      = "prisma-client-js"
+  engineType    = "library"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -135,3 +136,28 @@ model ActiveFunnel {
   state          Json?
   updatedAt      DateTime     @updatedAt
 }
+
+model PendingOutboundMessage {
+  id             String       @id @default(uuid())
+  tenantId       String
+  conversationId String
+  contactId      String
+  message        String
+  followUpId     String?
+  status         String       @default("PENDING") // PENDING, PROCESSING, SENT, FAILED
+  retries        Int          @default(0)
+  sentAt         DateTime?
+  durationMs     Int?
+  providerResponse String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model IncomingMessageFailure {
+  id        String   @id @default(uuid())
+  payload   Json
+  error     String
+  createdAt DateTime @default(now())
+}
+
+
