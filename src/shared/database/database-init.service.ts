@@ -61,20 +61,49 @@ export class DatabaseInitService implements OnApplicationBootstrap {
   }
 
   private async ensureKnowledgeBundle(tenantId: string) {
+    const emptyBundlePrompt = {
+      _raw: {
+        identidad: { nombre: 'Asistente Virtual', tono: 'Profesional, empático y vendedor' },
+        empresa: { nombre: '', descripcion: '', sitioWeb: '' },
+        productos: [],
+        categorias: [],
+        servicios: [],
+        faqs: [],
+        objeciones: [],
+        scriptsComerciales: [],
+        promociones: [],
+        seguimientos: [],
+        soporte: [],
+        politicasAtencion: [],
+      },
+      instrucciones: 'El asistente se encuentra listo para configurar. Carga tus productos y servicios desde el Business Studio.',
+    };
+
     const existing = await this.prisma.knowledgeBundle.findUnique({
       where: { tenantId },
     });
+
     if (!existing) {
       await this.prisma.knowledgeBundle.create({
         data: {
           tenantId,
-          systemPrompt: {
-            instrucciones: 'El asistente se encuentra en modo configuración. No tiene conocimientos de negocio aún.',
-          },
+          systemPrompt: emptyBundlePrompt,
           version: 1,
         },
       });
       this.logger.log(`✅ KnowledgeBundle created for tenant: ${tenantId}`);
+    } else {
+      const prompt: any = existing.systemPrompt || {};
+      if (prompt.empresa === 'FerreOS' || JSON.stringify(prompt).includes('FerreOS')) {
+        await this.prisma.knowledgeBundle.update({
+          where: { tenantId },
+          data: {
+            systemPrompt: emptyBundlePrompt,
+            version: { increment: 1 },
+          },
+        });
+        this.logger.log(`🧹 Legacy FerreOS KnowledgeBundle reset to clean slate for tenant: ${tenantId}`);
+      }
     }
   }
 }

@@ -7,27 +7,42 @@ export class KnowledgeBundleComposer {
    * Generates a clean, structured Knowledge Bundle artifact from raw BackOffice sections.
    */
   compose(rawData: any) {
+    const raw = rawData || {};
+    const identidad = raw.identidad || {};
+    const empresa = raw.empresa || {};
+
     return {
-      identity: "Asistente Virtual Inteligente de la empresa.",
-      business: "Información general del negocio y operaciones.",
+      identity: {
+        nombre: identidad.nombre || "Asistente Virtual",
+        tono: identidad.tono || "Profesional, conciso, empático y vendedor",
+        rol: identidad.rol || "Asistente de ventas y atención al cliente",
+        objetivo: identidad.objetivo || "Vender, calificar prospectos y responder dudas de forma persuasiva"
+      },
+      business: {
+        nombre: empresa.nombre || "",
+        descripcion: empresa.descripcion || "",
+        sitioWeb: empresa.sitioWeb || "",
+        ubicacion: empresa.ubicacion || "",
+        contacto: empresa.contacto || ""
+      },
       products: {
-         categories: rawData.categorias || [],
-         items: rawData.productos || []
+         categories: raw.categorias || [],
+         items: raw.productos || []
       },
-      services: rawData.servicios || [],
-      faqs: rawData.faqs || [],
+      services: raw.servicios || [],
+      faqs: raw.faqs || [],
       sales: {
-         scripts: rawData.scriptsComerciales || [],
-         promotions: rawData.promociones || []
+         scripts: raw.scriptsComerciales || [],
+         promotions: raw.promociones || []
       },
-      objections: rawData.objeciones || [],
-      followups: rawData.seguimientos || [],
-      support: rawData.soporte || [],
-      policies: rawData.politicasAtencion || [],
+      objections: raw.objeciones || [],
+      followups: raw.seguimientos || [],
+      support: raw.soporte || [],
+      policies: raw.politicasAtencion || [],
       restrictions: [
-        "Nunca inventes información que no esté en este bundle.",
-        "Limítate a los productos, servicios y políticas detalladas aquí.",
-        "Si el usuario pregunta algo fuera de este conocimiento, indica que no tienes esa información y ofrece derivar a un humano."
+        "Nunca inventes información que no esté en este bundle de conocimiento.",
+        "Limítate a los productos, servicios, precios y políticas detalladas en este conocimiento.",
+        "Si el usuario pregunta algo fuera de este conocimiento o no especificado, indícale amablemente que consultarás con el equipo y ofrece derivar a un humano."
       ]
     };
   }
