@@ -1,11 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
 export class SettingsService {
   private readonly logger = new Logger(SettingsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   async getSettings(tenantId: string) {
     const tenant = await this.prisma.tenant.findUnique({
@@ -93,6 +97,8 @@ export class SettingsService {
       update: { systemPrompt: emptyBundlePrompt, version: 1 },
       create: { tenantId, systemPrompt: emptyBundlePrompt, version: 1 },
     });
+
+    this.eventEmitter.emit('knowledge-base.updated', { tenantId });
 
     return { status: 'CLEAN_SLATE_COMPLETED', tenantId };
   }
