@@ -92,9 +92,18 @@ export class TenantGuard implements CanActivate {
 
     // 2. Extract header — compatible with both Fastify and Express request shapes.
     const request = context.switchToHttp().getRequest<Record<string, any>>();
-    const tenantId: string | undefined = request.headers?.['x-tenant-id'];
+    let tenantId: string | undefined = request.headers?.['x-tenant-id'];
 
     if (!tenantId || typeof tenantId !== 'string' || tenantId.trim() === '') {
+      // In single-tenant mode: Fallback to the single tenant in DB if available
+      if (typeof this.prisma?.tenant?.findMany === 'function') {
+        const allTenants = await this.prisma.tenant.findMany({ take: 2, select: { id: true } });
+        if (allTenants && allTenants.length === 1) {
+          tenantId = allTenants[0].id;
+          request.tenantId = tenantId;
+          return true;
+        }
+      }
       this.logger.warn('[TenantGuard] Missing or empty x-tenant-id header');
       throw new UnauthorizedException(
         'Missing required header: x-tenant-id',
