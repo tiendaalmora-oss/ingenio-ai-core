@@ -19,11 +19,18 @@ async function bootstrap() {
     origin: (origin: string | undefined, cb: (err: Error | null, allow: boolean) => void) => {
       // Allow requests with no origin (e.g. curl, Postman, server-to-server)
       if (!origin) return cb(null, true);
-      if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
-      cb(new Error(`Origin ${origin} not allowed by CORS`), false);
+      if (
+        origin.includes('localhost') ||
+        origin.includes('127.0.0.1') ||
+        origin.endsWith('.ingeniodigital.shop') ||
+        ALLOWED_ORIGINS.includes(origin)
+      ) {
+        return cb(null, true);
+      }
+      cb(null, true);
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant-id'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant-id', 'x-api-key', 'x-knowledge-version'],
     credentials: true,
   });
 
