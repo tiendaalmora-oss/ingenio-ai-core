@@ -22,6 +22,7 @@ export class DatabaseInitService implements OnApplicationBootstrap {
 
   private async initializeTenant() {
     try {
+      const targetSession = process.env.WAHA_SESSION || 'ferreos';
       const tenants = await this.prisma.tenant.findMany();
 
       if (tenants.length === 0) {
@@ -29,7 +30,7 @@ export class DatabaseInitService implements OnApplicationBootstrap {
         const tenant = await this.prisma.tenant.create({
           data: {
             name: 'Default Tenant',
-            wahaSession: 'default',
+            wahaSession: targetSession,
             currentBundleVersion: 'v1',
           },
         });
@@ -39,17 +40,17 @@ export class DatabaseInitService implements OnApplicationBootstrap {
         await this.ensureKnowledgeBundle(tenant.id);
       } else {
         const main = tenants[0];
-        if (main.wahaSession !== 'default') {
+        if (main.wahaSession !== targetSession) {
           await this.prisma.tenant.update({
             where: { id: main.id },
-            data: { wahaSession: 'default' },
+            data: { wahaSession: targetSession },
           });
           this.logger.log(
-            `✅ Tenant "${main.name}" patched: wahaSession set to default`,
+            `✅ Tenant "${main.name}" patched: wahaSession set to ${targetSession}`,
           );
         } else {
           this.logger.log(
-            `✅ Tenant "${main.name}" already has correct wahaSession`,
+            `✅ Tenant "${main.name}" already has correct wahaSession (${targetSession})`,
           );
         }
         await this.ensureKnowledgeBundle(main.id);

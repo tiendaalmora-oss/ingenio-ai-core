@@ -39,9 +39,9 @@ export class WahaAdapterService {
       throw new Error('WAHA_API_URL is not configured');
     }
     
-    // Buscar wahaSession real
+    // Buscar wahaSession real (prioriza variable de entorno WAHA_SESSION)
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
-    const session = tenant?.wahaSession || 'default';
+    const session = process.env.WAHA_SESSION || tenant?.wahaSession || 'ferreos';
     
     const apiKey = process.env.WAHA_API_KEY || '';
 
