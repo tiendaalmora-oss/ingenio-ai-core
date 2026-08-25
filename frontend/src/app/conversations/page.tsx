@@ -19,7 +19,8 @@ import {
   RefreshCw,
   Sparkles,
   ArrowRight,
-  ShieldAlert
+  ShieldAlert,
+  Trash2
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -28,6 +29,7 @@ export default function ConversationsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const queryClient = useQueryClient();
@@ -119,6 +121,24 @@ export default function ConversationsPage() {
       addToast(`Conversación marcada como ${vars.status}`, 'success');
       queryClient.invalidateQueries({ queryKey: ['conversations-list'] });
       queryClient.invalidateQueries({ queryKey: ['conversation-detail', selectedConvId] });
+    },
+  });
+
+  // 6. Reset conversation history & contact memory mutation
+  const resetMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.delete(`/conversations/${id}/history`);
+      return res.data;
+    },
+    onSuccess: () => {
+      addToast('Historial y memoria del contacto reiniciados', 'success');
+      queryClient.invalidateQueries({ queryKey: ['conversation-messages', selectedConvId] });
+      queryClient.invalidateQueries({ queryKey: ['conversation-detail', selectedConvId] });
+      queryClient.invalidateQueries({ queryKey: ['conversations-list'] });
+      setConfirmResetOpen(false);
+    },
+    onError: (err: any) => {
+      addToast(err?.response?.data?.message || 'Error al reiniciar historial', 'error');
     },
   });
 
@@ -296,6 +316,16 @@ export default function ConversationsPage() {
                   Reactivar Bot
                 </button>
               )}
+
+              {/* Botón de Borrar Historial de Contacto para Pruebas */}
+              <button
+                onClick={() => setConfirmResetOpen(true)}
+                className="px-2.5 py-1.5 text-xs text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg font-medium transition flex items-center gap-1"
+                title="Borrar mensajes y memoria de este contacto para volver a probar desde cero"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Borrar Historial
+              </button>
             </div>
           </div>
 
@@ -402,6 +432,43 @@ export default function ConversationsPage() {
             title="Selecciona una conversación"
             description="Elige un chat de la lista de la izquierda para ver el historial y responder en tiempo real."
           />
+        </div>
+      )}
+
+      {/* Modal de confirmación de reset de historial */}
+      {confirmResetOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-5 space-y-4 border border-gray-100">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-gray-900">¿Borrar historial del contacto?</h4>
+                <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                  Se eliminarán todos los mensajes y la memoria extraída de este lead para que puedas hacer una prueba limpia desde cero.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setConfirmResetOpen(false)}
+                disabled={resetMutation.isPending}
+                className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => selectedConvId && resetMutation.mutate(selectedConvId)}
+                disabled={resetMutation.isPending}
+                className="px-3.5 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition flex items-center gap-1.5"
+              >
+                {resetMutation.isPending ? 'Borrando...' : 'Sí, borrar historial'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

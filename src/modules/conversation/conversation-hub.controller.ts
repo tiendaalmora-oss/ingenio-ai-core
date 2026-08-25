@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Param, Query, Body, BadRequestException, Logger, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Query, Body, BadRequestException, Logger, UseGuards } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { WahaAdapterService } from '../outbound-engine/services/waha-adapter.service';
 import { AdminApiKeyGuard } from '../../shared/guards/admin-api-key.guard';
@@ -247,5 +247,49 @@ export class ConversationHubController {
     });
 
     return { success: true, count: updated.count };
+  }
+
+  /**
+   * DELETE /conversations/:id/history
+   * Elimina el historial de mensajes de la conversación y reinicia la memoria del contacto para pruebas limpias.
+   */
+  @Delete(':id/history')
+  async resetHistory(
+    @Param('id') id: string,
+    @TenantId() tenantId: string,
+  ) {
+    const conv = await this.prisma.conversation.findFirst({
+      where: { id, contact: { tenantId } },
+      include: { contact: true },
+    });
+
+    if (!conv) {
+      throw new BadRequestException(`Conversación "${id}" no encontrada.`);
+    }
+
+    // 1. Eliminar todas las interacciones de esta conversación
+    await this.prisma.interaction.deleteMany({
+      where: { conversationId: conv.id },
+    });
+
+    // 2. Reiniciar la memoria de negocio del contacto si existe
+    if (conv.contactId) {
+      await this.prisma.businessMemory.deleteMany({
+        where: { contactId: conv.contactId },
+      });
+      await this.prisma.task.deleteMany({
+        where: { contactId: conv.contactId },
+      });
+    }
+
+    // 3. Restablecer el estado de la conversación a 'NEW'
+    await this.prisma.conversation.update({
+      where: { id: conv.id },
+      data: { status: 'NEW' },
+    });
+
+    this.logger.log(`🧹 Historial y memoria reiniciados para la conversación ${id} (Contacto: ${conv.contact.name || conv.contact.externalId})`);
+
+    return { success: true, conversationId: conv.id, message: 'Historial reiniciado correctamente' };
   }
 }

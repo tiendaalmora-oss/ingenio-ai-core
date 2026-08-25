@@ -420,13 +420,13 @@ export default function SettingsPage() {
       <ConfirmDialog
         isOpen={isResetDialogOpen}
         title="¿Reiniciar el CRM a estado cero?"
-        message="Esta acción no se puede deshacer. Se eliminarán todas las conversaciones y contactos registrados para dejar el panel 100% limpio."
+        description="Esta acción no se puede deshacer. Se eliminarán todas las conversaciones y contactos registrados para dejar el panel 100% limpio."
         confirmText="Sí, vaciar y reiniciar"
         cancelText="Cancelar"
-        variant="danger"
+        type="danger"
         isLoading={resetMutation.isPending}
         onConfirm={() => resetMutation.mutate()}
-        onClose={() => setIsResetDialogOpen(false)}
+        onCancel={() => setIsResetDialogOpen(false)}
       />
     </PageContainer>
   );
