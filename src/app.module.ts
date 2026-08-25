@@ -17,6 +17,7 @@ import { EventBusModule } from './shared/event-bus';
 import { ScheduleModule } from '@nestjs/schedule';
 import { FollowUpEngineModule } from './modules/follow-up-engine/follow-up-engine.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     ScheduleModule.forRoot(),
     FollowUpEngineModule,
     SettingsModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
