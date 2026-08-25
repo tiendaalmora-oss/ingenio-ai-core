@@ -7,9 +7,9 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 export class FollowUpEngineService {
   private readonly logger = new Logger(FollowUpEngineService.name);
 
-  // Ventana horaria de atención respetuosa (por defecto 9:00 AM a 11:00 PM)
-  private readonly DEFAULT_START_HOUR = 9;
-  private readonly DEFAULT_END_HOUR = 23;
+  // Ventana horaria de atención respetuosa (por defecto 8:00 AM a 11:59 PM)
+  private readonly DEFAULT_START_HOUR = 8;
+  private readonly DEFAULT_END_HOUR = 24;
 
   constructor(
     private prisma: PrismaService,
@@ -20,16 +20,16 @@ export class FollowUpEngineService {
   async evaluateFollowUps() {
     const now = new Date();
 
-    // 1. Validar ventana horaria de envío (evitar mensajes nocturnos no solicitados)
+    // 1. Validar ventana horaria de envío con zona horaria local de Latinoamérica
     if (!this.isWithinAllowedWindow(now, this.DEFAULT_START_HOUR, this.DEFAULT_END_HOUR)) {
       this.logger.debug(`Fuera de la ventana horaria permitida (${this.DEFAULT_START_HOUR}:00 - ${this.DEFAULT_END_HOUR}:00). Omitiendo seguimientos nocturnos.`);
       return;
     }
 
-    // 2. Evaluar únicamente conversaciones ACTIVAS
+    // 2. Evaluar conversaciones activas (tanto 'NEW' como 'ACTIVE')
     const activeConversations = await this.prisma.conversation.findMany({
       where: {
-        status: 'ACTIVE'
+        status: { in: ['NEW', 'ACTIVE'] }
       },
       include: {
         contact: {
@@ -65,7 +65,8 @@ export class FollowUpEngineService {
 
       for (const convo of tenantConvos) {
         // No enviar seguimientos a leads que ya pagaron o con venta cerrada
-        if (convo.contact.memory?.leadStatus === 'CLOSED' || convo.contact.memory?.leadStatus === 'PAGADO') {
+        const leadStatus = (convo.contact.memory?.leadStatus || '').toUpperCase();
+        if (leadStatus === 'CLOSED' || leadStatus === 'PAGADO') {
           continue;
         }
 
@@ -77,7 +78,7 @@ export class FollowUpEngineService {
         for (const rule of seguimientos) {
           const delayMs = this.parseDelayMs(rule);
 
-          if (timeSinceLastInteraction > delayMs) {
+          if (timeSinceLastInteraction >= delayMs) {
             const ruleIdentifier = rule.id || `rule-${rule.tiempo || 'default'}-${delayMs}`;
 
             // Evitar enviar el mismo seguimiento repetido en las últimas 24 horas
@@ -100,7 +101,7 @@ export class FollowUpEngineService {
               timestamp: new Date()
             };
             
-            this.logger.log(`[FollowUpEngine] Oportunidad de seguimiento detectada para contacto ${convo.contactId}, regla: ${ruleIdentifier}`);
+            this.logger.log(`[FollowUpEngine] ✅ Oportunidad de seguimiento activada para ${convo.contact.name || convo.contactId} (hace ${Math.round(timeSinceLastInteraction / 60000)} min), regla: ${rule.tiempo || ruleIdentifier}`);
             
             this.eventEmitter.emit('FOLLOW_UP_PENDING', payload);
             
@@ -113,11 +114,22 @@ export class FollowUpEngineService {
   }
 
   /**
-   * Comprueba si la hora actual está dentro de la ventana de atención respetuosa (9 AM - 11 PM).
+   * Comprueba si la hora actual está dentro de la ventana de atención respetuosa considerando zona horaria.
    */
   private isWithinAllowedWindow(now: Date, startHour: number, endHour: number): boolean {
-    const currentHour = now.getHours();
-    return currentHour >= startHour && currentHour < endHour;
+    try {
+      // Usar America/Caracas (UTC-4) o extraer la hora local
+      const hourStr = new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',
+        hour12: false,
+        timeZone: 'America/Caracas',
+      }).format(now);
+      const localHour = parseInt(hourStr, 10);
+      return localHour >= startHour && localHour < endHour;
+    } catch {
+      const currentHour = now.getHours();
+      return currentHour >= startHour && currentHour < endHour;
+    }
   }
 
   /**
@@ -129,13 +141,16 @@ export class FollowUpEngineService {
     }
     const text = `${rule.tiempo || ''} ${rule.condition || ''} ${rule.condicion || ''}`.toLowerCase();
     
-    const hoursMatch = text.match(/(\d+)\s*(?:h|hora|horas)/);
+    // Minutos: '2 min', '5 minutos', '30m'
+    const minMatch = text.match(/(\d+)\s*(?:m|min|minuto|minutos)\b/);
+    if (minMatch) return parseInt(minMatch[1], 10) * 60 * 1000;
+
+    // Horas: '1 hora', '2 horas', '24h'
+    const hoursMatch = text.match(/(\d+)\s*(?:h|hora|horas)\b/);
     if (hoursMatch) return parseInt(hoursMatch[1], 10) * 60 * 60 * 1000;
     
-    const minMatch = text.match(/(\d+)\s*(?:m|min|minuto|minutos)/);
-    if (minMatch) return parseInt(minMatch[1], 10) * 60 * 1000;
-    
-    const daysMatch = text.match(/(\d+)\s*(?:d|dia|dias|día|días)/);
+    // Días: '1 dia', '2 días', '1d'
+    const daysMatch = text.match(/(\d+)\s*(?:d|dia|dias|día|días)\b/);
     if (daysMatch) return parseInt(daysMatch[1], 10) * 24 * 60 * 60 * 1000;
 
     return 24 * 60 * 60 * 1000; // 24 horas por defecto
