@@ -1,45 +1,31 @@
-# Base image
-FROM node:20.20.2-alpine AS builder
-
-WORKDIR /app
-
-# Instalar dependencias del sistema necesarias para Prisma
-RUN apk add --no-cache openssl libc6-compat
-
-# Archivos de dependencias
-COPY package*.json ./
-COPY prisma ./prisma/
-
-# Instalar dependencias
-RUN npm install
-
-# Copiar el código fuente (respetando .dockerignore)
-COPY . .
-
-# Generar Prisma Client con soporte multi-plataforma
-RUN npx prisma generate
-
-# Compilar NestJS
-RUN npm run build
-
-# --- Imagen final (ligera y lista para producción) ---
+# Base image Node.js 20 en Alpine Linux
 FROM node:20.20.2-alpine
 
 WORKDIR /app
 
-# Instalar dependencias nativas de runtime para Prisma
+# Instalar librerías de sistema nativas necesarias para Prisma Engine
 RUN apk add --no-cache openssl libc6-compat
 
-# Copiar dependencias de producción, package.json, cliente Prisma y la build
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./
-COPY --from=builder /app/scripts ./scripts
+# Copiar manifiestos de dependencias y schema de Prisma
+COPY package*.json ./
+COPY prisma ./prisma/
+COPY prisma.config.ts ./
+COPY scripts ./scripts/
 
-# Exponer el puerto
+# Instalar dependencias completas
+RUN npm install
+
+# Copiar código fuente (respetando .dockerignore)
+COPY . .
+
+# Generar cliente de Prisma
+RUN npx prisma generate
+
+# Compilar proyecto NestJS
+RUN npm run build
+
+# Exponer puerto 3000
 EXPOSE 3000
 
-# Comando por defecto para producción
+# Comando de arranque en producción
 CMD ["npm", "run", "start:prod"]

@@ -17,7 +17,7 @@ export class ContextBuilderService {
     tenantId: string, 
     contactId: string, 
     conversationId: string, 
-    content: string,
+    content: string | null = null,
     funnelInstruction: string | null = null
   ): Promise<any[]> {
     // 1. Obtener KOS Bundle del tenant dinámicamente
