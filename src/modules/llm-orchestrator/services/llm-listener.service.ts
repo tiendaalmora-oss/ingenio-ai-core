@@ -113,25 +113,7 @@ export class LlmListenerService {
         null
       );
 
-      const response = await this.hermesClient.generateResponse(masterPrompt);
-
-      if (response.content) {
-        await this.prisma.interaction.create({
-          data: {
-            conversationId: payload.conversationId,
-            direction: 'OUTBOUND',
-            type: 'TEXT',
-            content: response.content,
-            role: 'assistant'
-          }
-        });
-
-        this.eventEmitter.emit('response.generated', new ResponseGeneratedEvent(
-          payload.tenantId,
-          payload.conversationId,
-          response.content
-        ));
-      }
+      let response = await this.hermesClient.generateResponse(masterPrompt);
 
       if (response.toolCalls && response.toolCalls.length > 0) {
         await this.prisma.interaction.create({
@@ -155,6 +137,40 @@ export class LlmListenerService {
             call.arguments
           ));
         }
+
+        // Si el LLM ejecutó herramientas sin generar texto directo, solicitamos la respuesta conversacional final
+        if (!response.content || response.content.trim() === '') {
+          this.logger.log(`LLM ejecutó tool sin texto directo. Solicitando respuesta para el usuario...`);
+          const followUpPrompt = await this.contextBuilder.buildContext(
+            payload.tenantId,
+            payload.contactId,
+            payload.conversationId,
+            null,
+            null
+          );
+          const followUpResponse = await this.hermesClient.generateResponse(followUpPrompt);
+          if (followUpResponse.content) {
+            response.content = followUpResponse.content;
+          }
+        }
+      }
+
+      if (response.content && response.content.trim() !== '') {
+        await this.prisma.interaction.create({
+          data: {
+            conversationId: payload.conversationId,
+            direction: 'OUTBOUND',
+            type: 'TEXT',
+            content: response.content,
+            role: 'assistant'
+          }
+        });
+
+        this.eventEmitter.emit('response.generated', new ResponseGeneratedEvent(
+          payload.tenantId,
+          payload.conversationId,
+          response.content
+        ));
       }
     } catch (error) {
       this.logger.error(`Error orquestando LLM:`, error);

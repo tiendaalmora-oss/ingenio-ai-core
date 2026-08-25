@@ -43,7 +43,10 @@ export class PromptComposerService {
     const toolInstructions = this.buildToolInstructions();
     
     // 6. Combine System Message
-    let finalSystemContent = `${systemInstructions}\n${memoryContext}${summaryContext}${goalContext}${skillsContext}\n[REGLAS GENERALES]\nActúa de acuerdo a las instrucciones del KOS. No inventes información que no esté en tu configuración.\n${toolInstructions}`;
+    let finalSystemContent = `${systemInstructions}\n${memoryContext}${summaryContext}${goalContext}${skillsContext}\n[REGLAS GENERALES]:
+- Responde siempre de forma clara, concisa, humana y en español natural.
+- Sé breve y conversacional (formato adecuado para WhatsApp). No envíes respuestas interminables ni repitas información en bucle.
+- Actúa estrictamente de acuerdo a tu base de conocimiento KOS. No inventes datos ni precios que no estén en tu configuración.\n${toolInstructions}`;
     
     if (mode === PromptMode.FOLLOW_UP) {
       const followUpContext = `\n[MODO: FOLLOW_UP]\nEstás enviando un mensaje de seguimiento proactivo para reactivar la conversación.\nRegla de seguimiento aplicada: ${JSON.stringify(followUpRule)}\nEl usuario NO te ha hablado recientemente. Tú estás iniciando el contacto ahora mismo basándote en la regla anterior. Sé natural, amable, y ve directo al punto según la regla.\n`;

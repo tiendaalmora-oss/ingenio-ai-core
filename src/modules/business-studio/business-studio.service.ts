@@ -163,9 +163,14 @@ export class BusinessStudioService {
     };
   }
 
+  async getSection(tenantId: string, section: string) {
+    const base = await this.getKnowledgeBase(tenantId);
+    return base[section] || (['identidad', 'empresa'].includes(section) ? {} : []);
+  }
+
   async getItems(tenantId: string, section: string) {
     const base = await this.getKnowledgeBase(tenantId);
-    return base[section] || [];
+    return Array.isArray(base[section]) ? base[section] : [];
   }
 
   async getBundle(tenantId: string) {

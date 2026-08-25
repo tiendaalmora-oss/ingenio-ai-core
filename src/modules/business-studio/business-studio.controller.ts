@@ -105,7 +105,7 @@ export class BusinessStudioController {
     @TenantId() tenantId: string
   ) {
     this.validateSection(tenantId, section);
-    return this.studioService.getItems(tenantId, section);
+    return this.studioService.getSection(tenantId, section);
   }
 
   @Get('knowledge-base/:section/items')
@@ -155,6 +155,7 @@ export class BusinessStudioController {
     if (!tenantId) throw new BadRequestException('tenantId is required');
     
     const validSections = [
+      'identidad', 'empresa',
       'productos', 'categorias', 'servicios', 'faqs', 'objeciones', 
       'scriptsComerciales', 'promociones', 'seguimientos', 'soporte', 'politicasAtencion'
     ];
