@@ -75,10 +75,10 @@ const SECTION_FORM_CONFIGS: Record<string, { title: string; subtitle: string; fi
   },
   seguimientos: {
     title: 'Regla de Seguimiento',
-    subtitle: 'Mensajes para reactivar prospectos que dejaron de contestar.',
+    subtitle: 'Reactivación inteligente de prospectos según el tiempo y el estado del chat.',
     fields: [
-      { key: 'tiempo', label: 'Momento de Activación', placeholder: 'Ej: A las 2 horas de inactividad / Al día siguiente', type: 'text', required: true },
-      { key: 'mensaje', label: 'Mensaje de Reactivación', placeholder: 'Ej: Hola! ¿Te quedó alguna duda sobre el Mega Kit o necesitas los datos de pago para apartar tu acceso?', type: 'textarea', required: true },
+      { key: 'tiempo', label: 'Momento de Activación (Horas / Días)', placeholder: 'Ej: 2 horas / 24 horas / 48 horas', type: 'text', required: true },
+      { key: 'mensaje', label: 'Mensaje Sugerido (Opcional: Hermes creará uno con IA si lo dejas vacío)', placeholder: 'Déjalo en blanco para que Hermes genere una pregunta contextual con IA, o escribe un texto como: "Hola {nombre}, ¿pudiste revisar el kit?"', type: 'textarea' },
     ],
   },
   soporte: {

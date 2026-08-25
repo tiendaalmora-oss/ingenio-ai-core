@@ -23,13 +23,11 @@ export class OutboundDispatcherService {
 
   @Cron('*/30 * * * * *')
   async processPendingMessages() {
-    this.logger.debug('Buscando mensajes salientes pendientes...');
-
-    // Orden FIFO
+    // 1. Tomar lotes pequeños (máx 5) para dosificar y escalonar envíos de forma natural
     const pendingIds = await this.prisma.pendingOutboundMessage.findMany({
       where: { status: 'PENDING' },
       orderBy: { createdAt: 'asc' },
-      take: 20,
+      take: 5,
       select: { id: true }
     });
 
@@ -39,7 +37,7 @@ export class OutboundDispatcherService {
 
     const idsToProcess = pendingIds.map(p => p.id);
 
-    // Bloqueo Optimista: Actualizamos a PROCESSING solo los que siguen PENDING
+    // 2. Bloqueo Optimista: Actualizamos a PROCESSING solo los que siguen PENDING
     const updatedCount = await this.prisma.pendingOutboundMessage.updateMany({
       where: {
         id: { in: idsToProcess },
@@ -54,7 +52,7 @@ export class OutboundDispatcherService {
       return;
     }
 
-    // Traer los mensajes bloqueados
+    // 3. Traer los mensajes bloqueados
     const messagesToProcess = await this.prisma.pendingOutboundMessage.findMany({
       where: {
         id: { in: idsToProcess },
@@ -65,7 +63,15 @@ export class OutboundDispatcherService {
 
     this.metrics.pending += messagesToProcess.length;
 
-    for (const msg of messagesToProcess) {
+    for (let i = 0; i < messagesToProcess.length; i++) {
+      const msg = messagesToProcess[i];
+
+      // Retardo humano anti-ráfaga entre mensajes consecutivos (5 a 12 segundos)
+      if (i > 0) {
+        const jitterMs = Math.floor(Math.random() * (12000 - 5000 + 1)) + 5000;
+        await new Promise(resolve => setTimeout(resolve, jitterMs));
+      }
+
       const startTime = Date.now();
       try {
         const result = await this.wahaAdapter.sendMessage(msg.tenantId, msg.contactId, msg.message);
@@ -80,6 +86,23 @@ export class OutboundDispatcherService {
             providerResponse: JSON.stringify({ id: result })
           }
         });
+
+        // Registrar la interacción saliente en el historial del chat
+        if (msg.conversationId) {
+          try {
+            await this.prisma.interaction.create({
+              data: {
+                conversationId: msg.conversationId,
+                direction: 'OUTBOUND',
+                type: 'TEXT',
+                content: msg.message,
+                role: 'assistant',
+              }
+            });
+          } catch (e: any) {
+            this.logger.warn(`No se pudo guardar interaction para mensaje ${msg.id}: ${e.message}`);
+          }
+        }
         
         this.metrics.sent++;
         
@@ -128,5 +151,9 @@ export class OutboundDispatcherService {
     }
     
     this.logger.debug(`Métricas de despacho: SENT=${this.metrics.sent}, FAILED=${this.metrics.failed}, RETRY=${this.metrics.retry}`);
+  }
+
+  getMetrics() {
+    return { ...this.metrics };
   }
 }

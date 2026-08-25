@@ -7,6 +7,10 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 export class FollowUpEngineService {
   private readonly logger = new Logger(FollowUpEngineService.name);
 
+  // Ventana horaria de atención respetuosa (por defecto 9:00 AM a 11:00 PM)
+  private readonly DEFAULT_START_HOUR = 9;
+  private readonly DEFAULT_END_HOUR = 23;
+
   constructor(
     private prisma: PrismaService,
     private eventEmitter: EventEmitter2
@@ -14,7 +18,15 @@ export class FollowUpEngineService {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async evaluateFollowUps() {
-    // Evaluar únicamente conversaciones ACTIVAS
+    const now = new Date();
+
+    // 1. Validar ventana horaria de envío (evitar mensajes nocturnos no solicitados)
+    if (!this.isWithinAllowedWindow(now, this.DEFAULT_START_HOUR, this.DEFAULT_END_HOUR)) {
+      this.logger.debug(`Fuera de la ventana horaria permitida (${this.DEFAULT_START_HOUR}:00 - ${this.DEFAULT_END_HOUR}:00). Omitiendo seguimientos nocturnos.`);
+      return;
+    }
+
+    // 2. Evaluar únicamente conversaciones ACTIVAS
     const activeConversations = await this.prisma.conversation.findMany({
       where: {
         status: 'ACTIVE'
@@ -37,7 +49,6 @@ export class FollowUpEngineService {
     const tenantIds = [...new Set(activeConversations.map(c => c.contact.tenantId))];
 
     for (const tenantId of tenantIds) {
-      // Leer las reglas de seguimiento desde Knowledge Bundle
       const bundle = await this.prisma.knowledgeBundle.findUnique({
         where: { tenantId }
       });
@@ -53,7 +64,7 @@ export class FollowUpEngineService {
       const tenantConvos = activeConversations.filter(c => c.contact.tenantId === tenantId);
 
       for (const convo of tenantConvos) {
-        // No enviar seguimientos si el lead ya pagó o la venta se cerró
+        // No enviar seguimientos a leads que ya pagaron o con venta cerrada
         if (convo.contact.memory?.leadStatus === 'CLOSED' || convo.contact.memory?.leadStatus === 'PAGADO') {
           continue;
         }
@@ -93,7 +104,7 @@ export class FollowUpEngineService {
             
             this.eventEmitter.emit('FOLLOW_UP_PENDING', payload);
             
-            // Detenemos evaluación de esta conversación para no saturar con múltiples reglas simultáneas
+            // Evaluamos solo una regla por conversación para no saturar al cliente
             break;
           }
         }
@@ -101,6 +112,17 @@ export class FollowUpEngineService {
     }
   }
 
+  /**
+   * Comprueba si la hora actual está dentro de la ventana de atención respetuosa (9 AM - 11 PM).
+   */
+  private isWithinAllowedWindow(now: Date, startHour: number, endHour: number): boolean {
+    const currentHour = now.getHours();
+    return currentHour >= startHour && currentHour < endHour;
+  }
+
+  /**
+   * Interpreta cadenas de tiempo en lenguaje natural como '2 horas', '30 min', '24h', '1 día'.
+   */
   private parseDelayMs(rule: any): number {
     if (rule.delayHours && !isNaN(Number(rule.delayHours))) {
       return Number(rule.delayHours) * 60 * 60 * 1000;
