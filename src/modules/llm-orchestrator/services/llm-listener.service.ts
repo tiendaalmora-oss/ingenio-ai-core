@@ -10,6 +10,7 @@ import { PrismaService } from '../../../shared/database/prisma.service';
 import { FunnelEngineService } from '../../funnel-engine/funnel-engine.service';
 import { RuntimeEngineService } from '../../funnel-engine/runtime/runtime-engine.service';
 import { ExecutionContext } from '../../funnel-engine/runtime/execution-context.interface';
+import { sanitizeUserFacingResponse } from '../utils/response-sanitizer';
 
 /**
  * Tracks the recursive depth of the Executive Loop per conversation.
@@ -153,6 +154,10 @@ export class LlmListenerService {
             response.content = followUpResponse.content;
           }
         }
+      }
+
+      if (response.content) {
+        response.content = sanitizeUserFacingResponse(response.content);
       }
 
       if (response.content && response.content.trim() !== '') {

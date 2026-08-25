@@ -79,14 +79,44 @@ export class PromptComposerService {
   }
   
   private buildSystemKOS(kosBundle: any): string {
-    let result = '[SYSTEM KOS]\n';
+    let result = '[CONOCIMIENTO DEL NEGOCIO Y PRODUCTOS (KOS)]\n';
     if (!kosBundle) return result;
     
     for (const [key, value] of Object.entries(kosBundle)) {
-      if (typeof value === 'object') {
-        result += `- ${key.toUpperCase()}: ${JSON.stringify(value)}\n`;
-      } else {
-        result += `- ${key.toUpperCase()}: ${value}\n`;
+      if (!value) continue;
+      if (typeof value === 'string') {
+        result += `### ${key.toUpperCase()}:\n${value}\n\n`;
+      } else if (Array.isArray(value)) {
+        if (value.length > 0) {
+          result += `### ${key.toUpperCase()}:\n`;
+          value.forEach((item, idx) => {
+            if (typeof item === 'string') {
+              result += `- ${item}\n`;
+            } else if (typeof item === 'object') {
+              result += `- Item ${idx + 1}: ${Object.entries(item).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(' | ')}\n`;
+            }
+          });
+          result += '\n';
+        }
+      } else if (typeof value === 'object') {
+        result += `### ${key.toUpperCase()}:\n`;
+        for (const [subK, subV] of Object.entries(value)) {
+          if (subV) {
+            if (typeof subV === 'string') {
+              result += `  * ${subK}: ${subV}\n`;
+            } else if (Array.isArray(subV)) {
+              if (subV.length > 0) {
+                result += `  * ${subK}:\n`;
+                subV.forEach((sv, i) => {
+                  result += `    - ${typeof sv === 'object' ? JSON.stringify(sv) : sv}\n`;
+                });
+              }
+            } else if (typeof subV === 'object') {
+              result += `  * ${subK}: ${JSON.stringify(subV)}\n`;
+            }
+          }
+        }
+        result += '\n';
       }
     }
     return result;

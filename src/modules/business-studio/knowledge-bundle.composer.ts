@@ -4,27 +4,54 @@ import { Injectable } from '@nestjs/common';
 export class KnowledgeBundleComposer {
   
   /**
-   * Generates a clean, structured Knowledge Bundle artifact from raw BackOffice sections.
+   * Generates a clean, structured Knowledge Bundle artifact from raw BackOffice sections,
+   * seamlessly supporting natural language text, markdown, prompts, arrays, and objects.
    */
   compose(rawData: any) {
     const raw = rawData || {};
-    const identidad = raw.identidad || {};
-    const empresa = raw.empresa || {};
+    
+    // Normalizar identidad (soporta texto plano natural o campos estructurados)
+    let identity: any;
+    if (typeof raw.identidad === 'string') {
+      identity = raw.identidad;
+    } else if (raw.identidad && typeof raw.identidad === 'object') {
+      if (raw.identidad.prompt) {
+        identity = raw.identidad.prompt;
+      } else {
+        identity = {
+          nombre: raw.identidad.nombre || "Asistente Virtual",
+          tono: raw.identidad.tono || "Profesional, conciso, empático y vendedor",
+          rol: raw.identidad.rol || "Asistente de ventas y atención al cliente",
+          objetivo: raw.identidad.objetivo || "Vender, calificar prospectos y responder dudas de forma persuasiva"
+        };
+      }
+    } else {
+      identity = "Asistente Virtual de ventas y atención al cliente.";
+    }
+
+    // Normalizar empresa (soporta texto plano natural o campos estructurados)
+    let business: any;
+    if (typeof raw.empresa === 'string') {
+      business = raw.empresa;
+    } else if (raw.empresa && typeof raw.empresa === 'object') {
+      if (raw.empresa.prompt) {
+        business = raw.empresa.prompt;
+      } else {
+        business = {
+          nombre: raw.empresa.nombre || "",
+          descripcion: raw.empresa.descripcion || "",
+          sitioWeb: raw.empresa.sitioWeb || "",
+          ubicacion: raw.empresa.ubicacion || "",
+          contacto: raw.empresa.contacto || ""
+        };
+      }
+    } else {
+      business = "Información general del negocio.";
+    }
 
     return {
-      identity: {
-        nombre: identidad.nombre || "Asistente Virtual",
-        tono: identidad.tono || "Profesional, conciso, empático y vendedor",
-        rol: identidad.rol || "Asistente de ventas y atención al cliente",
-        objetivo: identidad.objetivo || "Vender, calificar prospectos y responder dudas de forma persuasiva"
-      },
-      business: {
-        nombre: empresa.nombre || "",
-        descripcion: empresa.descripcion || "",
-        sitioWeb: empresa.sitioWeb || "",
-        ubicacion: empresa.ubicacion || "",
-        contacto: empresa.contacto || ""
-      },
+      identity,
+      business,
       products: {
          categories: raw.categorias || [],
          items: raw.productos || []
