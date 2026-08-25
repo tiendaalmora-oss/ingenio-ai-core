@@ -43,13 +43,14 @@ export class PromptComposerService {
     const toolInstructions = this.buildToolInstructions();
     
     // 6. Combine System Message
-    let finalSystemContent = `${systemInstructions}\n${memoryContext}${summaryContext}${goalContext}${skillsContext}\n[REGLAS GENERALES]:
-- Responde siempre de forma clara, concisa, humana y en español natural.
-- Sé breve y conversacional (formato adecuado para WhatsApp). No envíes respuestas interminables ni repitas información en bucle.
-- Actúa estrictamente de acuerdo a tu base de conocimiento KOS. No inventes datos ni precios que no estén en tu configuración.\n${toolInstructions}`;
-    
+    let finalSystemContent = `${systemInstructions}\n${memoryContext}${summaryContext}${goalContext}${skillsContext}\n[REGLAS GENERALES DE VENTA Y EMBUDOS]:
+- Responde siempre de forma clara, concisa, persuasiva y en español natural (tono WhatsApp amigable y directo).
+- No envíes respuestas interminables ni repitas información en bucle.
+- Actúa estrictamente de acuerdo a tu base de conocimiento KOS. No inventes datos ni precios que no estén en tu configuración.
+- EMBUDOS DE VENTA POR PRODUCTO: Cuando un cliente muestre interés por un producto o kit (ej: Matemática, Física), identifica el producto y sigue la 'secuenciaVenta' (embudo paso a paso) configurada para ese producto hasta concretar el cierre.\n${toolInstructions}`;
+
     if (mode === PromptMode.FOLLOW_UP) {
-      const followUpContext = `\n[MODO: FOLLOW_UP]\nEstás enviando un mensaje de seguimiento proactivo para reactivar la conversación.\nRegla de seguimiento aplicada: ${JSON.stringify(followUpRule)}\nEl usuario NO te ha hablado recientemente. Tú estás iniciando el contacto ahora mismo basándote en la regla anterior. Sé natural, amable, y ve directo al punto según la regla.\n`;
+      const followUpContext = `\n[MODO: SEGUIMIENTO AUTOMÁTICO ACTIVO (FOLLOW_UP)]\nEstás enviando un mensaje de seguimiento proactivo para reactivar la conversación.\nRegla de seguimiento aplicada: ${JSON.stringify(followUpRule)}\nEl usuario no ha respondido recientemente. Tú estás retomando el contacto amablemente según la regla. Menciona el producto que le interesaba si lo conoces, resuelve dudas y anímalo a continuar.\n`;
       finalSystemContent += followUpContext;
     }
 
@@ -137,14 +138,22 @@ export class PromptComposerService {
   
   private buildToolInstructions(): string {
     return `
-[INSTRUCCIONES DE TOOLS - OBLIGATORIO]:
-Tienes acceso a herramientas que DEBES usar en estas situaciones:
-- update_business_memory: Llama a esta tool SIEMPRE que el usuario mencione su nombre, empresa, tipo de negocio, intereses, productos que busca, problemas actuales, tamaño del negocio (ej. cantidad de cajas, sucursales), o cualquier dato relevante del lead. Es fundamental para actualizar el CRM automáticamente. DEBES extraer CADA fragmento de información nueva en llamadas separadas o unificadas.
-- create_task: Úsala cuando necesites recordarte a ti mismo hacer un seguimiento interno.
-- schedule_meeting: Úsala EXCLUSIVAMENTE cuando el cliente acepte de forma explícita tener una demostración o reunión.
-- handoff_to_human: Úsala cuando el usuario pida hablar con una persona humana o la situación lo requiera.
+[INSTRUCCIONES DE TOOLS - ETIQUETADO Y CRM AUTOMÁTICO]:
+Tienes acceso a herramientas esenciales que DEBES usar proactivamente:
+- update_business_memory: Llama a esta herramienta OBLIGATORIAMENTE para mantener el CRM actualizado:
+  * interests: Agrega el nombre del producto o kit consultado (ej: ["Mega Kit Matemática"] o ["Mega Kit Física"]).
+  * leadStatus: Clasifica el estado de venta:
+      - "COLD": Primer contacto o curiosidad general.
+      - "WARM": Pregunta por características, beneficios o precios.
+      - "HOT": Pide datos de pago, transferencia o dice "quiero el kit".
+      - "CLOSED": Pago reportado / venta concretada.
+  * tags: Asigna etiquetas automáticas según lo que ocurra: ["INTERESADO_MATEMATICA", "INTERESADO_FISICA", "PIDIO_PRECIO", "PIDIO_DATOS_PAGO", "PAGO_CONFIRMADO", "DUDAS_MATERIAL", etc.].
+  * name, company, objections: Extrae el nombre del cliente y cualquier objeción o duda.
+- create_task: Para tareas o recordatorios internos.
+- schedule_meeting: Solo cuando el cliente acepte expresamente una reunión.
+- handoff_to_human: Cuando el usuario pida explícitamente ser atendido por una persona.
 
-IMPORTANTE: Si el usuario menciona cualquier dato de su negocio (empresa, rubro, cantidad de cajas, herramientas que usa, problemas, necesidades), PRIMERO llama a update_business_memory obligatoriamente con esa información antes de responder.`;
+IMPORTANTE: Antes de enviar la respuesta final, si detectas nuevos datos, interés en un producto o cambio de estado de compra, llama a update_business_memory para etiquetar al cliente.`;
   }
   
   private buildHistory(history: Interaction[]): any[] {

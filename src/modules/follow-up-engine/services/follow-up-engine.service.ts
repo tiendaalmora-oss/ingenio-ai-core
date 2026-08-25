@@ -14,15 +14,15 @@ export class FollowUpEngineService {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async evaluateFollowUps() {
-    this.logger.debug('Evaluando oportunidades de seguimiento...');
-
     // Evaluar únicamente conversaciones ACTIVAS
     const activeConversations = await this.prisma.conversation.findMany({
       where: {
         status: 'ACTIVE'
       },
       include: {
-        contact: true,
+        contact: {
+          include: { memory: true }
+        },
         interactions: {
           orderBy: { timestamp: 'desc' },
           take: 1
@@ -53,35 +53,43 @@ export class FollowUpEngineService {
       const tenantConvos = activeConversations.filter(c => c.contact.tenantId === tenantId);
 
       for (const convo of tenantConvos) {
+        // No enviar seguimientos si el lead ya pagó o la venta se cerró
+        if (convo.contact.memory?.leadStatus === 'CLOSED' || convo.contact.memory?.leadStatus === 'PAGADO') {
+          continue;
+        }
+
         const lastInteraction = convo.interactions.length > 0 ? convo.interactions[0] : null;
         if (!lastInteraction) continue;
 
         const timeSinceLastInteraction = Date.now() - lastInteraction.timestamp.getTime();
 
         for (const rule of seguimientos) {
-          // Lógica simplificada de tiempos basados en el KOS para determinar si corresponde
-          let delayMs = 24 * 60 * 60 * 1000; // 24h por defecto
-          if (rule.delayHours) {
-            delayMs = rule.delayHours * 60 * 60 * 1000;
-          } else if (typeof rule.condition === 'string') {
-            if (rule.condition.includes('24h')) delayMs = 24 * 60 * 60 * 1000;
-            else if (rule.condition.includes('48h')) delayMs = 48 * 60 * 60 * 1000;
-            else if (rule.condition.includes('1h')) delayMs = 1 * 60 * 60 * 1000;
-            else if (rule.condition.includes('min')) delayMs = 5 * 60 * 1000;
-          }
+          const delayMs = this.parseDelayMs(rule);
 
           if (timeSinceLastInteraction > delayMs) {
-            // Solo generar una acción interna (FOLLOW_UP_PENDING) y publicarla
+            const ruleIdentifier = rule.id || `rule-${rule.tiempo || 'default'}-${delayMs}`;
+
+            // Evitar enviar el mismo seguimiento repetido en las últimas 24 horas
+            const alreadyDispatched = await this.prisma.pendingOutboundMessage.findFirst({
+              where: {
+                conversationId: convo.id,
+                followUpId: ruleIdentifier,
+                createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+              }
+            });
+
+            if (alreadyDispatched) continue;
+
             const payload = {
               tenantId: tenantId,
               conversationId: convo.id,
               contactId: convo.contactId,
-              followUpId: rule.id || `rule-${Math.random().toString(36).substring(2, 9)}`,
+              followUpId: ruleIdentifier,
               ruleApplied: rule,
               timestamp: new Date()
             };
             
-            this.logger.log(`[FollowUpEngine] Oportunidad detectada para contacto ${convo.contactId}, regla: ${payload.followUpId}`);
+            this.logger.log(`[FollowUpEngine] Oportunidad de seguimiento detectada para contacto ${convo.contactId}, regla: ${ruleIdentifier}`);
             
             this.eventEmitter.emit('FOLLOW_UP_PENDING', payload);
             
@@ -91,5 +99,23 @@ export class FollowUpEngineService {
         }
       }
     }
+  }
+
+  private parseDelayMs(rule: any): number {
+    if (rule.delayHours && !isNaN(Number(rule.delayHours))) {
+      return Number(rule.delayHours) * 60 * 60 * 1000;
+    }
+    const text = `${rule.tiempo || ''} ${rule.condition || ''} ${rule.condicion || ''}`.toLowerCase();
+    
+    const hoursMatch = text.match(/(\d+)\s*(?:h|hora|horas)/);
+    if (hoursMatch) return parseInt(hoursMatch[1], 10) * 60 * 60 * 1000;
+    
+    const minMatch = text.match(/(\d+)\s*(?:m|min|minuto|minutos)/);
+    if (minMatch) return parseInt(minMatch[1], 10) * 60 * 1000;
+    
+    const daysMatch = text.match(/(\d+)\s*(?:d|dia|dias|día|días)/);
+    if (daysMatch) return parseInt(daysMatch[1], 10) * 24 * 60 * 60 * 1000;
+
+    return 24 * 60 * 60 * 1000; // 24 horas por defecto
   }
 }

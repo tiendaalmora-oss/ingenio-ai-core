@@ -27,6 +27,7 @@ const SECTION_FORM_CONFIGS: Record<string, { title: string; subtitle: string; fi
       { key: 'precio', label: 'Precio / Valor', placeholder: 'Ej: 7.250 Bs (o $50 USD)', type: 'text', required: true },
       { key: 'categoria', label: 'Categoría', placeholder: 'Ej: Material Educativo / Secundaria', type: 'text' },
       { key: 'descripcion', label: 'Beneficios y Qué Incluye', placeholder: 'Ej: Incluye 83 evaluaciones editables, versiones resueltas por el profesor, planificaciones MPPE, proyectos y acceso de por vida.', type: 'textarea', required: true },
+      { key: 'secuenciaVenta', label: 'Embudo de Venta y Secuencia Paso a Paso (Guion de Cierre)', placeholder: 'Paso 1: Saludar y confirmar el nivel educativo.\nPaso 2: Presentar los beneficios clave del kit.\nPaso 3: Dar el precio de oferta con acceso vitalicio.\nPaso 4: Pedir nombre y correo para enviar los datos bancarios.', type: 'textarea' },
       { key: 'link', label: 'Enlace de Pago o Acceso', placeholder: 'Ej: https://mpago.la/... o enlace a Google Drive', type: 'text' },
     ],
   },
