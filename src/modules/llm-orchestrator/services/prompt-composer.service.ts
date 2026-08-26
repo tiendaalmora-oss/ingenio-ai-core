@@ -170,21 +170,17 @@ export class PromptComposerService {
   private buildToolInstructions(): string {
     return `
 [INSTRUCCIONES DE TOOLS - ETIQUETADO Y CRM AUTOMÁTICO]:
-Tienes acceso a herramientas esenciales que DEBES usar proactivamente:
-- update_business_memory: Llama a esta herramienta OBLIGATORIAMENTE para mantener el CRM actualizado:
+Tienes acceso a herramientas esenciales que puedes usar para registrar datos en el CRM:
+- update_business_memory: Úsala para registrar intereses del cliente, etiquetas o su nivel de avance en la compra:
   * interests: Agrega el nombre del producto o kit consultado (ej: ["Mega Kit Matemática"] o ["Mega Kit Física"]).
-  * leadStatus: Clasifica el estado de venta:
-      - "COLD": Primer contacto o curiosidad general.
-      - "WARM": Pregunta por características, beneficios o precios.
-      - "HOT": Pide datos de pago, transferencia o dice "quiero el kit".
-      - "CLOSED": Pago reportado / venta concretada.
-  * tags: Asigna etiquetas automáticas según lo que ocurra: ["INTERESADO_MATEMATICA", "INTERESADO_FISICA", "PIDIO_PRECIO", "PIDIO_DATOS_PAGO", "PAGO_CONFIRMADO", "DUDAS_MATERIAL", etc.].
-  * name, company, objections: Extrae el nombre del cliente y cualquier objeción o duda.
+  * leadStatus: Clasifica el estado de venta ("COLD", "WARM", "HOT", "CLOSED").
+  * tags: Etiquetas relevantes (ej: ["INTERESADO_MATEMATICA", "INTERESADO_FISICA", "3RO_ANO", "4TO_ANO", "5TO_ANO", "PIDIO_PRECIO", etc.]).
+  * name, company, objections: Datos adicionales relevantes.
 - create_task: Para tareas o recordatorios internos.
 - schedule_meeting: Solo cuando el cliente acepte expresamente una reunión.
-- handoff_to_human: Cuando el usuario pida explícitamente ser atendido por una persona.
+- handoff_to_human: Cuando el usuario pida explícitamente ser atendido por un asesor humano.
 
-IMPORTANTE: Antes de enviar la respuesta final, si detectas nuevos datos, interés en un producto o cambio de estado de compra, llama a update_business_memory para etiquetar al cliente.`;
+REGLA OBLIGATORIA: Siempre debes responder de forma amable, profesional y persuasiva al mensaje del usuario en lenguaje natural. Nunca dejes al usuario sin respuesta.`;
   }
   
   private buildHistory(history: Interaction[]): any[] {

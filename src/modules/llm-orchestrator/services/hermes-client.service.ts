@@ -85,12 +85,16 @@ export class HermesClientService {
     private readonly aiProvider: IAiProvider,
   ) {}
 
-  async generateResponse(messages: AiMessage[]): Promise<LLMResponse> {
+  async generateResponse(messages: AiMessage[], enableTools = true): Promise<LLMResponse> {
     try {
-      const response: AiResponse = await this.aiProvider.chat(messages, {
-        tools: HERMES_TOOLS,
+      const options: any = {
         temperature: 0.4,
-      });
+      };
+      if (enableTools) {
+        options.tools = HERMES_TOOLS;
+      }
+
+      const response: AiResponse = await this.aiProvider.chat(messages, options);
 
       this.logger.log(`Response received from ${response.provider} | model: ${response.model}`);
 

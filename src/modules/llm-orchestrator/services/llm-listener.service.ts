@@ -106,7 +106,7 @@ export class LlmListenerService {
 
       // 2. Si no hay funnel, el Agente Universal actúa libremente
       this.logger.log(`No hay automatización, ejecutando Agente Universal...`);
-      let currentPrompt = await this.contextBuilder.buildContext(
+      const masterPrompt = await this.contextBuilder.buildContext(
         payload.tenantId, 
         payload.contactId, 
         payload.conversationId,
@@ -115,53 +115,51 @@ export class LlmListenerService {
       );
 
       let finalContent = '';
+      const response = await this.hermesClient.generateResponse(masterPrompt, true);
 
-      // Bucle Ejecutivo (hasta 3 turnos de herramientas antes de responder al usuario)
-      for (let turn = 0; turn < 3; turn++) {
-        const response = await this.hermesClient.generateResponse(currentPrompt);
-
-        if (response.toolCalls && response.toolCalls.length > 0) {
-          await this.prisma.interaction.create({
-            data: {
-              conversationId: payload.conversationId,
-              direction: 'OUTBOUND',
-              type: 'TOOL_CALL',
-              content: response.content || '',
-              role: 'assistant',
-              toolCalls: response.toolCalls
-            }
-          });
-
-          for (const call of response.toolCalls) {
-            await this.eventEmitter.emitAsync('tool.called', new ToolCalledEvent(
-              payload.tenantId,
-              payload.conversationId,
-              payload.contactId,
-              call.id,
-              call.name,
-              call.arguments
-            ));
+      // Si el LLM ejecutó herramientas
+      if (response.toolCalls && response.toolCalls.length > 0) {
+        await this.prisma.interaction.create({
+          data: {
+            conversationId: payload.conversationId,
+            direction: 'OUTBOUND',
+            type: 'TOOL_CALL',
+            content: response.content || '',
+            role: 'assistant',
+            toolCalls: response.toolCalls
           }
+        });
 
-          if (response.content && response.content.trim() !== '') {
-            finalContent = response.content;
-            break;
-          }
+        for (const call of response.toolCalls) {
+          await this.eventEmitter.emitAsync('tool.called', new ToolCalledEvent(
+            payload.tenantId,
+            payload.conversationId,
+            payload.contactId,
+            call.id,
+            call.name,
+            call.arguments
+          ));
+        }
 
-          this.logger.log(`[Executive Loop] Turno ${turn + 1}: Tool ejecutada. Obteniendo respuesta conversacional con memoria actualizada...`);
-          currentPrompt = await this.contextBuilder.buildContext(
+        if (response.content && response.content.trim() !== '') {
+          finalContent = response.content;
+        } else {
+          // Solicitamos la respuesta conversacional final forzando texto (enableTools = false)
+          this.logger.log(`[Executive Loop] Herramienta ejecutada. Solicitando respuesta de texto conversacional para el usuario...`);
+          const textPrompt = await this.contextBuilder.buildContext(
             payload.tenantId,
             payload.contactId,
             payload.conversationId,
             null,
             null
           );
-        } else {
-          if (response.content) {
-            finalContent = response.content;
+          const textResponse = await this.hermesClient.generateResponse(textPrompt, false);
+          if (textResponse.content) {
+            finalContent = textResponse.content;
           }
-          break;
         }
+      } else if (response.content) {
+        finalContent = response.content;
       }
 
       if (finalContent) {
