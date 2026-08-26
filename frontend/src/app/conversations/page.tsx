@@ -135,10 +135,31 @@ export default function ConversationsPage() {
       queryClient.invalidateQueries({ queryKey: ['conversation-messages', selectedConvId] });
       queryClient.invalidateQueries({ queryKey: ['conversation-detail', selectedConvId] });
       queryClient.invalidateQueries({ queryKey: ['conversations-list'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-leads'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-summary'] });
       setConfirmResetOpen(false);
     },
     onError: (err: any) => {
       addToast(err?.response?.data?.message || 'Error al reiniciar historial', 'error');
+    },
+  });
+
+  // 7. Purge contact completely from CRM & Database (Reset Total desde Cero)
+  const purgeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.delete(`/conversations/${id}/purge-contact`);
+      return res.data;
+    },
+    onSuccess: () => {
+      addToast('Prospecto y todo su historial eliminados por completo del CRM', 'success');
+      setSelectedConvId(null);
+      queryClient.invalidateQueries({ queryKey: ['conversations-list'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-leads'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-summary'] });
+      setConfirmResetOpen(false);
+    },
+    onError: (err: any) => {
+      addToast(err?.response?.data?.message || 'Error al eliminar contacto', 'error');
     },
   });
 
@@ -435,37 +456,59 @@ export default function ConversationsPage() {
         </div>
       )}
 
-      {/* Modal de confirmación de reset de historial */}
+      {/* Modal de confirmación de reset de historial y purga */}
       {confirmResetOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-5 space-y-4 border border-gray-100">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 border border-gray-100">
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0 font-bold">
                 <Trash2 className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-gray-900">¿Borrar historial del contacto?</h4>
+                <h4 className="text-base font-bold text-gray-900">Opciones de Reinicio de Prueba</h4>
                 <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                  Se eliminarán todos los mensajes y la memoria extraída de este lead para que puedas hacer una prueba limpia desde cero.
+                  Selecciona cómo deseas reiniciar este número para tus pruebas:
                 </p>
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+
+            <div className="space-y-2 pt-2">
               <button
                 type="button"
-                onClick={() => setConfirmResetOpen(false)}
-                disabled={resetMutation.isPending}
-                className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                onClick={() => selectedConvId && purgeMutation.mutate(selectedConvId)}
+                disabled={purgeMutation.isPending || resetMutation.isPending}
+                className="w-full p-3 text-left rounded-xl border border-red-200 bg-red-50/50 hover:bg-red-50 hover:border-red-300 transition group"
               >
-                Cancelar
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-red-700">🧨 Borrar TODO el Contacto (Reset Total)</span>
+                  <span className="text-[10px] bg-red-200 text-red-800 font-bold px-2 py-0.5 rounded">Recomendado</span>
+                </div>
+                <p className="text-[11px] text-red-600/80 mt-1">
+                  Elimina el número del CRM, borra estados, etiquetas, memoria y mensajes. Cuando vuelva a escribir, empezará como un cliente 100% nuevo.
+                </p>
               </button>
+
               <button
                 type="button"
                 onClick={() => selectedConvId && resetMutation.mutate(selectedConvId)}
-                disabled={resetMutation.isPending}
-                className="px-3.5 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition flex items-center gap-1.5"
+                disabled={resetMutation.isPending || purgeMutation.isPending}
+                className="w-full p-3 text-left rounded-xl border border-gray-200 bg-gray-50/50 hover:bg-gray-100 transition"
               >
-                {resetMutation.isPending ? 'Borrando...' : 'Sí, borrar historial'}
+                <span className="text-xs font-bold text-gray-800">🧹 Borrar Solo Historial de Mensajes</span>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Limpia los mensajes del chat y la memoria pero mantiene el contacto en el CRM.
+                </p>
+              </button>
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setConfirmResetOpen(false)}
+                disabled={resetMutation.isPending || purgeMutation.isPending}
+                className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition"
+              >
+                Cancelar
               </button>
             </div>
           </div>

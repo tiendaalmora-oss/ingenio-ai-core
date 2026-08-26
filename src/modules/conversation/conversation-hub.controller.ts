@@ -272,12 +272,18 @@ export class ConversationHubController {
       where: { conversationId: conv.id },
     });
 
-    // 2. Reiniciar la memoria de negocio del contacto si existe
+    // 2. Reiniciar la memoria de negocio, tareas, logs y seguimientos del contacto
     if (conv.contactId) {
       await this.prisma.businessMemory.deleteMany({
         where: { contactId: conv.contactId },
       });
+      await this.prisma.memoryAuditLog.deleteMany({
+        where: { contactId: conv.contactId },
+      });
       await this.prisma.task.deleteMany({
+        where: { contactId: conv.contactId },
+      });
+      await this.prisma.pendingOutboundMessage.deleteMany({
         where: { contactId: conv.contactId },
       });
     }
@@ -288,8 +294,50 @@ export class ConversationHubController {
       data: { status: 'NEW' },
     });
 
-    this.logger.log(`🧹 Historial y memoria reiniciados para la conversación ${id} (Contacto: ${conv.contact.name || conv.contact.externalId})`);
+    this.logger.log(`🧹 Historial, memoria y seguimientos reiniciados para la conversación ${id} (Contacto: ${conv.contact.name || conv.contact.externalId})`);
 
-    return { success: true, conversationId: conv.id, message: 'Historial reiniciado correctamente' };
+    return { success: true, conversationId: conv.id, message: 'Historial y memoria reiniciados correctamente' };
+  }
+
+  /**
+   * DELETE /conversations/:id/purge-contact
+   * Elimina COMPLETAMENTE el contacto del CRM, todas sus conversaciones, memoria, tareas y seguimientos.
+   */
+  @Delete(':id/purge-contact')
+  async purgeContact(
+    @Param('id') id: string,
+    @TenantId() tenantId: string,
+  ) {
+    const conv = await this.prisma.conversation.findFirst({
+      where: { id, contact: { tenantId } },
+      include: { contact: true },
+    });
+
+    if (!conv) {
+      throw new BadRequestException(`Conversación "${id}" no encontrada.`);
+    }
+
+    const contactId = conv.contactId;
+
+    if (contactId) {
+      const allConvs = await this.prisma.conversation.findMany({ where: { contactId } });
+      const convIds = allConvs.map(c => c.id);
+      
+      if (convIds.length > 0) {
+        await this.prisma.interaction.deleteMany({ where: { conversationId: { in: convIds } } });
+        await this.prisma.activeFunnel.deleteMany({ where: { conversationId: { in: convIds } } });
+        await this.prisma.conversation.deleteMany({ where: { id: { in: convIds } } });
+      }
+
+      await this.prisma.task.deleteMany({ where: { contactId } });
+      await this.prisma.memoryAuditLog.deleteMany({ where: { contactId } });
+      await this.prisma.businessMemory.deleteMany({ where: { contactId } });
+      await this.prisma.pendingOutboundMessage.deleteMany({ where: { contactId } });
+      await this.prisma.contact.delete({ where: { id: contactId } });
+    }
+
+    this.logger.log(`🧨 Contacto ${contactId} (${conv.contact.name || conv.contact.phone}) y toda su data eliminados por completo.`);
+
+    return { success: true, contactId, message: 'Contacto y toda su información eliminados por completo' };
   }
 }
