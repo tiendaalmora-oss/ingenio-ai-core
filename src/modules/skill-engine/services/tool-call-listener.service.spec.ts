@@ -66,11 +66,6 @@ describe('ToolCallListenerService', () => {
         })
       })
     );
-
-    expect(eventEmitter.emit).toHaveBeenCalledWith(
-      'interaction.received',
-      expect.any(Object)
-    );
   });
 
   it('should handle create_task and emit task.created', async () => {

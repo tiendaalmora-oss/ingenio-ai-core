@@ -13,6 +13,7 @@ import { ConversationUpdatedEvent } from '../events/out/conversation-updated.eve
 @Injectable()
 export class ReceiveMessageService {
   private readonly logger = new Logger(ReceiveMessageService.name);
+  private readonly recentMessages = new Map<string, number>();
 
   constructor(
     @Inject(CONVERSATION_REPOSITORY)
@@ -23,6 +24,24 @@ export class ReceiveMessageService {
   ) {}
 
   async execute(tenantId: string, externalId: string, content: string): Promise<void> {
+    const dedupeKey = `${tenantId}:${externalId}:${content.trim()}`;
+    const now = Date.now();
+    const lastSeen = this.recentMessages.get(dedupeKey);
+
+    // Evitar procesar eventos webhook duplicados que lleguen en menos de 4 segundos
+    if (lastSeen && (now - lastSeen) < 4000) {
+      this.logger.warn(`Ignorando mensaje duplicado recibido en <4s para ${externalId}: "${content.substring(0, 30)}..."`);
+      return;
+    }
+    this.recentMessages.set(dedupeKey, now);
+
+    // Limpieza de memoria si el caché crece
+    if (this.recentMessages.size > 500) {
+      for (const [k, ts] of this.recentMessages.entries()) {
+        if (now - ts > 30000) this.recentMessages.delete(k);
+      }
+    }
+
     this.logger.debug(`ReceiveMessageService executing for tenant=${tenantId} externalId=${externalId}`);
     // 0. Ensure Contact exists for (tenantId, phoneNormalized) → get internal UUID
     const contactUuid = await this.conversationRepo.ensureContactExists(tenantId, externalId);

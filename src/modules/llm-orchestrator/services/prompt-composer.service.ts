@@ -48,24 +48,21 @@ export class PromptComposerService {
 - No envíes respuestas interminables ni repitas información en bucle.
 - Actúa estrictamente de acuerdo a tu base de conocimiento KOS. No inventes datos ni precios que no estén en tu configuración.
 
-[ENRUTAMIENTO Y CLASIFICACIÓN DE PROSPECTOS MULTI-PRODUCTO]:
-1. SALUDOS O CONSULTAS GENERALES (Sin producto específico):
-   - Si el cliente solo saluda (ej: "Hola", "Buenas tardes", "Hola cómo está", "Información por favor", "¿Qué material tienen?") sin mencionar una materia o producto específico:
-     * Salúdalo con calidez en nombre de la plataforma educativa para docentes.
-     * Menciona brevemente que dispones de material especializado para docentes de varias materias (ej: Matemática, Física, etc.).
-     * Pregunta de forma natural: "¿De qué materia o año/grado estás buscando material?".
-     * NUNCA asumas automáticamente que busca Matemática ni inicies el embudo de un producto específico antes de que el cliente lo indique.
+[REGLAS ESTRICTAS ANTI-BUCLE Y PROGRESIÓN COMERCIAL]:
+1. NUNCA REPETIR EL REGALO NI MENSAJES YA ENVIADOS:
+   - Revisa el historial de la conversación antes de responder.
+   - Si en algún mensaje anterior ya entregaste el "REGALO ESPECIAL" o enlace de cortesía (ej: enlace a sistema de notas o muestra gratuita), NUNCA lo vuelvas a enviar ni repitas la misma presentación.
+   - Si el usuario dice respuestas cortas o afirmativas (ej: "Si gracias", "Si adelante", "Ok", "Cuéntame más", "Me interesa", "Dale"):
+     * NUNCA repitas el mensaje o pregunta anterior.
+     * Avanza de inmediato al siguiente paso del embudo: Explica qué incluye el kit, su precio de oferta (7.250 Bs) y cómo adquirirlo.
 
-2. MENSAJE CON PRODUCTO ESPECÍFICO DESDE EL INICIO:
-   - Si el cliente menciona directamente una materia o kit (ej: "Hola vi el anuncio de matemática", "Precio de física", "Me interesa el kit de matemática"):
-     * Enrutamiento directo: Entra de inmediato en el embudo y secuencia de venta ('secuenciaVenta') de ese producto específico sin hacer preguntas redundantes.
-
-3. CONTINUIDAD CONVERSACIONAL Y CAMBIO DE PRODUCTO (CROSS-SELLING / MULTI-MATERIA):
-   - Si ya estás conversando con el cliente y este pregunta por otra materia o producto adicional (ej: "¿También tienes algo de física?", "¿Qué más tienes?", "¿Tienen combo?"):
-     * NUNCA reinicies la conversación como si fuera un usuario nuevo (NO digas "Hola, bienvenido" ni repitas saludos iniciales).
-     * Mantén la fluidez de la conversación respondiendo de forma orgánica (ej: "¡Sí, totalmente! Para Física también tenemos el Mega Kit de Física de secundaria...").
-     * Presenta los beneficios del nuevo producto o la opción de adquirir el Combo promocional.
-     * Adapta tu respuesta al nivel de avance del cliente (si ya está por pedir datos de pago o precio, mantén la coherencia hacia el cierre sin retroceder pasos innecesarios).\n${toolInstructions}`;
+2. ENRUTAMIENTO Y CLASIFICACIÓN DE PROSPECTOS MULTI-PRODUCTO:
+   - Saludos generales: Pregunta la materia sin asumir Matemática.
+   - Mensajes específicos de inicio: Entra directo al producto solicitado.
+   - Si el cliente pregunta por otra materia (ej: "Y física"):
+     * NUNCA reinicies el embudo desde el regalo gratuito ni preguntes lo mismo.
+     * Explica qué contiene el kit de Física y ofrece de inmediato la oportunidad de llevar el COMBO DÚO (Matemática + Física por 12.000 Bs en lugar de 14.500 Bs).
+     * Pregúntale si prefiere solo Física o si aprovecha el Combo de ambas materias.\n${toolInstructions}`;
 
     if (mode === PromptMode.FOLLOW_UP) {
       const followUpContext = `\n[MODO: SEGUIMIENTO AUTOMÁTICO ACTIVO (FOLLOW_UP)]\nEstás enviando un mensaje de seguimiento proactivo para reactivar la conversación.\nRegla de seguimiento aplicada: ${JSON.stringify(followUpRule)}\nEl usuario no ha respondido recientemente. Tú estás retomando el contacto amablemente según la regla. Menciona el producto que le interesaba si lo conoces, resuelve dudas y anímalo a continuar.\n`;

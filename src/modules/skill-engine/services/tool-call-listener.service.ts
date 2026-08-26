@@ -80,13 +80,7 @@ export class ToolCallListenerService {
         }
       });
 
-      // ¡EL EXECUTIVE LOOP!
-      // Re-emitimos interaction.received para que el LLM Orchestrator lea el historial actualizado y responda al usuario
-      this.logger.log(`Tool ejecutada. Re-activando Executive Loop para conversación ${payload.conversationId}`);
-      this.eventEmitter.emit(
-        'interaction.received',
-        new InteractionReceivedEvent(payload.tenantId, payload.conversationId, 'tool-execution', payload.contactId, '')
-      );
+      this.logger.log(`Tool ${payload.toolName} ejecutada y registrada para conversación ${payload.conversationId}`);
 
     } catch (error: any) {
       this.logger.error(`Error ejecutando tool ${payload.toolName}: ${error.message}`);
