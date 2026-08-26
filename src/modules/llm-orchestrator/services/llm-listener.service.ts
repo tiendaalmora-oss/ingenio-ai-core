@@ -106,7 +106,7 @@ export class LlmListenerService {
 
       // 2. Si no hay funnel, el Agente Universal actúa libremente
       this.logger.log(`No hay automatización, ejecutando Agente Universal...`);
-      const masterPrompt = await this.contextBuilder.buildContext(
+      let currentPrompt = await this.contextBuilder.buildContext(
         payload.tenantId, 
         payload.contactId, 
         payload.conversationId,
@@ -114,59 +114,67 @@ export class LlmListenerService {
         null
       );
 
-      let response = await this.hermesClient.generateResponse(masterPrompt);
+      let finalContent = '';
 
-      if (response.toolCalls && response.toolCalls.length > 0) {
-        await this.prisma.interaction.create({
-          data: {
-            conversationId: payload.conversationId,
-            direction: 'OUTBOUND',
-            type: 'TOOL_CALL',
-            content: '', // Empty string in DB — ContextBuilder sends null to LLM
-            role: 'assistant',
-            toolCalls: response.toolCalls
+      // Bucle Ejecutivo (hasta 3 turnos de herramientas antes de responder al usuario)
+      for (let turn = 0; turn < 3; turn++) {
+        const response = await this.hermesClient.generateResponse(currentPrompt);
+
+        if (response.toolCalls && response.toolCalls.length > 0) {
+          await this.prisma.interaction.create({
+            data: {
+              conversationId: payload.conversationId,
+              direction: 'OUTBOUND',
+              type: 'TOOL_CALL',
+              content: response.content || '',
+              role: 'assistant',
+              toolCalls: response.toolCalls
+            }
+          });
+
+          for (const call of response.toolCalls) {
+            await this.eventEmitter.emitAsync('tool.called', new ToolCalledEvent(
+              payload.tenantId,
+              payload.conversationId,
+              payload.contactId,
+              call.id,
+              call.name,
+              call.arguments
+            ));
           }
-        });
 
-        for (const call of response.toolCalls) {
-          await this.eventEmitter.emitAsync('tool.called', new ToolCalledEvent(
-            payload.tenantId,
-            payload.conversationId,
-            payload.contactId,
-            call.id,
-            call.name,
-            call.arguments
-          ));
-        }
+          if (response.content && response.content.trim() !== '') {
+            finalContent = response.content;
+            break;
+          }
 
-        // Si el LLM ejecutó herramientas sin generar texto directo, solicitamos la respuesta conversacional final
-        if (!response.content || response.content.trim() === '') {
-          this.logger.log(`LLM ejecutó tool sin texto directo. Solicitando respuesta para el usuario con historial actualizado...`);
-          const followUpPrompt = await this.contextBuilder.buildContext(
+          this.logger.log(`[Executive Loop] Turno ${turn + 1}: Tool ejecutada. Obteniendo respuesta conversacional con memoria actualizada...`);
+          currentPrompt = await this.contextBuilder.buildContext(
             payload.tenantId,
             payload.contactId,
             payload.conversationId,
             null,
             null
           );
-          const followUpResponse = await this.hermesClient.generateResponse(followUpPrompt);
-          if (followUpResponse.content) {
-            response.content = followUpResponse.content;
+        } else {
+          if (response.content) {
+            finalContent = response.content;
           }
+          break;
         }
       }
 
-      if (response.content) {
-        response.content = sanitizeUserFacingResponse(response.content);
+      if (finalContent) {
+        finalContent = sanitizeUserFacingResponse(finalContent);
       }
 
-      if (response.content && response.content.trim() !== '') {
+      if (finalContent && finalContent.trim() !== '') {
         await this.prisma.interaction.create({
           data: {
             conversationId: payload.conversationId,
             direction: 'OUTBOUND',
             type: 'TEXT',
-            content: response.content,
+            content: finalContent,
             role: 'assistant'
           }
         });
@@ -174,7 +182,7 @@ export class LlmListenerService {
         this.eventEmitter.emit('response.generated', new ResponseGeneratedEvent(
           payload.tenantId,
           payload.conversationId,
-          response.content
+          finalContent
         ));
       }
     } catch (error) {

@@ -62,7 +62,16 @@ export class PromptComposerService {
    - Si el cliente pregunta por otra materia (ej: "Y física"):
      * NUNCA reinicies el embudo desde el regalo gratuito ni preguntes lo mismo.
      * Explica qué contiene el kit de Física y ofrece de inmediato la oportunidad de llevar el COMBO DÚO (Matemática + Física por 12.000 Bs en lugar de 14.500 Bs).
-     * Pregúntale si prefiere solo Física o si aprovecha el Combo de ambas materias.\n${toolInstructions}`;
+     * Pregúntale si prefiere solo Física o si aprovecha el Combo de ambas materias.
+
+3. COMPRENSIÓN TOTAL Y FLEXIBILIDAD ANTE CUALQUIER MENSAJE:
+   - NUNCA te quedes en silencio ni te paralices ante respuestas breves o naturales del usuario (ej: "5 de bachillerato", "5to año", "1ero a 5to", "tengo varias secciones", "quiero el kit de matemática", "pasa precio", "me interesa").
+   - Cuando el usuario responda qué año o sección atiende (ej: "5 de bachillerato"):
+     * Valida de inmediato su respuesta con entusiasmo (ej: "¡Excelente, profe! Justamente para 5to año de bachillerato contamos con todas las evaluaciones resueltas y planificaciones listas...").
+     * Continúa fluidamente explicando el contenido del kit y avanzando hacia el precio de oferta (7.250 Bs) o datos de pago.
+   - Si el usuario dice directamente "quiero el kit" o "estoy interesado":
+     * Dale la bienvenida a la compra, confirma el Mega Kit seleccionado, el precio promocional y ofrécele los métodos de pago (Pago Móvil / Transferencia).
+   - OBLIGATORIO: Cada mensaje del usuario DEBE recibir una respuesta conversacional completa, amigable y persuasiva, terminando con una pregunta de cierre.\n${toolInstructions}`;
 
     if (mode === PromptMode.FOLLOW_UP) {
       const followUpContext = `\n[MODO: SEGUIMIENTO AUTOMÁTICO ACTIVO (FOLLOW_UP)]\nEstás enviando un mensaje de seguimiento proactivo para reactivar la conversación.\nRegla de seguimiento aplicada: ${JSON.stringify(followUpRule)}\nEl usuario no ha respondido recientemente. Tú estás retomando el contacto amablemente según la regla. Menciona el producto que le interesaba si lo conoces, resuelve dudas y anímalo a continuar.\n`;

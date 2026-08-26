@@ -85,13 +85,18 @@ describe('LlmListenerService', () => {
     });
 
     it('should emit tool.called events for each tool call returned by Hermes', async () => {
-      hermesClient.generateResponse.mockResolvedValue({
-        content: undefined,
-        toolCalls: [
-          { id: 'call-1', name: 'update_business_memory', arguments: { key: 'nombre', value: 'Juan' } },
-          { id: 'call-2', name: 'create_task', arguments: { title: 'Seguimiento' } },
-        ],
-      });
+      hermesClient.generateResponse
+        .mockResolvedValueOnce({
+          content: undefined,
+          toolCalls: [
+            { id: 'call-1', name: 'update_business_memory', arguments: { key: 'nombre', value: 'Juan' } },
+            { id: 'call-2', name: 'create_task', arguments: { title: 'Seguimiento' } },
+          ],
+        })
+        .mockResolvedValueOnce({
+          content: 'He actualizado tu información.',
+          toolCalls: [],
+        });
 
       await service.handleInteraction(PAYLOAD);
 
