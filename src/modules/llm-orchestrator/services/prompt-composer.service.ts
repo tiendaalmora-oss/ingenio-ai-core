@@ -86,18 +86,25 @@ export class PromptComposerService {
     // 7. Build History
     messages.push(...this.buildHistory(history));
 
-    // 8. Add Current Message if not in history
-    // Since history usually already contains the incoming message in our DB, we check if it's provided separately.
-    // If we need to explicitly append it (depending on how the controller/listener is set up), we do it here.
-    if (currentMessage) {
-       // Only append if it's not the last message in history
-       const lastMsg = history.length > 0 ? history[history.length - 1] : null;
-       if (!lastMsg || lastMsg.content !== currentMessage) {
-           messages.push({
-               role: 'user',
-               content: currentMessage
-           });
-       }
+    // 8. Add Current Message or Follow-Up trigger
+    if (mode === PromptMode.FOLLOW_UP) {
+      const ruleText = typeof followUpRule === 'string' 
+        ? followUpRule 
+        : (followUpRule?.instruccion || followUpRule?.condicion || followUpRule?.mensaje || followUpRule?.tiempo || 'Retomar contacto amablemente');
+      
+      messages.push({
+        role: 'user',
+        content: `[INSTRUCCIÓN DE SEGUIMIENTO AUTOMÁTICO]: El cliente lleva un tiempo sin responder. Redacta un mensaje de WhatsApp corto, amable y persuasivo aplicando esta pauta: "${ruleText}". Menciona su nombre o el producto de interés si lo conoces, y hazle una pregunta clara para continuar la conversación.`
+      });
+    } else if (currentMessage) {
+      // Only append if it's not the last message in history
+      const lastMsg = history.length > 0 ? history[history.length - 1] : null;
+      if (!lastMsg || lastMsg.content !== currentMessage) {
+        messages.push({
+          role: 'user',
+          content: currentMessage
+        });
+      }
     }
     
     return messages;

@@ -23,9 +23,8 @@ export class WahaAdapterService {
       return rawId;
     }
 
-    // Strip known garbage suffixes before appending @c.us
-    // Some WAHA versions return IDs with trailing 'd' or 'i' characters
-    const cleaned = rawId.replace(/[a-zA-Z]+$/, '');
+    // Strip non-digit characters (+, spaces, dashes, dots)
+    const cleaned = rawId.replace(/\D/g, '');
 
     return `${cleaned}@c.us`;
   }
