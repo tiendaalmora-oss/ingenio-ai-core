@@ -148,9 +148,11 @@ export class ConversationHubController {
     const take = parseInt(limit);
 
     const [total, messages] = await Promise.all([
-      this.prisma.interaction.count({ where: { conversationId: id } }),
+      this.prisma.interaction.count({
+        where: { conversationId: id, type: { notIn: ['TOOL_RESULT'] } },
+      }),
       this.prisma.interaction.findMany({
-        where: { conversationId: id },
+        where: { conversationId: id, type: { notIn: ['TOOL_RESULT'] } },
         orderBy: { timestamp: 'asc' },
         skip,
         take,

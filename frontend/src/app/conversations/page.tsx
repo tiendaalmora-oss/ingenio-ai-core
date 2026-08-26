@@ -356,7 +356,11 @@ export default function ConversationsPage() {
               <LoadingSkeleton rows={5} />
             ) : (
               (messagesData?.data || []).map((msg: any) => {
-                const isUser = msg.role === 'user' || msg.direction === 'INBOUND';
+                if (msg.type === 'TOOL_RESULT' || msg.role === 'tool') {
+                  return null;
+                }
+
+                const isUser = msg.role === 'user' || (msg.direction === 'INBOUND' && msg.type === 'TEXT');
                 const isHuman = msg.role === 'human';
                 const isTool = msg.type === 'TOOL_CALL';
 
@@ -365,7 +369,7 @@ export default function ConversationsPage() {
                     <div key={msg.id} className="flex justify-center my-2">
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded-full text-[11px] font-medium">
                         <Sparkles className="w-3.5 h-3.5" />
-                        Hermes ejecutó herramienta del CRM
+                        Hermes actualizó CRM / Memoria
                       </span>
                     </div>
                   );

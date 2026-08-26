@@ -129,7 +129,7 @@ export class LlmListenerService {
         });
 
         for (const call of response.toolCalls) {
-          this.eventEmitter.emit('tool.called', new ToolCalledEvent(
+          await this.eventEmitter.emitAsync('tool.called', new ToolCalledEvent(
             payload.tenantId,
             payload.conversationId,
             payload.contactId,
@@ -141,7 +141,7 @@ export class LlmListenerService {
 
         // Si el LLM ejecutó herramientas sin generar texto directo, solicitamos la respuesta conversacional final
         if (!response.content || response.content.trim() === '') {
-          this.logger.log(`LLM ejecutó tool sin texto directo. Solicitando respuesta para el usuario...`);
+          this.logger.log(`LLM ejecutó tool sin texto directo. Solicitando respuesta para el usuario con historial actualizado...`);
           const followUpPrompt = await this.contextBuilder.buildContext(
             payload.tenantId,
             payload.contactId,

@@ -42,7 +42,7 @@ describe('LlmListenerService', () => {
     runtimeEngine = { parseReactFlowToDsl: jest.fn(), executeFlow: jest.fn() } as any;
     contextBuilder = { buildContext: jest.fn().mockResolvedValue('mock-prompt') } as any;
     prisma = { interaction: { create: jest.fn().mockResolvedValue({}) } } as any;
-    eventEmitter = { emit: jest.fn() } as any;
+    eventEmitter = { emit: jest.fn(), emitAsync: jest.fn().mockResolvedValue([]) } as any;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -63,25 +63,24 @@ describe('LlmListenerService', () => {
     jest.clearAllMocks();
   });
 
-  // ── Normal Operation ─────────────────────────────────────────────────────────
+  // ── Tests ────────────────────────────────────────────────────────────────────
 
   describe('Normal operation (depth = 0)', () => {
-    it('should call hermesClient.generateResponse when there is no active funnel', async () => {
-      hermesClient.generateResponse.mockResolvedValue({ content: 'Respuesta del agente', toolCalls: [] });
+    it('should generate a response and emit response.generated when no tools are called', async () => {
+      hermesClient.generateResponse.mockResolvedValue({
+        content: '¡Hola! ¿Cómo estás?',
+        toolCalls: [],
+      });
 
       await service.handleInteraction(PAYLOAD);
 
       expect(hermesClient.generateResponse).toHaveBeenCalledTimes(1);
-    });
-
-    it('should emit response.generated when Hermes returns a text response', async () => {
-      hermesClient.generateResponse.mockResolvedValue({ content: 'Respuesta del agente', toolCalls: [] });
-
-      await service.handleInteraction(PAYLOAD);
-
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'response.generated',
-        expect.objectContaining({ tenantId: PAYLOAD.tenantId }),
+        expect.objectContaining({
+          conversationId: 'conv-abc',
+          generatedContent: '¡Hola! ¿Cómo estás?',
+        }),
       );
     });
 
@@ -96,9 +95,9 @@ describe('LlmListenerService', () => {
 
       await service.handleInteraction(PAYLOAD);
 
-      expect(eventEmitter.emit).toHaveBeenCalledTimes(2);
-      expect(eventEmitter.emit).toHaveBeenCalledWith('tool.called', expect.objectContaining({ toolName: 'update_business_memory' }));
-      expect(eventEmitter.emit).toHaveBeenCalledWith('tool.called', expect.objectContaining({ toolName: 'create_task' }));
+      expect(eventEmitter.emitAsync).toHaveBeenCalledTimes(2);
+      expect(eventEmitter.emitAsync).toHaveBeenCalledWith('tool.called', expect.objectContaining({ toolName: 'update_business_memory' }));
+      expect(eventEmitter.emitAsync).toHaveBeenCalledWith('tool.called', expect.objectContaining({ toolName: 'create_task' }));
     });
 
     it('should execute the Automation Runtime when a matching funnel is found', async () => {
