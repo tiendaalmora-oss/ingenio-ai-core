@@ -89,6 +89,8 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
       setCurrentVersion(newVersion);
       setBootstrapData({ ...bootstrapData, version: newVersion });
       queryClient.setQueryData(['business-studio-knowledge-base', sectionKey], updatedData);
+      queryClient.invalidateQueries({ queryKey: ['bootstrap'] });
+      queryClient.invalidateQueries({ queryKey: ['business-studio-knowledge-base'] });
       setTimeout(() => {
         if (saveStatus !== 'saving') setSaveStatus('idle');
       }, 2000);

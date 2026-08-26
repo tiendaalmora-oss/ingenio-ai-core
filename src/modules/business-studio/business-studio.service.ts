@@ -21,6 +21,8 @@ export class BusinessStudioService {
     const rawData = prompt['_raw'] || prompt;
     
     return {
+      identidad: rawData.identidad ?? prompt.identidad ?? {},
+      empresa: rawData.empresa ?? prompt.empresa ?? {},
       productos: rawData.productos || [],
       categorias: rawData.categorias || [],
       servicios: rawData.servicios || [],
