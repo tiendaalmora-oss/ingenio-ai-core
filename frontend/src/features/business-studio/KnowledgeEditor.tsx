@@ -24,6 +24,18 @@ const SECTION_GUIDANCE: Record<string, { title: string; placeholder: string; hin
     placeholder: `Ejemplo:\nSomos Ingenio Digital, una plataforma educativa de cursos y herramientas digitales para profesores y estudiantes.\nUbicación: Caracas, Venezuela y toda Latinoamérica online.\nSitio web: https://ingeniodigital.shop\nMedios de pago aceptados: Pago Móvil (Bs), Transferencia Bancaria, Binance USDT, PayPal.`,
     hint: 'Explica qué hace tu negocio, qué medios de pago aceptas, tu ubicación y propuesta de valor.',
   },
+  enrutamiento: {
+    title: 'Estrategia de Enrutamiento y Flujo Comercial',
+    placeholder: `Ejemplo:
+1. Modo de Entrada (Triaje Inicial):
+- Saludo general o sin producto definido: Saludar amablemente en nombre de la plataforma y preguntar: "¿De qué materia o año eres docente y buscas material?"
+- Entrada directa por anuncio: Si el cliente menciona un producto específico en su primer mensaje (ej: Matemática o Física), ingresar de inmediato a ese embudo sin hacer preguntas redundantes.
+
+2. Reglas de Venta Cruzada y Combos (Cross-Selling):
+- Si el cliente pregunta por otra materia (ej: Física) estando en Matemática, presentar el Mega Kit de Física y ofrecer el Combo de ambas por 12.000 Bs.
+- Nunca reiniciar el saludo ni repetir "Hola, bienvenido" si la conversación ya está en curso.`,
+    hint: 'Configura cómo debe recibir el bot a prospectos nuevos, qué preguntar si no especifican producto y qué combos o reglas de venta cruzada aplicar.',
+  },
   scriptsComerciales: {
     title: 'Guiones y Argumentos Comerciales',
     placeholder: `Ejemplo:\n- Cuando el cliente pregunte el precio, menciona el valor de oferta por tiempo limitado y resalta que incluye acceso de por vida.\n- Si el cliente duda, ofrécele una muestra o explícale los beneficios inmediatos que obtendrá.\n- Para concretar la venta, solicita nombre y correo electrónico para facilitarle los datos bancarios.`,

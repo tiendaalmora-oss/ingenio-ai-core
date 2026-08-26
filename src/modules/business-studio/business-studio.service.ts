@@ -23,6 +23,7 @@ export class BusinessStudioService {
     return {
       identidad: rawData.identidad ?? prompt.identidad ?? {},
       empresa: rawData.empresa ?? prompt.empresa ?? {},
+      enrutamiento: rawData.enrutamiento ?? prompt.enrutamiento ?? {},
       productos: rawData.productos || [],
       categorias: rawData.categorias || [],
       servicios: rawData.servicios || [],
@@ -115,6 +116,7 @@ export class BusinessStudioService {
     return [
       { key: 'identidad', title: 'Identidad del Bot', description: 'Personalidad y nombre', icon: 'User', editable: true, collection: false },
       { key: 'empresa', title: 'Datos de la Empresa', description: 'Información general', icon: 'Building', editable: true, collection: false },
+      { key: 'enrutamiento', title: 'Estrategia y Enrutamiento', description: 'Triaje, venta cruzada y flujo', icon: 'Compass', editable: true, collection: false },
       { key: 'productos', title: 'Productos', description: 'Catálogo de productos', icon: 'Package', editable: true, collection: true },
       { key: 'categorias', title: 'Categorías', description: 'Categorías de productos', icon: 'Tags', editable: true, collection: true },
       { key: 'servicios', title: 'Servicios', description: 'Servicios ofrecidos', icon: 'Briefcase', editable: true, collection: true },
@@ -167,7 +169,7 @@ export class BusinessStudioService {
 
   async getSection(tenantId: string, section: string) {
     const base = await this.getKnowledgeBase(tenantId);
-    return base[section] || (['identidad', 'empresa'].includes(section) ? {} : []);
+    return base[section] ?? (['identidad', 'empresa', 'enrutamiento'].includes(section) ? {} : []);
   }
 
   async getItems(tenantId: string, section: string) {
