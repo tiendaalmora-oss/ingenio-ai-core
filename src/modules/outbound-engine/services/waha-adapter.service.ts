@@ -30,9 +30,27 @@ export class WahaAdapterService {
     return `${cleaned}@c.us`;
   }
 
-  async sendMessage(tenantId: string, contactId: string, content: string): Promise<string> {
-    const chatId = this.normalizeJid(contactId);
-    this.logger.log(`Enviando mensaje vía WAHA a ${chatId} (raw: ${contactId})...`);
+  async sendMessage(tenantId: string, contactIdOrPhone: string, content: string): Promise<string> {
+    let rawPhone = contactIdOrPhone;
+
+    // Si contactIdOrPhone es un ID de Contacto de base de datos, resolvemos el teléfono real
+    if (contactIdOrPhone && !contactIdOrPhone.includes('@')) {
+      const contact = await this.prisma.contact.findFirst({
+        where: {
+          OR: [
+            { id: contactIdOrPhone },
+            { phone: contactIdOrPhone },
+            { externalId: contactIdOrPhone }
+          ]
+        }
+      });
+      if (contact) {
+        rawPhone = contact.phone || contact.externalId || contactIdOrPhone;
+      }
+    }
+
+    const chatId = this.normalizeJid(rawPhone);
+    this.logger.log(`Enviando mensaje vía WAHA a ${chatId} (teléfono: ${rawPhone}, id: ${contactIdOrPhone})...`);
     
     const wahaUrl = process.env.WAHA_API_URL;
     if (!wahaUrl) {

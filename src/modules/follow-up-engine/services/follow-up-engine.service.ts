@@ -61,6 +61,9 @@ export class FollowUpEngineService {
 
       if (!Array.isArray(seguimientos) || seguimientos.length === 0) continue;
 
+      // Ordenar reglas por tiempo de menor a mayor (ej: 5 min antes de 1 hora)
+      const sortedRules = [...seguimientos].sort((a, b) => this.parseDelayMs(a) - this.parseDelayMs(b));
+
       const tenantConvos = activeConversations.filter(c => c.contact.tenantId === tenantId);
 
       for (const convo of tenantConvos) {
@@ -75,17 +78,18 @@ export class FollowUpEngineService {
 
         const timeSinceLastInteraction = Date.now() - lastInteraction.timestamp.getTime();
 
-        for (const rule of seguimientos) {
+        for (const rule of sortedRules) {
           const delayMs = this.parseDelayMs(rule);
 
           if (timeSinceLastInteraction >= delayMs) {
             const ruleIdentifier = rule.id || `rule-${rule.tiempo || 'default'}-${delayMs}`;
 
-            // Evitar enviar el mismo seguimiento repetido en las últimas 24 horas
+            // Evitar enviar el mismo seguimiento repetido en las últimas 24 horas si ya está encolado o enviado
             const alreadyDispatched = await this.prisma.pendingOutboundMessage.findFirst({
               where: {
                 conversationId: convo.id,
                 followUpId: ruleIdentifier,
+                status: { in: ['PENDING', 'PROCESSING', 'SENT'] },
                 createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
               }
             });

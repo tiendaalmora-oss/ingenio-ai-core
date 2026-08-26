@@ -155,7 +155,7 @@ export class BusinessStudioController {
     if (!tenantId) throw new BadRequestException('tenantId is required');
     
     const validSections = [
-      'identidad', 'empresa',
+      'identidad', 'empresa', 'enrutamiento',
       'productos', 'categorias', 'servicios', 'faqs', 'objeciones', 
       'scriptsComerciales', 'promociones', 'seguimientos', 'soporte', 'politicasAtencion'
     ];
