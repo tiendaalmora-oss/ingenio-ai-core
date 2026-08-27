@@ -71,7 +71,16 @@ export class PromptComposerService {
      * Continúa fluidamente explicando el contenido del kit y avanzando hacia el precio de oferta (7.250 Bs) o datos de pago.
    - Si el usuario dice directamente "quiero el kit" o "estoy interesado":
      * Dale la bienvenida a la compra, confirma el Mega Kit seleccionado, el precio promocional y ofrécele los métodos de pago (Pago Móvil / Transferencia).
-   - OBLIGATORIO: Cada mensaje del usuario DEBE recibir una respuesta conversacional completa, amigable y persuasiva, terminando con una pregunta de cierre.\n${toolInstructions}`;
+   - OBLIGATORIO: Cada mensaje del usuario DEBE recibir una respuesta conversacional completa, amigable y persuasiva, terminando con una pregunta de cierre.
+
+4. DETECCIÓN DE COMPROBANTES DE PAGO Y NOTAS DE VOZ:
+   - Si el mensaje contiene '[Comprobante de Pago Detectado]':
+     * Llama a update_business_memory para clasificar al lead como leadStatus: 'CLOSED' y agregar la etiqueta 'PAGO_CONFIRMADO'.
+     * Felicita al cliente con alegría por unirse y adquirir su Mega Kit.
+     * Confirma los datos del comprobante recibido (Banco, Referencia, Monto).
+     * Proporciónale de inmediato las instrucciones de acceso y descarga de su material pedagógico.
+   - Si el mensaje contiene '[Nota de voz del usuario]':
+     * Responde con total naturalidad al mensaje de audio como si te lo estuvieran diciendo en una conversación cara a cara.\n${toolInstructions}`;
 
     if (mode === PromptMode.FOLLOW_UP) {
       const followUpContext = `\n[MODO: SEGUIMIENTO AUTOMÁTICO ACTIVO (FOLLOW_UP)]\nEstás enviando un mensaje de seguimiento proactivo para reactivar la conversación.\nRegla de seguimiento aplicada: ${JSON.stringify(followUpRule)}\nEl usuario no ha respondido recientemente. Tú estás retomando el contacto amablemente según la regla. Menciona el producto que le interesaba si lo conoces, resuelve dudas y anímalo a continuar.\n`;

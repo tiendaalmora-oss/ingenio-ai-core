@@ -18,6 +18,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { FollowUpEngineModule } from './modules/follow-up-engine/follow-up-engine.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { MediaProcessingModule } from './modules/media-processing/media-processing.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
     DatabaseModule,
     CrmModule,
     ConversationModule,
+    MediaProcessingModule,
     FunnelEngineModule,
     LlmOrchestratorModule,
     OutboundEngineModule,

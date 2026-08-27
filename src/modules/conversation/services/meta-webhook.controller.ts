@@ -3,6 +3,8 @@ import type { FastifyReply } from 'fastify';
 import { ReceiveMessageService } from './receive-message.service';
 import { TenantResolverService } from '../../tenant/services/tenant-resolver.service';
 import { PrismaService } from '../../../shared/database/prisma.service';
+import { AudioTranscriptionService } from '../../media-processing/services/audio-transcription.service';
+import { MediaVisionService } from '../../media-processing/services/media-vision.service';
 
 @Controller('webhooks/meta')
 export class MetaWebhookController {
@@ -11,7 +13,9 @@ export class MetaWebhookController {
   constructor(
     private readonly receiveMessageService: ReceiveMessageService,
     private readonly tenantResolver: TenantResolverService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    private readonly audioTranscriptionService: AudioTranscriptionService,
+    private readonly mediaVisionService: MediaVisionService
   ) {}
 
   /**
@@ -34,7 +38,7 @@ export class MetaWebhookController {
 
   /**
    * POST /webhooks/meta
-   * Recepción unificada de eventos de WhatsApp (WAHA) y Meta (Instagram/Messenger)
+   * Recepción unificada de eventos de WhatsApp (WAHA) y Meta (Instagram/Messenger) con soporte multimedia
    */
   @Post()
   async receiveMessage(@Body() body: any, @Res() res: FastifyReply) {
@@ -58,14 +62,35 @@ export class MetaWebhookController {
         if (body.event === 'message.any') return;
 
         contactId = body.payload?.from;
-        content = body.payload?.body;
-
+        
         if (contactId && contactId.endsWith('@g.us')) {
           this.logger.debug(`Ignoring group message: ${contactId}`);
           return;
         }
 
         tenantId = await this.tenantResolver.resolveFromWahaSession(body.session || 'ferreos');
+
+        // Procesamiento Multimedia vs Texto
+        const hasMedia = body.payload?.hasMedia || Boolean(body.payload?.media);
+        const media = body.payload?.media || {};
+        const mimetype = (media.mimetype || body.payload?._data?.mimetype || '').toLowerCase();
+        const messageType = (body.payload?.type || '').toLowerCase();
+
+        // 1. Audio o Nota de Voz
+        if (hasMedia && (mimetype.startsWith('audio/') || messageType === 'ptt' || messageType === 'audio')) {
+          this.logger.log(`Procesando nota de voz entrante de ${contactId}...`);
+          content = await this.audioTranscriptionService.transcribe(media);
+        }
+        // 2. Imagen o Captura de Comprobante
+        else if (hasMedia && (mimetype.startsWith('image/') || messageType === 'image')) {
+          this.logger.log(`Procesando imagen entrante de ${contactId}...`);
+          const caption = body.payload?.body || body.payload?.caption || '';
+          content = await this.mediaVisionService.analyzeImage(media, caption);
+        }
+        // 3. Mensaje de Texto Normal
+        else {
+          content = body.payload?.body || '';
+        }
       }
       // CASO B: Meta Cloud API Oficial (Instagram Direct / Facebook Messenger)
       else if (body.object === 'page' || body.object === 'instagram') {
@@ -76,10 +101,16 @@ export class MetaWebhookController {
         }
 
         contactId = messaging.sender?.id;
-        content = messaging.message?.text;
-        
-        // Resolver tenant principal por defecto para Meta Cloud
         tenantId = await this.tenantResolver.resolveFromWahaSession('ferreos');
+
+        const attachment = messaging.message?.attachments?.[0];
+        if (attachment?.type === 'audio') {
+          content = await this.audioTranscriptionService.transcribe({ url: attachment.payload?.url });
+        } else if (attachment?.type === 'image') {
+          content = await this.mediaVisionService.analyzeImage({ url: attachment.payload?.url }, messaging.message?.text);
+        } else {
+          content = messaging.message?.text;
+        }
       }
       // CASO C: Fallback para testing manual
       else {

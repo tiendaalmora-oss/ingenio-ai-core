@@ -9,9 +9,10 @@ import { CONVERSATION_REPOSITORY } from './ports/out/conversation-repository.int
 import { INTERACTION_REPOSITORY } from './ports/out/interaction-repository.interface';
 
 import { OutboundEngineModule } from '../outbound-engine/outbound-engine.module';
+import { MediaProcessingModule } from '../media-processing/media-processing.module';
 
 @Module({
-  imports: [OutboundEngineModule],
+  imports: [OutboundEngineModule, MediaProcessingModule],
   controllers: [MetaWebhookController, ConversationHubController],
   providers: [
     PrismaService,
