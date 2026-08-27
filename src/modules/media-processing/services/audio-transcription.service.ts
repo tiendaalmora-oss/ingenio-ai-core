@@ -90,7 +90,7 @@ export class AudioTranscriptionService {
 
     // Construcción de FormData nativo de Node 18+
     const formData = new FormData();
-    const blob = new Blob([audioBuffer], { type: mimetype });
+    const blob = new Blob([new Uint8Array(audioBuffer)], { type: mimetype });
     formData.append('file', blob, filename);
     formData.append('model', model);
     formData.append('language', 'es');

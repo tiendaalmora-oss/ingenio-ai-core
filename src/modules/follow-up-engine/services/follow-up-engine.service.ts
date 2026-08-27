@@ -19,11 +19,22 @@ export class FollowUpEngineService {
   @Cron(CronExpression.EVERY_MINUTE)
   async evaluateFollowUps() {
     const now = new Date();
+    const report: any = {
+      timestamp: now.toISOString(),
+      isWindowAllowed: false,
+      activeConversationsFound: 0,
+      evaluatedTenants: [],
+      dispatched: [],
+      skipped: [],
+    };
 
     // 1. Validar ventana horaria de atención (7 AM a 12 AM medianoche)
-    if (!this.isWithinAllowedWindow(now, this.DEFAULT_START_HOUR, this.DEFAULT_END_HOUR)) {
+    const allowed = this.isWithinAllowedWindow(now, this.DEFAULT_START_HOUR, this.DEFAULT_END_HOUR);
+    report.isWindowAllowed = allowed;
+
+    if (!allowed) {
       this.logger.debug(`[FollowUpEngine] Fuera de ventana horaria (${this.DEFAULT_START_HOUR}:00 - ${this.DEFAULT_END_HOUR}:00).`);
-      return;
+      return report;
     }
 
     // 2. Buscar todas las conversaciones activas
@@ -42,8 +53,10 @@ export class FollowUpEngineService {
       }
     });
 
+    report.activeConversationsFound = activeConversations.length;
+
     if (!activeConversations.length) {
-      return;
+      return report;
     }
 
     const tenantIds = [...new Set(activeConversations.map(c => c.contact.tenantId))];
@@ -53,32 +66,48 @@ export class FollowUpEngineService {
         where: { tenantId }
       });
 
-      if (!bundle) continue;
+      if (!bundle) {
+        report.skipped.push({ tenantId, reason: 'No KnowledgeBundle found' });
+        continue;
+      }
       
       const systemPrompt: any = bundle.systemPrompt || {};
       const rawData: any = typeof systemPrompt === 'string' ? JSON.parse(systemPrompt) : (systemPrompt['_raw'] || systemPrompt);
-      const rawSeguimientos = rawData['seguimientos'];
+      const rawSeguimientos = rawData['seguimientos'] || rawData['followups'] || systemPrompt['followups'] || systemPrompt['seguimientos'] || rawData['scriptsComerciales'];
 
       // Extraer reglas universales (acepta texto natural, arrays, u objetos)
       const rules = this.extractFollowUpRules(rawSeguimientos);
-      if (!rules.length) continue;
+      if (!rules.length) {
+        report.skipped.push({ tenantId, reason: 'No follow-up rules configured or parsed' });
+        continue;
+      }
 
       // Ordenar reglas por tiempo de menor a mayor (ej: 5 min antes de 1 hora)
       const sortedRules = [...rules].sort((a, b) => this.parseDelayMs(a) - this.parseDelayMs(b));
 
       const tenantConvos = activeConversations.filter(c => c.contact.tenantId === tenantId);
+      report.evaluatedTenants.push({
+        tenantId,
+        rulesCount: sortedRules.length,
+        conversationsCount: tenantConvos.length
+      });
 
       for (const convo of tenantConvos) {
         // No enviar seguimientos si la venta ya está cerrada o pagada
         const leadStatus = (convo.contact.memory?.leadStatus || '').toUpperCase();
         if (leadStatus === 'CLOSED' || leadStatus === 'PAGADO') {
+          report.skipped.push({ conversationId: convo.id, contact: convo.contact.phone, reason: `Lead status is ${leadStatus}` });
           continue;
         }
 
         const lastInteraction = convo.interactions.length > 0 ? convo.interactions[0] : null;
-        if (!lastInteraction) continue;
+        if (!lastInteraction) {
+          report.skipped.push({ conversationId: convo.id, contact: convo.contact.phone, reason: 'No interactions found' });
+          continue;
+        }
 
         const timeSinceLastInteraction = Date.now() - lastInteraction.timestamp.getTime();
+        const elapsedMinutes = Math.round(timeSinceLastInteraction / 60000);
 
         for (const rule of sortedRules) {
           const delayMs = this.parseDelayMs(rule);
@@ -96,7 +125,10 @@ export class FollowUpEngineService {
               }
             });
 
-            if (alreadyDispatched) continue;
+            if (alreadyDispatched) {
+              report.skipped.push({ conversationId: convo.id, contact: convo.contact.phone, rule: ruleIdentifier, reason: `Already dispatched with status ${alreadyDispatched.status}` });
+              continue;
+            }
 
             const payload = {
               tenantId: tenantId,
@@ -107,16 +139,25 @@ export class FollowUpEngineService {
               timestamp: new Date()
             };
             
-            this.logger.log(`[FollowUpEngine] 🚀 Disparando seguimiento para ${convo.contact.name || convo.contact.phone || convo.contactId} (inactivo hace ${Math.round(timeSinceLastInteraction / 60000)} min), regla: "${rule.tiempo || ruleIdentifier}"`);
+            this.logger.log(`[FollowUpEngine] 🚀 Disparando seguimiento para ${convo.contact.name || convo.contact.phone || convo.contactId} (inactivo hace ${elapsedMinutes} min), regla: "${rule.tiempo || ruleIdentifier}"`);
             
             this.eventEmitter.emit('FOLLOW_UP_PENDING', payload);
             
+            report.dispatched.push({
+              conversationId: convo.id,
+              contact: convo.contact.phone || convo.contactId,
+              rule: rule.tiempo || ruleIdentifier,
+              elapsedMinutes
+            });
+
             // Evaluamos solo la regla prioritaria actual para no saturar al cliente
             break;
           }
         }
       }
     }
+
+    return report;
   }
 
   /**

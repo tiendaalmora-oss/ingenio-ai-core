@@ -68,7 +68,19 @@ export class MetaWebhookController {
           return;
         }
 
-        tenantId = await this.tenantResolver.resolveFromWahaSession(body.session || 'ferreos');
+        tenantId = await this.tenantResolver.resolveFromWahaSession(body.session || 'default');
+
+        // Sincronizar la sesión activa de WAHA en el tenant para garantizar que los envíos salientes usen la sesión correcta
+        if (body.session && tenantId) {
+          try {
+            await this.prisma.tenant.update({
+              where: { id: tenantId },
+              data: { wahaSession: body.session }
+            });
+          } catch {
+            // Ignorar si el tenant no existe aún
+          }
+        }
 
         // Procesamiento Multimedia vs Texto
         const hasMedia = body.payload?.hasMedia || Boolean(body.payload?.media);

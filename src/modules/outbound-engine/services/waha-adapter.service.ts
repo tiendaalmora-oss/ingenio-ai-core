@@ -58,7 +58,7 @@ export class WahaAdapterService {
     
     // Buscar wahaSession real (prioriza variable de entorno WAHA_SESSION)
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
-    const session = process.env.WAHA_SESSION || tenant?.wahaSession || 'ferreos';
+    const session = process.env.WAHA_SESSION || tenant?.wahaSession || 'default';
     
     const apiKey = process.env.WAHA_API_KEY || '';
 
@@ -72,7 +72,7 @@ export class WahaAdapterService {
     }
 
     try {
-      const response = await fetch(`${wahaUrl}/api/sendText`, {
+      let response = await fetch(`${wahaUrl}/api/sendText`, {
         method: 'POST',
         headers: headers,
         body: JSON.stringify({
@@ -82,18 +82,56 @@ export class WahaAdapterService {
         })
       });
       
+      // Si falló y la sesión probada no era 'default', reintentar con 'default'
+      if (!response.ok && session !== 'default') {
+        const errBody = await response.text().catch(() => '');
+        this.logger.warn(`Envío falló con sesión "${session}" (${response.status}: ${errBody}). Reintentando con sesión "default"...`);
+        
+        response = await fetch(`${wahaUrl}/api/sendText`, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({
+            chatId: chatId,
+            text: content,
+            session: 'default'
+          })
+        });
+      }
+
       if (!response.ok) {
         const errBody = await response.text().catch(() => '');
         throw new Error(`Waha response con error ${response.status}: ${response.statusText}. Body: ${errBody}`);
       }
 
       const result = await response.json();
-      this.logger.log(`WAHA confirmó el envío. ID: ${result.id || 'N/A'}`);
+      this.logger.log(`WAHA confirmó el envío a ${chatId}. ID: ${result.id || 'N/A'}`);
       
       return result.id || `waha_msg_${Date.now()}`;
-    } catch (error) {
-      this.logger.error(`Error crítico: ${error.message}`);
+    } catch (error: any) {
+      this.logger.error(`Error crítico enviando mensaje a ${chatId}: ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Consulta las sesiones activas en WAHA para diagnóstico
+   */
+  async getWahaSessions(): Promise<any> {
+    const wahaUrl = process.env.WAHA_API_URL;
+    if (!wahaUrl) return { error: 'WAHA_API_URL no configurado' };
+
+    const apiKey = process.env.WAHA_API_KEY || '';
+    const headers: Record<string, string> = { 'Accept': 'application/json' };
+    if (apiKey) headers['X-Api-Key'] = apiKey;
+
+    try {
+      const response = await fetch(`${wahaUrl}/api/sessions?all=true`, { headers });
+      if (!response.ok) {
+        return { status: response.status, error: await response.text() };
+      }
+      return await response.json();
+    } catch (e: any) {
+      return { error: e.message };
     }
   }
 }
