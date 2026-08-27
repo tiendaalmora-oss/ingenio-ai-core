@@ -34,11 +34,11 @@ export class ContextBuilderService {
       this.logger.log(`No se encontró Business Memory para el contacto ${contactId}. Procediendo en blanco.`);
     }
 
-    // 3. Obtener Historial de Conversación (últimos 10 mensajes)
+    // 3. Obtener Historial de Conversación (últimos 30 mensajes para no perder el contexto del embudo)
     const rawHistory = await this.prisma.interaction.findMany({
       where: { conversationId },
       orderBy: { timestamp: 'desc' },
-      take: 10,
+      take: 30,
     });
     
     // Invertir para mantener orden cronológico
@@ -71,7 +71,7 @@ export class ContextBuilderService {
     const rawHistory = await this.prisma.interaction.findMany({
       where: { conversationId },
       orderBy: { timestamp: 'desc' },
-      take: 10,
+      take: 30,
     });
     
     const history = rawHistory.reverse();
