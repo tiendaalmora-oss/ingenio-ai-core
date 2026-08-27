@@ -85,13 +85,18 @@ export class HermesClientService {
     private readonly aiProvider: IAiProvider,
   ) {}
 
-  async generateResponse(messages: AiMessage[], enableTools = true): Promise<LLMResponse> {
+  async generateResponse(messages: AiMessage[], enableTools = true, toolChoice: 'auto' | 'none' = 'auto'): Promise<LLMResponse> {
     try {
       const options: any = {
         temperature: 0.4,
       };
       if (enableTools) {
         options.tools = HERMES_TOOLS;
+        options.toolChoice = toolChoice;
+      } else {
+        // Al requerir solo texto habiendo tools en el historial, pasamos tools con toolChoice = 'none'
+        options.tools = HERMES_TOOLS;
+        options.toolChoice = 'none';
       }
 
       const response: AiResponse = await this.aiProvider.chat(messages, options);

@@ -16,6 +16,7 @@ export interface AiMessage {
 
 export interface AiOptions {
   tools?: AiTool[];
+  toolChoice?: 'auto' | 'none' | 'required';
   temperature?: number;
   maxTokens?: number;
 }

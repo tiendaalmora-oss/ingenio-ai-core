@@ -144,15 +144,22 @@ export class LlmListenerService {
         if (response.content && response.content.trim() !== '') {
           finalContent = response.content;
         } else {
-          // Solicitamos la respuesta conversacional final forzando texto (enableTools = false)
+          // Solicitamos la respuesta conversacional final forzando texto (enableTools = false con toolChoice = 'none')
           this.logger.log(`[Executive Loop] Herramienta ejecutada. Solicitando respuesta de texto conversacional para el usuario...`);
           const textPrompt = await this.contextBuilder.buildContext(
             payload.tenantId,
             payload.contactId,
             payload.conversationId,
-            null,
+            payload.content,
             null
           );
+
+          // Directiva explícita para que el LLM redacte la respuesta sin demoras
+          textPrompt.push({
+            role: 'user',
+            content: `[SISTEMA]: La memoria del CRM ya fue actualizada con éxito. Redacta ahora tu respuesta conversacional completa para el usuario respondiendo a su mensaje: "${payload.content}". Sé persuasivo, amable y termina con una pregunta de cierre.`
+          });
+
           const textResponse = await this.hermesClient.generateResponse(textPrompt, false);
           if (textResponse.content) {
             finalContent = textResponse.content;
@@ -160,6 +167,21 @@ export class LlmListenerService {
         }
       } else if (response.content) {
         finalContent = response.content;
+      }
+
+      // Fallback de seguridad: Si la IA no generó texto tras la herramienta, generar respuesta contextual
+      if (!finalContent || finalContent.trim() === '') {
+        this.logger.warn(`[Executive Loop] LLM devolvió texto vacío tras herramienta. Generando respuesta contextual de contingencia...`);
+        const userMsg = (payload.content || '').toLowerCase();
+        if (userMsg.includes('matemática') || userMsg.includes('matematica')) {
+          finalContent = '¡Excelente, profe! Justamente para Matemática de bachillerato tenemos nuestro Mega Kit con planificaciones listas, evaluaciones resueltas y guías pedagógicas. ¿Qué años estás atendiendo actualmente (de 1° a 5° año) para orientarte mejor? 😊📐';
+        } else if (userMsg.includes('física') || userMsg.includes('fisica')) {
+          finalContent = '¡Excelente, profe! Para Física de bachillerato contamos con el Mega Kit completo de física. ¿Qué años estás atendiendo (de 3° a 5° año)? 😊⚡';
+        } else if (userMsg.includes('comprobante') || userMsg.includes('pago') || userMsg.includes('referencia')) {
+          finalContent = '¡Muchísimas gracias, profe! Hemos registrado tu comprobante con éxito. Ya estamos preparando los accesos para que puedas descargar todo el material de inmediato. 🎉🎒';
+        } else {
+          finalContent = '¡Hola, profe! Qué gusto saludarte. 👋 Cuéntame, ¿de qué materia o año estás buscando material para orientarte con la mejor opción? 📚';
+        }
       }
 
       if (finalContent) {

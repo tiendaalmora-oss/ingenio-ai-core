@@ -26,7 +26,7 @@ export class OpenAiCompatibleProvider extends IAiProvider {
 
     if (options?.tools && options.tools.length > 0) {
       body.tools = options.tools;
-      body.tool_choice = 'auto';
+      body.tool_choice = options.toolChoice || 'auto';
     }
     if (options?.temperature !== undefined) body.temperature = options.temperature;
     if (options?.maxTokens !== undefined) body.max_tokens = options.maxTokens;
