@@ -32,24 +32,26 @@ export class WahaAdapterService {
   async sendMessage(tenantId: string, contactIdOrPhone: string, content: string): Promise<string> {
     let rawPhone = contactIdOrPhone;
 
-    // Si contactIdOrPhone es un ID de Contacto de base de datos, resolvemos el teléfono real
+    // Si contactIdOrPhone es un ID de Contacto de base de datos o UUID, resolvemos el contacto
     if (contactIdOrPhone && !contactIdOrPhone.includes('@')) {
       const contact = await this.prisma.contact.findFirst({
         where: {
           OR: [
             { id: contactIdOrPhone },
+            { externalId: contactIdOrPhone },
             { phone: contactIdOrPhone },
-            { externalId: contactIdOrPhone }
+            { phoneNormalized: contactIdOrPhone }
           ]
         }
       });
       if (contact) {
-        rawPhone = contact.phone || contact.externalId || contactIdOrPhone;
+        // Priorizar externalId que contiene el JID exacto original (@lid o @c.us)
+        rawPhone = contact.externalId || contact.phone || contact.phoneNormalized || contactIdOrPhone;
       }
     }
 
-    const chatId = this.normalizeJid(rawPhone);
-    this.logger.log(`Enviando mensaje vía WAHA a ${chatId} (teléfono: ${rawPhone}, id: ${contactIdOrPhone})...`);
+    let chatId = this.normalizeJid(rawPhone);
+    this.logger.log(`Enviando mensaje vía WAHA a ${chatId} (teléfono/ref: ${rawPhone}, id: ${contactIdOrPhone})...`);
     
     const wahaUrl = process.env.WAHA_API_URL;
     if (!wahaUrl) {
@@ -82,10 +84,31 @@ export class WahaAdapterService {
         })
       });
       
-      // Si falló y la sesión probada no era 'default', reintentar con 'default'
+      let errBody = '';
+      if (!response.ok) {
+        errBody = await response.text().catch(() => '');
+      }
+
+      // Reintento 1: Si falló por "No LID for user" con @c.us, reintentar con @lid
+      if (!response.ok && errBody.includes('No LID for user') && chatId.endsWith('@c.us')) {
+        const lidChatId = chatId.replace('@c.us', '@lid');
+        this.logger.warn(`Detectado error "No LID for user". Reintentando entrega a ${lidChatId}...`);
+        chatId = lidChatId;
+        response = await fetch(`${wahaUrl}/api/sendText`, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({
+            chatId: lidChatId,
+            text: content,
+            session: session
+          })
+        });
+        if (!response.ok) errBody = await response.text().catch(() => '');
+      }
+
+      // Reintento 2: Si falló por sesión no encontrada y no era 'default', reintentar con 'default'
       if (!response.ok && session !== 'default') {
-        const errBody = await response.text().catch(() => '');
-        this.logger.warn(`Envío falló con sesión "${session}" (${response.status}: ${errBody}). Reintentando con sesión "default"...`);
+        this.logger.warn(`Envío falló con sesión "${session}". Reintentando con sesión "default"...`);
         
         response = await fetch(`${wahaUrl}/api/sendText`, {
           method: 'POST',
@@ -96,10 +119,10 @@ export class WahaAdapterService {
             session: 'default'
           })
         });
+        if (!response.ok) errBody = await response.text().catch(() => '');
       }
 
       if (!response.ok) {
-        const errBody = await response.text().catch(() => '');
         throw new Error(`Waha response con error ${response.status}: ${response.statusText}. Body: ${errBody}`);
       }
 

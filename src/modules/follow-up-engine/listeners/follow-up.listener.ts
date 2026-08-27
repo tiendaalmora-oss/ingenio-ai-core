@@ -30,7 +30,7 @@ export class FollowUpListenerService {
         });
         finalMessage = rule.mensaje.replace(/\{nombre\}/gi, contact?.name || 'hola');
       } else {
-        // Por defecto, Hermes genera un mensaje de seguimiento hiper-personalizado contextual
+        // Por defecto, Hermes genera un mensaje de seguimiento contextual forzando modo texto (enableTools = false)
         const messages = await this.contextBuilder.buildFollowUpContext(
           payload.tenantId,
           payload.contactId,
@@ -38,15 +38,21 @@ export class FollowUpListenerService {
           payload.ruleApplied
         );
         
-        const response = await this.hermesClient.generateResponse(messages);
+        const response = await this.hermesClient.generateResponse(messages, false);
         if (response.content) {
           finalMessage = sanitizeUserFacingResponse(response.content);
         }
       }
       
+      // Fallback seguro: Si la IA no generó texto, usar la instrucción de la regla o mensaje por defecto
       if (!finalMessage || finalMessage.trim() === '') {
-        this.logger.warn(`Hermes no generó contenido para FOLLOW_UP_PENDING ${payload.conversationId}`);
-        return;
+        const ruleText = typeof rule === 'string' ? rule : (rule.mensaje || rule.instruccion || rule.condicion || '');
+        if (ruleText && !ruleText.toLowerCase().includes('rule-')) {
+          finalMessage = ruleText.replace(/^\d+[\.\-\)]\s*/, '').trim();
+        } else {
+          finalMessage = '¡Hola, profe! 👋 ¿Pudiste revisar la información del material? Cuéntame si tienes alguna duda para orientarte.';
+        }
+        this.logger.log(`Usando texto de seguimiento fallback: "${finalMessage.substring(0, 50)}..."`);
       }
       
       await this.prisma.pendingOutboundMessage.create({
