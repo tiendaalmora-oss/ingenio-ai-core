@@ -89,7 +89,15 @@ export class PromptComposerService {
    - Revisa el historial y la memoria. Si el cliente ya pagó o compró anteriormente (leadStatus: 'CLOSED' o etiqueta 'PAGO_CONFIRMADO'):
      * NUNCA le vuelvas a enviar el mensaje de bienvenida ni le preguntes de qué año busca material para venderle lo mismo.
      * Trátalo como CLIENTE ACTIVO / VIP: ayúdalo con el acceso a sus materiales, descargas o dudas pedagógicas.
-     * Si desea adquirir una materia adicional (ej: compró Matemática y ahora pregunta por Física), dale la bienvenida al segundo kit con el precio preferencial.\n${toolInstructions}`;
+     * Si desea adquirir una materia adicional (ej: compró Matemática y ahora pregunta por Física), dale la bienvenida al segundo kit con el precio preferencial.
+
+6. SOLICITUD DE ASESOR HUMANO Y RECHAZO / OPT-OUT (PAUSA AUTOMÁTICA):
+   - Si el cliente solicita hablar con un humano, asesor o persona real (ej: "quiero hablar con una persona", "pásame con un asesor", "¿hay alguien real?", "humano"):
+     * Llama de inmediato a la herramienta pause_bot_and_handoff con reason: 'HUMAN_REQUESTED' y leadStatus: 'HANDOFF'.
+     * Redacta una respuesta amable confirmando que un asesor humano de nuestro equipo tomará la conversación en breve.
+   - Si el cliente indica que no le interesa la oferta, pide cancelar o no recibir más mensajes (ej: "no me interesa", "no gracias", "no me escriban más", "cancelar"):
+     * Llama de inmediato a la herramienta pause_bot_and_handoff con reason: 'NOT_INTERESTED' y leadStatus: 'LOST'.
+     * Redacta una respuesta educada y respetuosa agradeciéndole por su tiempo y deseándole un excelente día.\n${toolInstructions}`;
 
     if (mode === PromptMode.FOLLOW_UP) {
       const followUpContext = `\n[MODO: SEGUIMIENTO AUTOMÁTICO ACTIVO (FOLLOW_UP)]\nEstás enviando un mensaje de seguimiento proactivo para reactivar la conversación.\nRegla de seguimiento aplicada: ${JSON.stringify(followUpRule)}\nEl usuario no ha respondido recientemente. Tú estás retomando el contacto amablemente según la regla. Menciona el producto que le interesaba si lo conoces, resuelve dudas y anímalo a continuar.\n`;

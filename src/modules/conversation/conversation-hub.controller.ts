@@ -248,6 +248,13 @@ export class ConversationHubController {
       data: { status: body.status },
     });
 
+    if (['HANDOFF', 'PAUSED', 'LOST', 'RESOLVED'].includes(body.status.toUpperCase())) {
+      await this.prisma.pendingOutboundMessage.deleteMany({
+        where: { conversationId: id, status: 'PENDING' },
+      });
+      this.logger.log(`Cancelados seguimientos pendientes por cambio de estado a "${body.status}" en conversación ${id}`);
+    }
+
     return { success: true, count: updated.count };
   }
 

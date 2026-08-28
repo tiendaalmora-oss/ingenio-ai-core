@@ -22,7 +22,16 @@ describe('ToolCallListenerService', () => {
           provide: PrismaService,
           useValue: {
             interaction: {
-              create: jest.fn(),
+              create: jest.fn().mockResolvedValue({}),
+            },
+            conversation: {
+              update: jest.fn().mockResolvedValue({}),
+            },
+            businessMemory: {
+              upsert: jest.fn().mockResolvedValue({}),
+            },
+            pendingOutboundMessage: {
+              deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
             },
           },
         },

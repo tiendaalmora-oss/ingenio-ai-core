@@ -82,6 +82,16 @@ export class LlmListenerService {
       return;
     }
 
+    // ── Check if conversation is paused / handed off to human ────────────────
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: payload.conversationId },
+    });
+
+    if (conversation && (conversation.status === 'HANDOFF' || conversation.status === 'PAUSED' || conversation.status === 'LOST' || conversation.status === 'RESOLVED')) {
+      this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}'. Bot en pausa para permitir atención humana manual.`);
+      return;
+    }
+
     this.incrementDepth(payload.conversationId);
 
     try {

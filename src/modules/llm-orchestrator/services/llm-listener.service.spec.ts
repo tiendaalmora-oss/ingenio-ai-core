@@ -41,7 +41,10 @@ describe('LlmListenerService', () => {
     funnelEngine = { findMatchingFunnel: jest.fn().mockResolvedValue(null) } as any;
     runtimeEngine = { parseReactFlowToDsl: jest.fn(), executeFlow: jest.fn() } as any;
     contextBuilder = { buildContext: jest.fn().mockResolvedValue('mock-prompt') } as any;
-    prisma = { interaction: { create: jest.fn().mockResolvedValue({}) } } as any;
+    prisma = {
+      interaction: { create: jest.fn().mockResolvedValue({}) },
+      conversation: { findUnique: jest.fn().mockResolvedValue({ id: 'conv-abc', status: 'ACTIVE' }) },
+    } as any;
     eventEmitter = { emit: jest.fn(), emitAsync: jest.fn().mockResolvedValue([]) } as any;
 
     const module: TestingModule = await Test.createTestingModule({
