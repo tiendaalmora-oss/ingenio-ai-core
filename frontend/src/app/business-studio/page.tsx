@@ -47,21 +47,39 @@ export default function BusinessStudioPage() {
   }
 
   return (
-    /* Full-height flex container — no PageContainer wrapper needed here,
-       AppLayout's <main> already provides padding and scrolling */
-    <div className="flex h-full overflow-hidden bg-white rounded-lg shadow-sm border border-gray-200">
+    <div className="flex flex-col md:flex-row h-full overflow-hidden bg-white rounded-xl shadow-sm border border-gray-200">
 
-      {/* Left: Knowledge Sidebar */}
+      {/* Mobile Horizontal Section Navigation Bar */}
+      <div className="md:hidden bg-white border-b border-gray-200 p-2 overflow-x-auto shrink-0 flex gap-1.5 scrollbar-none">
+        {schema?.map((section: any) => {
+          const isActive = selectedSection === section.key;
+          return (
+            <button
+              key={section.key}
+              onClick={() => setSelectedSection(section.key)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                isActive
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <span>{section.title}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Left: Knowledge Sidebar (Desktop only) */}
       <KnowledgeSidebar />
 
-      {/* Right: Content area */}
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-gray-50">
+      {/* Right: Content area (Full width on mobile) */}
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-gray-50/50">
         {isLoading ? (
-          <div className="flex-1 p-6">
+          <div className="flex-1 p-3 sm:p-6">
             <LoadingSkeleton rows={6} />
           </div>
         ) : activeSchema ? (
-          <div className="flex-1 flex flex-col overflow-hidden p-6 gap-4">
+          <div className="flex-1 flex flex-col overflow-y-auto p-3 sm:p-6 gap-3 sm:gap-4">
             <KnowledgeHeader
               title={activeSchema.title}
               description={activeSchema.description}
@@ -71,7 +89,7 @@ export default function BusinessStudioPage() {
                 { label: activeSchema.title },
               ]}
             />
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 min-h-0">
               <KnowledgeContent
                 sectionKey={activeSchema.key}
                 isCollection={activeSchema.collection}
@@ -80,7 +98,7 @@ export default function BusinessStudioPage() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-400 text-lg">
+          <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
             Seleccione una sección del Knowledge Base
           </div>
         )}

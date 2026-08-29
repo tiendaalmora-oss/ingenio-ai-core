@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Sparkles,
   ArrowRight,
+  ArrowLeft,
   ShieldAlert,
   Trash2
 } from 'lucide-react';
@@ -54,10 +55,12 @@ export default function ConversationsPage() {
     refetchInterval: 5000, // Poll every 5 seconds for new live chats
   });
 
-  // Auto-select first conversation if none selected
+  // Auto-select first conversation only on desktop screens
   useEffect(() => {
-    if (convsData?.data && convsData.data.length > 0 && !selectedConvId) {
-      setSelectedConvId(convsData.data[0].id);
+    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+      if (convsData?.data && convsData.data.length > 0 && !selectedConvId) {
+        setSelectedConvId(convsData.data[0].id);
+      }
     }
   }, [convsData, selectedConvId]);
 
@@ -172,11 +175,15 @@ export default function ConversationsPage() {
   const conversations = convsData?.data || [];
 
   return (
-    <div className="flex h-[calc(100vh-6rem)] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="flex h-[calc(100vh-5rem)] md:h-[calc(100vh-6rem)] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       {/* ── LEFT: Conversations List ────────────────────────────────────────── */}
-      <div className="w-80 md:w-96 border-r border-gray-200 flex flex-col bg-gray-50/50">
+      <div
+        className={`w-full md:w-80 lg:w-96 border-r border-gray-200 flex flex-col bg-gray-50/50 ${
+          selectedConvId ? 'hidden md:flex' : 'flex'
+        }`}
+      >
         {/* Header & Search */}
-        <div className="p-4 border-b border-gray-200 bg-white space-y-3">
+        <div className="p-3 sm:p-4 border-b border-gray-200 bg-white space-y-2.5 sm:space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
               <MessageSquare className="w-5 h-5 text-blue-600" />
@@ -198,12 +205,12 @@ export default function ConversationsPage() {
               placeholder="Buscar por nombre o número..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none"
+              className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none"
             />
           </div>
 
           {/* Filter Pills */}
-          <div className="flex gap-1 overflow-x-auto text-[11px]">
+          <div className="flex gap-1 overflow-x-auto text-[11px] pb-0.5">
             {[
               { label: 'Todos', value: '' },
               { label: 'Activos', value: 'ACTIVE' },
@@ -244,7 +251,7 @@ export default function ConversationsPage() {
                 <button
                   key={c.id}
                   onClick={() => setSelectedConvId(c.id)}
-                  className={`w-full p-3.5 text-left flex gap-3 transition hover:bg-gray-100/80 ${
+                  className={`w-full p-3 sm:p-3.5 text-left flex gap-3 transition hover:bg-gray-100/80 ${
                     isSelected ? 'bg-blue-50/80 border-l-4 border-blue-600' : 'bg-white'
                   }`}
                 >
@@ -268,7 +275,7 @@ export default function ConversationsPage() {
                       {c.lastMessage?.content || 'Sin mensajes'}
                     </p>
 
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       {c.status === 'HANDOFF' ? (
                         <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded">
                           Handoff
@@ -295,29 +302,38 @@ export default function ConversationsPage() {
 
       {/* ── RIGHT: Chat Window ──────────────────────────────────────────────── */}
       {selectedConvId && currentConv ? (
-        <div className="flex-1 flex flex-col bg-slate-50 min-w-0">
+        <div className="flex-1 flex flex-col bg-slate-50 min-w-0 w-full">
           {/* Top Bar */}
-          <div className="h-16 px-6 bg-white border-b border-gray-200 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+          <div className="h-16 px-3 sm:px-6 bg-white border-b border-gray-200 flex items-center justify-between shrink-0 gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              {/* Back button on mobile */}
+              <button
+                onClick={() => setSelectedConvId(null)}
+                className="md:hidden p-1.5 -ml-1 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 shrink-0"
+                aria-label="Volver a la lista"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
                 {currentConv.contact.name ? currentConv.contact.name.charAt(0).toUpperCase() : 'U'}
               </div>
               <div className="min-w-0">
-                <h3 className="text-sm font-bold text-gray-900 truncate">
+                <h3 className="text-xs sm:text-sm font-bold text-gray-900 truncate">
                   {currentConv.contact.name || 'Prospecto'}
                 </h3>
-                <p className="text-xs text-gray-400 flex items-center gap-1">
-                  <Phone className="w-3 h-3" />
-                  {currentConv.contact.phone || 'Sin número'}
+                <p className="text-[11px] text-gray-400 flex items-center gap-1 truncate">
+                  <Phone className="w-3 h-3 shrink-0" />
+                  <span className="truncate">{currentConv.contact.phone || 'Sin número'}</span>
                 </p>
               </div>
             </div>
 
             {/* Quick Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <Link
                 href={`/crm`}
-                className="px-2.5 py-1.5 text-xs text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition"
+                className="hidden sm:inline-flex px-2.5 py-1.5 text-xs text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition"
               >
                 Ver en CRM
               </Link>
@@ -325,16 +341,16 @@ export default function ConversationsPage() {
               {currentConv.status !== 'HANDOFF' ? (
                 <button
                   onClick={() => statusMutation.mutate({ id: selectedConvId, status: 'HANDOFF' })}
-                  className="px-2.5 py-1.5 text-xs text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg font-medium transition"
+                  className="px-2 sm:px-2.5 py-1.5 text-[11px] sm:text-xs text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg font-medium transition"
                 >
-                  Pausar Bot (Tomar Chat)
+                  Pausar Bot
                 </button>
               ) : (
                 <button
                   onClick={() => statusMutation.mutate({ id: selectedConvId, status: 'ACTIVE' })}
-                  className="px-2.5 py-1.5 text-xs text-green-800 bg-green-100 hover:bg-green-200 rounded-lg font-medium transition"
+                  className="px-2 sm:px-2.5 py-1.5 text-[11px] sm:text-xs text-emerald-800 bg-emerald-100 hover:bg-emerald-200 rounded-lg font-medium transition"
                 >
-                  Reactivar Bot
+                  Reanudar Bot
                 </button>
               )}
 

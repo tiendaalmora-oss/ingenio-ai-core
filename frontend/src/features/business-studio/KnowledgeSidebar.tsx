@@ -32,7 +32,7 @@ export default function KnowledgeSidebar() {
   }
 
   return (
-    <div className="w-64 border-r border-gray-200 bg-white overflow-y-auto h-[calc(100vh-4rem)] p-4">
+    <div className="hidden md:block w-64 lg:w-72 shrink-0 border-r border-gray-200 bg-white overflow-y-auto h-full p-4">
       <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 px-2">Knowledge Base</h2>
       <ul className="space-y-1">
         {schema?.map((section: any) => {
