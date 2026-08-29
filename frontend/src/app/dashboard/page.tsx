@@ -22,20 +22,33 @@ export default function DashboardPage() {
     <PageContainer maxWidth="max-w-[1600px]">
       
       {/* Header del Tenant */}
-      <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-200 pb-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            Tenant: {tenant || 'N/A'}
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-200 pb-4 gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">
+              Dashboard
+            </h1>
             <VersionIndicator version={dashboard?.knowledgeVersion || data.version} />
-          </h1>
-          <div className="text-sm text-gray-500 mt-2 flex items-center gap-4">
-            <span className="flex items-center gap-1"><Clock className="w-4 h-4"/> Última Sincronización: {timestamp ? new Date(timestamp).toLocaleString() : 'N/A'}</span>
-            <span className="flex items-center gap-1"><Database className="w-4 h-4"/> Cache: {dashboard?.cacheStatus === 'HIT' || status?.cacheLoaded ? 'Cargado' : 'Miss/Vacío'}</span>
-            <span className="flex items-center gap-1"><Server className="w-4 h-4"/> Bundle: {dashboard?.bundleStatus || 'Desconocido'}</span>
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm text-gray-500">
+            <span className="flex items-center gap-1 bg-gray-100 px-2 py-0.5 rounded text-gray-700 font-mono text-xs truncate max-w-[220px] sm:max-w-none">
+              Tenant: {tenant || 'N/A'}
+            </span>
+            <span className="flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5"/> Sincronizado: {timestamp ? new Date(timestamp).toLocaleTimeString() : 'N/A'}
+            </span>
+            <span className="flex items-center gap-1">
+              <Database className="w-3.5 h-3.5"/> Cache: {dashboard?.cacheStatus === 'HIT' || status?.cacheLoaded ? 'Cargado' : 'Miss'}
+            </span>
           </div>
         </div>
-        <div className="mt-4 sm:mt-0 flex gap-2">
-          <Link href="/business-studio" className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
+
+        <div className="flex-shrink-0 w-full sm:w-auto">
+          <Link
+            href="/business-studio"
+            className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 active:bg-blue-800 transition-colors shadow-sm"
+          >
             Abrir Business Studio
           </Link>
         </div>

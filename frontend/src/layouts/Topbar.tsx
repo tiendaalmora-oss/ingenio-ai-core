@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { usePathname } from 'next/navigation';
-import { Activity, Clock, Database } from 'lucide-react';
+import { Activity, Clock, Database, Menu, Lock } from 'lucide-react';
+import { useUiStore } from '../store/ui.store';
 
 interface HealthItem {
   name: string;
@@ -18,6 +19,7 @@ interface TopbarProps {
 
 export default function Topbar({ tenant, version, timestamp, health }: TopbarProps) {
   const pathname = usePathname();
+  const { toggleMobileMenu } = useUiStore();
 
   const hasDown = Array.isArray(health) && health.some((h) => h.status === 'DOWN');
   const hasWarning = Array.isArray(health) && health.some((h) => h.status === 'WARNING');
@@ -39,12 +41,22 @@ export default function Topbar({ tenant, version, timestamp, health }: TopbarPro
       : pathname.split('/').filter(Boolean).join(' / ').replace(/-/g, ' ');
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 flex-shrink-0">
-      <div className="flex items-center gap-4 min-w-0">
-        <div className="flex items-center gap-2 text-sm text-gray-600 font-medium bg-gray-100 px-3 py-1.5 rounded-full flex-shrink-0">
-          <Database className="w-4 h-4 text-gray-500" />
-          <span className="truncate max-w-[120px]">{tenant}</span>
+    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-3 sm:px-6 flex-shrink-0">
+      <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+        {/* Mobile Hamburger Button */}
+        <button
+          onClick={toggleMobileMenu}
+          className="md:hidden p-2 -ml-1 rounded-lg hover:bg-gray-100 text-gray-600 focus:outline-none"
+          aria-label="Abrir menú"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 font-medium bg-gray-100 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full flex-shrink-0">
+          <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 shrink-0" />
+          <span className="truncate max-w-[90px] sm:max-w-[140px]">{tenant}</span>
         </div>
+
         <nav className="hidden sm:flex items-center text-sm text-gray-500 capitalize truncate">
           {breadcrumb}
         </nav>

@@ -37,8 +37,7 @@ interface MenuItem {
 
 export default function Sidebar({ menu }: { menu: MenuItem[] }) {
   const pathname = usePathname();
-  const { sidebarOpen, toggleSidebar } = useUiStore();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const { sidebarOpen, toggleSidebar, mobileMenuOpen, setMobileMenuOpen } = useUiStore();
 
   const sortedMenu = [...menu].sort((a, b) => a.order - b.order);
   const sidebarWidth = sidebarOpen ? 'w-64' : 'w-20';
@@ -73,7 +72,6 @@ export default function Sidebar({ menu }: { menu: MenuItem[] }) {
                 <li key={item.id}>
                   <Link
                     href={item.enabled ? item.route : '#'}
-                    onClick={() => setMobileOpen(false)}
                     className={`flex items-center p-2 rounded-lg group transition-colors ${
                       !item.enabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''
                     } ${
@@ -99,28 +97,20 @@ export default function Sidebar({ menu }: { menu: MenuItem[] }) {
         </nav>
       </aside>
 
-      {/* ── Mobile hamburger button ── */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="md:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-md shadow border border-gray-200 text-gray-600"
-        aria-label="Open menu"
-      >
-        <Menu className="w-5 h-5" />
-      </button>
-
       {/* ── Mobile drawer ── */}
-      {mobileOpen && (
+      {mobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
           <div
-            className="absolute inset-0 bg-black bg-opacity-40"
-            onClick={() => setMobileOpen(false)}
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
+            onClick={() => setMobileMenuOpen(false)}
           />
-          <aside className="relative z-10 w-64 h-full bg-white border-r border-gray-200 flex flex-col">
+          <aside className="relative z-10 w-72 max-w-[85vw] h-full bg-white shadow-2xl flex flex-col animate-in slide-in-from-left duration-200">
             <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
-              <span className="text-xl font-bold text-gray-800">Ingenio AI</span>
+              <span className="text-xl font-bold text-gray-900">Ingenio AI</span>
               <button
-                onClick={() => setMobileOpen(false)}
-                className="p-2 rounded-md hover:bg-gray-100 text-gray-600"
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+                aria-label="Cerrar menú"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -135,17 +125,17 @@ export default function Sidebar({ menu }: { menu: MenuItem[] }) {
                     <li key={item.id}>
                       <Link
                         href={item.enabled ? item.route : '#'}
-                        onClick={() => setMobileOpen(false)}
-                        className={`flex items-center p-2 rounded-lg transition-colors ${
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={`flex items-center p-3 rounded-xl transition-colors ${
                           !item.enabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''
                         } ${
                           isActive
-                            ? 'bg-blue-50 text-blue-700'
+                            ? 'bg-blue-600 text-white font-medium shadow-md shadow-blue-600/20'
                             : 'text-gray-700 hover:bg-gray-100'
                         }`}
                       >
-                        <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-blue-700' : 'text-gray-500'}`} />
-                        <span className="ms-3 text-sm font-medium">{item.title}</span>
+                        <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-500'}`} />
+                        <span className="ms-3 text-sm">{item.title}</span>
                       </Link>
                     </li>
                   );

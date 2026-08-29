@@ -102,14 +102,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Sidebar menu={data.menu} />
 
       {/*
-        Main wrapper — offset by sidebar width.
-        sidebarOpen → 256px (w-64)
-        collapsed   → 80px  (w-20)
-        The transition must mirror the sidebar's own transition-all.
+        Main wrapper — offset by sidebar width on desktop, 0 on mobile.
+        Desktop: sidebarOpen → ml-64, collapsed → ml-20
+        Mobile: ml-0
       */}
       <div
-        className={`flex flex-col flex-1 min-w-0 overflow-hidden transition-all duration-300 ${
-          sidebarOpen ? 'ml-64' : 'ml-20'
+        className={`flex flex-col flex-1 min-w-0 overflow-hidden transition-all duration-300 ml-0 ${
+          sidebarOpen ? 'md:ml-64' : 'md:ml-20'
         }`}
       >
         <Topbar
@@ -118,7 +117,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           timestamp={data.timestamp}
           health={data.health}
         />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 flex flex-col">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 flex flex-col">
           <div className="flex-1 flex flex-col min-h-0">
             {children}
           </div>
