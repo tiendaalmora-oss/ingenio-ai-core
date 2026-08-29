@@ -92,6 +92,224 @@ export class LlmListenerService {
       return;
     }
 
+    // ── Check Configurable Bot Control Rules (Opt-Out, Human Handoff & Message Limit) ──
+    const bundle = this.prisma?.knowledgeBundle
+      ? await this.prisma.knowledgeBundle.findUnique({
+          where: { tenantId: payload.tenantId },
+        })
+      : null;
+    const rawPrompt: any = bundle?.systemPrompt || {};
+    const rawData = rawPrompt['_raw'] || rawPrompt;
+    const reglasBot = rawData.reglasBot || {
+      autoPauseOptOut: true,
+      optOutMessage: 'Entendido perfectamente. Agradecemos mucho tu tiempo y honestidad. ¡Que tengas un excelente día!',
+      autoPauseHandoff: true,
+      handoffMessage: 'Con gusto. En breve un asesor humano de nuestro equipo continuará la conversación contigo por acá.',
+      enableMessageLimit: true,
+      maxBotMessages: 10,
+      limitReachedMessage: 'Para brindarte una atención personalizada y revisar los detalles de tu caso, te transferiré con un asesor de nuestro equipo que te atenderá en breve.'
+    };
+
+    const textNorm = (payload.content || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+    // 1. REGLA: Auto-Pausa por Rechazo / Desinterés (Opt-Out)
+    if (reglasBot.autoPauseOptOut !== false) {
+      const optOutPatterns = [
+        'no me interesa',
+        'no estoy interesado',
+        'no estoy interesada',
+        'no gracias',
+        'no me escribas mas',
+        'no me escriban mas',
+        'no me escribas',
+        'no me escriban',
+        'no quiero nada',
+        'no quiero recibir',
+        'deja de escribir',
+        'dejen de escribir',
+        'cancela',
+        'cancelar',
+        'eliminarme',
+        'darme de baja',
+        'ya no quiero',
+        'no molesten',
+        'no molestar',
+        'no enviar mas',
+        'no me mandes mas',
+        'no me manden mas',
+        'desuscribir',
+        'no responder mas'
+      ];
+
+      const isOptOut = optOutPatterns.some(p => textNorm.includes(p));
+      if (isOptOut) {
+        this.logger.log(`[Reglas Bot] Detectado Opt-Out ("${payload.content}"). Pausando bot permanentemente y cancelando seguimientos.`);
+        
+        await this.prisma.conversation.update({
+          where: { id: payload.conversationId },
+          data: { status: 'LOST', leadStatus: 'LOST' }
+        });
+
+        const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } });
+        const currentTags = (memory?.tags as string[]) || [];
+        const updatedTags = Array.from(new Set([...currentTags, 'NO_INTERESADO', 'OPT_OUT']));
+        await this.prisma.businessMemory.upsert({
+          where: { contactId: payload.contactId },
+          create: {
+            tenantId: payload.tenantId,
+            contactId: payload.contactId,
+            leadStatus: 'LOST',
+            tags: updatedTags
+          },
+          update: {
+            leadStatus: 'LOST',
+            tags: updatedTags
+          }
+        });
+
+        await this.prisma.pendingOutboundMessage.deleteMany({
+          where: { conversationId: payload.conversationId }
+        });
+
+        const farewell = reglasBot.optOutMessage || 'Entendido perfectamente. Agradecemos mucho tu tiempo y honestidad. ¡Que tengas un excelente día!';
+        
+        await this.prisma.interaction.create({
+          data: {
+            conversationId: payload.conversationId,
+            direction: 'OUTBOUND',
+            type: 'TEXT',
+            content: farewell,
+            role: 'assistant'
+          }
+        });
+
+        this.eventEmitter.emit('response.generated', new ResponseGeneratedEvent(
+          payload.tenantId,
+          payload.conversationId,
+          farewell
+        ));
+        return;
+      }
+    }
+
+    // 2. REGLA: Auto-Pausa y Traspaso por Solicitud de Humano (Handoff)
+    if (reglasBot.autoPauseHandoff !== false) {
+      const handoffPatterns = [
+        'hablar con un humano',
+        'hablar con una persona',
+        'persona real',
+        'un asesor',
+        'asesor humano',
+        'atencion humana',
+        'atencion con persona',
+        'pasame con un asesor',
+        'pasame con alguien',
+        'quiero una persona',
+        'quiero un asesor',
+        'quiero un humano',
+        'comunicarme con una persona',
+        'comunicarme con un asesor',
+        'asesor por favor',
+        'humano por favor'
+      ];
+
+      const isHandoff = handoffPatterns.some(p => textNorm.includes(p));
+      if (isHandoff) {
+        this.logger.log(`[Reglas Bot] Solicitud de asesor humano ("${payload.content}"). Traspasando a HANDOFF y cancelando seguimientos.`);
+        
+        await this.prisma.conversation.update({
+          where: { id: payload.conversationId },
+          data: { status: 'HANDOFF', leadStatus: 'HANDOFF' }
+        });
+
+        const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } });
+        const currentTags = (memory?.tags as string[]) || [];
+        const updatedTags = Array.from(new Set([...currentTags, 'HANDOFF_HUMANO', 'ASESOR_SOLICITADO']));
+        await this.prisma.businessMemory.upsert({
+          where: { contactId: payload.contactId },
+          create: {
+            tenantId: payload.tenantId,
+            contactId: payload.contactId,
+            leadStatus: 'HANDOFF',
+            tags: updatedTags
+          },
+          update: {
+            leadStatus: 'HANDOFF',
+            tags: updatedTags
+          }
+        });
+
+        await this.prisma.pendingOutboundMessage.deleteMany({
+          where: { conversationId: payload.conversationId }
+        });
+
+        const handoffMsg = reglasBot.handoffMessage || 'Con gusto. En breve un asesor humano de nuestro equipo continuará la conversación contigo por acá.';
+        
+        await this.prisma.interaction.create({
+          data: {
+            conversationId: payload.conversationId,
+            direction: 'OUTBOUND',
+            type: 'TEXT',
+            content: handoffMsg,
+            role: 'assistant'
+          }
+        });
+
+        this.eventEmitter.emit('response.generated', new ResponseGeneratedEvent(
+          payload.tenantId,
+          payload.conversationId,
+          handoffMsg
+        ));
+        return;
+      }
+    }
+
+    // 3. REGLA: Límite Máximo de Mensajes del Bot (Ahorro de Tokens y Guardrail)
+    if (reglasBot.enableMessageLimit !== false) {
+      const maxMessages = Number(reglasBot.maxBotMessages) || 10;
+      const botMessageCount = this.prisma?.interaction?.count
+        ? await this.prisma.interaction.count({
+            where: {
+              conversationId: payload.conversationId,
+              direction: 'OUTBOUND',
+              role: 'assistant'
+            }
+          })
+        : 0;
+
+      if (botMessageCount >= maxMessages) {
+        this.logger.log(`[Reglas Bot] Conversación ${payload.conversationId} alcanzó el límite de ${maxMessages} mensajes del bot (${botMessageCount} enviados). Pausando bot.`);
+        
+        await this.prisma.conversation.update({
+          where: { id: payload.conversationId },
+          data: { status: 'HANDOFF', leadStatus: 'HANDOFF' }
+        });
+
+        await this.prisma.pendingOutboundMessage.deleteMany({
+          where: { conversationId: payload.conversationId }
+        });
+
+        const limitMsg = reglasBot.limitReachedMessage || 'Para brindarte una atención personalizada y revisar los detalles de tu caso, te transferiré con un asesor de nuestro equipo que te atenderá en breve.';
+        
+        await this.prisma.interaction.create({
+          data: {
+            conversationId: payload.conversationId,
+            direction: 'OUTBOUND',
+            type: 'TEXT',
+            content: limitMsg,
+            role: 'assistant'
+          }
+        });
+
+        this.eventEmitter.emit('response.generated', new ResponseGeneratedEvent(
+          payload.tenantId,
+          payload.conversationId,
+          limitMsg
+        ));
+        return;
+      }
+    }
+
     this.incrementDepth(payload.conversationId);
 
     try {

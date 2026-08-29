@@ -142,6 +142,27 @@ export class PromptComposerService {
     
     for (const [key, value] of Object.entries(kosBundle)) {
       if (!value) continue;
+
+      if (key.toLowerCase() === 'products' || key.toLowerCase() === 'productos') {
+        result += `### CATÁLOGO DE PRODUCTOS Y BASE DE CONOCIMIENTO TÉCNICA:\n`;
+        const items = (value as any).items || (value as any).productos || (Array.isArray(value) ? value : []);
+        if (Array.isArray(items) && items.length > 0) {
+          items.forEach((p: any, i: number) => {
+            result += `\n📦 PRODUCTO #${i + 1}: ${p.nombre || p.name || 'Sin nombre'}\n`;
+            if (p.precio || p.price) result += `  - Precio: ${p.precio || p.price}\n`;
+            if (p.categoria || p.category) result += `  - Categoría: ${p.categoria || p.category}\n`;
+            if (p.descripcion || p.description) result += `  - Descripción: ${p.descripcion || p.description}\n`;
+            if (p.beneficios) result += `  - Beneficios: ${p.beneficios}\n`;
+            if (p.enlace || p.link) result += `  - Enlace: ${p.enlace || p.link}\n`;
+            if (p.baseConocimiento || p.detallesTecnicos) {
+              result += `  - 📚 BASE DE CONOCIMIENTO TÉCNICA:\n    ${(p.baseConocimiento || p.detallesTecnicos).replace(/\n/g, '\n    ')}\n`;
+            }
+          });
+          result += '\n';
+        }
+        continue;
+      }
+
       if (typeof value === 'string') {
         result += `### ${key.toUpperCase()}:\n${value}\n\n`;
       } else if (Array.isArray(value)) {

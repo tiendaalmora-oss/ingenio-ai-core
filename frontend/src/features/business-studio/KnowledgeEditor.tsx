@@ -41,11 +41,31 @@ const SECTION_GUIDANCE: Record<string, { title: string; placeholder: string; hin
     placeholder: `Ejemplo:\n- Cuando el cliente pregunte el precio, menciona el valor de oferta por tiempo limitado y resalta que incluye acceso de por vida.\n- Si el cliente duda, ofrécele una muestra o explícale los beneficios inmediatos que obtendrá.\n- Para concretar la venta, solicita nombre y correo electrónico para facilitarle los datos bancarios.`,
     hint: 'Describe cómo quieres que el bot argumente la venta, maneje el cierre y motive al cliente a comprar.',
   },
-  politicasAtencion: {
-    title: 'Políticas de Atención y Garantías',
-    placeholder: `Ejemplo:\n- Horario de atención humana: Lunes a Sábado de 8:00 AM a 8:00 PM.\n- Entrega de productos digitales: Envío inmediato por enlace de Google Drive o correo tras confirmar el pago.\n- Garantía de satisfacción de 7 días.`,
-    hint: 'Detalla los tiempos de entrega, políticas de devolución, horarios de soporte y garantías.',
+  reglasBot: {
+    title: 'Control y Reglas de Pausa del Bot',
+    placeholder: `Configuración de Auto-Pausa y Límites del Bot:\n- Auto-Pausa por Desinterés (Opt-Out): Activada\n- Auto-Pausa por Solicitud de Humano: Activada\n- Límite de Mensajes del Bot: 10 mensajes`,
+    hint: 'Configura las reglas de detención automática del bot para evitar insistir a clientes no interesados y ahorrar consumo de tokens.',
   },
+};
+
+interface ReglasBotData {
+  autoPauseOptOut: boolean;
+  optOutMessage: string;
+  autoPauseHandoff: boolean;
+  handoffMessage: string;
+  enableMessageLimit: boolean;
+  maxBotMessages: number;
+  limitReachedMessage: string;
+}
+
+const DEFAULT_REGLAS_BOT: ReglasBotData = {
+  autoPauseOptOut: true,
+  optOutMessage: 'Entendido perfectamente. Agradecemos mucho tu tiempo y honestidad. ¡Que tengas un excelente día!',
+  autoPauseHandoff: true,
+  handoffMessage: 'Con gusto. En breve un asesor humano de nuestro equipo continuará la conversación contigo por acá.',
+  enableMessageLimit: true,
+  maxBotMessages: 10,
+  limitReachedMessage: 'Para brindarte una atención personalizada y revisar los detalles de tu caso, te transferiré con un asesor de nuestro equipo que te atenderá en breve.'
 };
 
 export default function KnowledgeEditor({ sectionKey, initialData, editable }: KnowledgeEditorProps) {
@@ -54,15 +74,29 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
   const setBootstrapData = useBootstrapStore(s => s.setBootstrapData);
   const bootstrapData = useBootstrapStore(s => s.data);
 
+  // Parse initial bot rules if sectionKey is reglasBot
+  const parseReglasBot = (d: any): ReglasBotData => {
+    if (!d || typeof d !== 'object') return DEFAULT_REGLAS_BOT;
+    return {
+      autoPauseOptOut: d.autoPauseOptOut !== undefined ? Boolean(d.autoPauseOptOut) : true,
+      optOutMessage: d.optOutMessage || DEFAULT_REGLAS_BOT.optOutMessage,
+      autoPauseHandoff: d.autoPauseHandoff !== undefined ? Boolean(d.autoPauseHandoff) : true,
+      handoffMessage: d.handoffMessage || DEFAULT_REGLAS_BOT.handoffMessage,
+      enableMessageLimit: d.enableMessageLimit !== undefined ? Boolean(d.enableMessageLimit) : true,
+      maxBotMessages: Number(d.maxBotMessages) || 10,
+      limitReachedMessage: d.limitReachedMessage || DEFAULT_REGLAS_BOT.limitReachedMessage
+    };
+  };
+
+  const [reglasData, setReglasData] = useState<ReglasBotData>(parseReglasBot(initialData));
+
   // Normalizar datos iniciales para mostrarlos en texto natural y limpio (sin llaves de JSON vacías)
   const extractNaturalText = (d: any): string => {
     if (!d) return '';
     if (typeof d === 'string') return d;
     if (typeof d === 'object') {
       if (d.prompt) return d.prompt;
-      // Si es un objeto vacío {}, no mostrar '{}' al usuario
       if (Object.keys(d).length === 0) return '';
-      // Si es un objeto con campos clásicos de identidad/empresa, transformarlo a texto legible
       const lines: string[] = [];
       for (const [k, v] of Object.entries(d)) {
         if (v && typeof v === 'string') {
@@ -82,6 +116,7 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
 
   useEffect(() => {
     setText(extractNaturalText(initialData));
+    setReglasData(parseReglasBot(initialData));
     setIsDirty(false);
     setSaveStatus('idle');
   }, [initialData, sectionKey]);
@@ -125,23 +160,25 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
   };
 
   const handleSave = () => {
-    // Si el usuario ingresó texto natural, se guarda como string limpio o como objeto con prompt
+    if (sectionKey === 'reglasBot') {
+      mutation.mutate(reglasData);
+      return;
+    }
+
     const trimmed = text.trim();
     try {
-      // Si el usuario expresamente escribió un JSON válido, lo parseamos
       if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
         const parsed = JSON.parse(trimmed);
         mutation.mutate(parsed);
         return;
       }
-    } catch {
-      // Si no es JSON, guardamos como texto natural directamente
-    }
+    } catch {}
     mutation.mutate(trimmed);
   };
 
   const handleCancel = () => {
     setText(extractNaturalText(initialData));
+    setReglasData(parseReglasBot(initialData));
     setIsDirty(false);
     setSaveStatus('idle');
   };
@@ -160,18 +197,18 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
   return (
     <div className="flex flex-col h-full bg-white rounded-md border border-gray-200 overflow-hidden shadow-sm">
       {/* Header con indicador de guardado y botones */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
+      <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200 bg-gray-50 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-blue-600" />
           <span className="text-sm font-semibold text-gray-800">{guidance.title}</span>
           <SaveIndicator status={saveStatus} isDirty={isDirty} />
         </div>
         {editable && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={handleCancel}
               disabled={!isDirty || mutation.isPending}
-              className="px-4 py-2 flex items-center gap-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-3 py-1.5 sm:px-4 sm:py-2 flex items-center gap-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <XCircle className="w-4 h-4" />
               Cancelar
@@ -179,7 +216,7 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
             <button
               onClick={handleSave}
               disabled={!isDirty || mutation.isPending}
-              className="px-4 py-2 flex items-center gap-2 text-sm font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-3 py-1.5 sm:px-4 sm:py-2 flex items-center gap-1.5 text-xs sm:text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
             >
               <Save className="w-4 h-4" />
               Guardar Cambios
@@ -194,17 +231,173 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
         <span>{guidance.hint}</span>
       </div>
 
-      {/* Área de texto en lenguaje natural */}
-      <textarea
-        value={text}
-        onChange={handleChange}
-        placeholder={guidance.placeholder}
-        readOnly={!editable}
-        className={`w-full flex-1 p-4 font-sans text-sm leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 inset-0 ${
-          !editable ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white text-gray-900'
-        }`}
-        spellCheck="false"
-      />
+      {/* Si es sección de Reglas del Bot, renderizamos el panel interactivo visual */}
+      {sectionKey === 'reglasBot' ? (
+        <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-6 bg-slate-50/50">
+          
+          {/* Card 1: Opt-Out */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  🛑 Auto-Pausa por Desinterés (Opt-Out)
+                </h4>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Detiene el bot permanentemente y cancela los seguimientos cuando el cliente dice "no me interesa", "no gracias", "no me escriban más", etc.
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={reglasData.autoPauseOptOut}
+                  onChange={(e) => {
+                    setReglasData({ ...reglasData, autoPauseOptOut: e.target.checked });
+                    setIsDirty(true);
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+
+            {reglasData.autoPauseOptOut && (
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                  Mensaje de despedida enviado al cliente:
+                </label>
+                <textarea
+                  rows={2}
+                  value={reglasData.optOutMessage}
+                  onChange={(e) => {
+                    setReglasData({ ...reglasData, optOutMessage: e.target.value });
+                    setIsDirty(true);
+                  }}
+                  className="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Card 2: Human Handoff */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  👤 Auto-Pausa y Traspaso a Asesor Humano (Handoff)
+                </h4>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Pausa el bot y cancela seguimientos cuando el cliente solicita hablar con un humano, asesor o persona real.
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={reglasData.autoPauseHandoff}
+                  onChange={(e) => {
+                    setReglasData({ ...reglasData, autoPauseHandoff: e.target.checked });
+                    setIsDirty(true);
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+
+            {reglasData.autoPauseHandoff && (
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                  Mensaje de confirmación de transferencia:
+                </label>
+                <textarea
+                  rows={2}
+                  value={reglasData.handoffMessage}
+                  onChange={(e) => {
+                    setReglasData({ ...reglasData, handoffMessage: e.target.value });
+                    setIsDirty(true);
+                  }}
+                  className="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Card 3: Message Limit (Token Saver) */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  ⏱️ Límite Máximo de Mensajes por Contacto (Ahorro de Tokens)
+                </h4>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Evita bucles interminables con usuarios curiosos limitando las respuestas del bot antes de pausar y transferir.
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={reglasData.enableMessageLimit}
+                  onChange={(e) => {
+                    setReglasData({ ...reglasData, enableMessageLimit: e.target.checked });
+                    setIsDirty(true);
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+
+            {reglasData.enableMessageLimit && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                <div className="sm:col-span-1">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    Máximo de respuestas del bot:
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={reglasData.maxBotMessages}
+                    onChange={(e) => {
+                      setReglasData({ ...reglasData, maxBotMessages: Number(e.target.value) || 10 });
+                      setIsDirty(true);
+                    }}
+                    className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none font-bold text-blue-600"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1">Recomendado: 8 a 15 respuestas.</p>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    Mensaje enviado al alcanzar el límite:
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={reglasData.limitReachedMessage}
+                    onChange={(e) => {
+                      setReglasData({ ...reglasData, limitReachedMessage: e.target.value });
+                      setIsDirty(true);
+                    }}
+                    className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+        </div>
+      ) : (
+        /* Área de texto en lenguaje natural */
+        <textarea
+          value={text}
+          onChange={handleChange}
+          placeholder={guidance.placeholder}
+          readOnly={!editable}
+          className={`w-full flex-1 p-4 font-sans text-sm leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 inset-0 ${
+            !editable ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : 'bg-white text-gray-900'
+          }`}
+          spellCheck="false"
+        />
+      )}
       
       <ConflictDialog isOpen={showConflict} onReload={handleReload} onClose={() => setShowConflict(false)} />
     </div>
