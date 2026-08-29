@@ -1,11 +1,13 @@
 import { create } from 'zustand';
 
-const DEFAULT_TENANT = 'default';
+const DEFAULT_TENANT = 'dba1c54c-89c6-41e9-ae9d-03613377a5b3';
 const DEFAULT_API_KEY = 'admin-dev-secret';
 
 // Pre-populate localStorage so the api interceptor always has values on first load
 if (typeof window !== 'undefined') {
-  if (!localStorage.getItem('tenant_id'))   localStorage.setItem('tenant_id',   DEFAULT_TENANT);
+  if (!localStorage.getItem('tenant_id') || localStorage.getItem('tenant_id') === 'default') {
+    localStorage.setItem('tenant_id', DEFAULT_TENANT);
+  }
   if (!localStorage.getItem('admin_api_key')) localStorage.setItem('admin_api_key', DEFAULT_API_KEY);
 }
 

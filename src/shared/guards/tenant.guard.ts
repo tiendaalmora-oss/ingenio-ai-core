@@ -94,12 +94,12 @@ export class TenantGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Record<string, any>>();
     let tenantId: string | undefined = request.headers?.['x-tenant-id'];
 
-    if (!tenantId || typeof tenantId !== 'string' || tenantId.trim() === '') {
-      // In single-tenant mode: Fallback to the single tenant in DB if available
-      if (typeof this.prisma?.tenant?.findMany === 'function') {
-        const allTenants = await this.prisma.tenant.findMany({ take: 2, select: { id: true } });
-        if (allTenants && allTenants.length === 1) {
-          tenantId = allTenants[0].id;
+    if (!tenantId || typeof tenantId !== 'string' || tenantId.trim() === '' || tenantId === 'default') {
+      // In single-tenant mode / default header: Fallback to the primary tenant in DB if available
+      if (typeof this.prisma?.tenant?.findFirst === 'function') {
+        const primaryTenant = await this.prisma.tenant.findFirst({ select: { id: true } });
+        if (primaryTenant) {
+          tenantId = primaryTenant.id;
           request.tenantId = tenantId;
           return true;
         }

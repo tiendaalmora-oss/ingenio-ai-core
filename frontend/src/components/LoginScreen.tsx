@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState } from 'react';
 import { Lock, Key, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
@@ -26,7 +26,7 @@ export default function LoginScreen({ onSuccess }: LoginScreenProps) {
 
     try {
       // Guardar credenciales en el store y localStorage
-      setCredentials('default', password.trim());
+      setCredentials('dba1c54c-89c6-41e9-ae9d-03613377a5b3', password.trim());
       localStorage.setItem('crm_authenticated', 'true');
       onSuccess();
     } catch (err: any) {
