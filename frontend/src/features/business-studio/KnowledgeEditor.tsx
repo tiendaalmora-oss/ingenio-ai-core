@@ -55,6 +55,9 @@ interface ReglasBotData {
   handoffMessage: string;
   enableMessageLimit: boolean;
   maxBotMessages: number;
+  respondLastMessageBeforePause: boolean;
+  autoResetAfterTime: boolean;
+  resetHours: number;
   limitReachedMessage: string;
 }
 
@@ -65,7 +68,10 @@ const DEFAULT_REGLAS_BOT: ReglasBotData = {
   handoffMessage: 'Con gusto. En breve un asesor humano de nuestro equipo continuará la conversación contigo por acá.',
   enableMessageLimit: true,
   maxBotMessages: 10,
-  limitReachedMessage: 'Para brindarte una atención personalizada y revisar los detalles de tu caso, te transferiré con un asesor de nuestro equipo que te atenderá en breve.'
+  respondLastMessageBeforePause: true,
+  autoResetAfterTime: false,
+  resetHours: 24,
+  limitReachedMessage: ''
 };
 
 export default function KnowledgeEditor({ sectionKey, initialData, editable }: KnowledgeEditorProps) {
@@ -84,7 +90,10 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
       handoffMessage: d.handoffMessage || DEFAULT_REGLAS_BOT.handoffMessage,
       enableMessageLimit: d.enableMessageLimit !== undefined ? Boolean(d.enableMessageLimit) : true,
       maxBotMessages: Number(d.maxBotMessages) || 10,
-      limitReachedMessage: d.limitReachedMessage || DEFAULT_REGLAS_BOT.limitReachedMessage
+      respondLastMessageBeforePause: d.respondLastMessageBeforePause !== undefined ? Boolean(d.respondLastMessageBeforePause) : true,
+      autoResetAfterTime: d.autoResetAfterTime !== undefined ? Boolean(d.autoResetAfterTime) : false,
+      resetHours: Number(d.resetHours) || 24,
+      limitReachedMessage: d.limitReachedMessage || ''
     };
   };
 
@@ -321,15 +330,15 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
             )}
           </div>
 
-          {/* Card 3: Message Limit (Token Saver) */}
+          {/* Card 3: Message Limit & Auto-Reset (Token Saver & Flow Preserver) */}
           <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                  ⏱️ Límite Máximo de Mensajes por Contacto (Ahorro de Tokens)
+                  ⏱️ Límite Máximo de Respuestas del Bot (Ahorro de Tokens)
                 </h4>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Evita bucles interminables con usuarios curiosos limitando las respuestas del bot antes de pausar y transferir.
+                  Responde normalmente el último mensaje y luego se pausa en silencio sin cortar el hilo de la conversación.
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -347,37 +356,87 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
             </div>
 
             {reglasData.enableMessageLimit && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
-                <div className="sm:col-span-1">
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    Máximo de respuestas del bot:
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={reglasData.maxBotMessages}
-                    onChange={(e) => {
-                      setReglasData({ ...reglasData, maxBotMessages: Number(e.target.value) || 10 });
-                      setIsDirty(true);
-                    }}
-                    className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none font-bold text-blue-600"
-                  />
-                  <p className="text-[10px] text-gray-400 mt-1">Recomendado: 8 a 15 respuestas.</p>
+              <div className="space-y-4 pt-2 border-t border-gray-100">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-gray-50 rounded-xl">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-800">
+                      Límite de respuestas automáticas por chat:
+                    </label>
+                    <p className="text-[11px] text-gray-500">
+                      Al llegar a este número, el bot responde su último mensaje y se detiene silenciosamente.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={reglasData.maxBotMessages}
+                      onChange={(e) => {
+                        setReglasData({ ...reglasData, maxBotMessages: Number(e.target.value) || 10 });
+                        setIsDirty(true);
+                      }}
+                      className="w-20 p-2 text-sm bg-white border border-gray-200 rounded-lg text-center font-bold text-blue-600 focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                    <span className="text-xs text-gray-500 font-medium">mensajes</span>
+                  </div>
                 </div>
 
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    Mensaje enviado al alcanzar el límite:
+                {/* Sub-option: Auto-Reset after time */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-blue-50/50 border border-blue-100 rounded-xl">
+                  <div>
+                    <span className="block text-xs font-bold text-blue-900">
+                      🔄 Reactivación Automática tras un periodo de inactividad
+                    </span>
+                    <p className="text-[11px] text-blue-700/80 mt-0.5">
+                      Si el cliente vuelve a escribir después de este tiempo, el bot se reactivará solo.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {reglasData.autoResetAfterTime && (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min={1}
+                          max={168}
+                          value={reglasData.resetHours}
+                          onChange={(e) => {
+                            setReglasData({ ...reglasData, resetHours: Number(e.target.value) || 24 });
+                            setIsDirty(true);
+                          }}
+                          className="w-16 p-1.5 text-xs bg-white border border-blue-200 rounded-lg text-center font-bold text-blue-800 focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                        <span className="text-xs text-blue-800 font-medium">horas</span>
+                      </div>
+                    )}
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={reglasData.autoResetAfterTime}
+                        onChange={(e) => {
+                          setReglasData({ ...reglasData, autoResetAfterTime: e.target.checked });
+                          setIsDirty(true);
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    (Opcional) Mensaje final de despedida al alcanzar el límite:
                   </label>
-                  <textarea
-                    rows={2}
+                  <input
+                    type="text"
+                    placeholder="Dejar en blanco para una pausa silenciosa natural (Recomendado)"
                     value={reglasData.limitReachedMessage}
                     onChange={(e) => {
                       setReglasData({ ...reglasData, limitReachedMessage: e.target.value });
                       setIsDirty(true);
                     }}
-                    className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none"
+                    className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none placeholder:text-gray-400"
                   />
                 </div>
               </div>

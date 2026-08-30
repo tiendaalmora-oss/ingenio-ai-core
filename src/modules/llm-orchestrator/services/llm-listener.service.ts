@@ -82,17 +82,7 @@ export class LlmListenerService {
       return;
     }
 
-    // ── Check if conversation is paused / handed off to human ────────────────
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: payload.conversationId },
-    });
-
-    if (conversation && (conversation.status === 'HANDOFF' || conversation.status === 'PAUSED' || conversation.status === 'LOST' || conversation.status === 'RESOLVED')) {
-      this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}'. Bot en pausa para permitir atención humana manual.`);
-      return;
-    }
-
-    // ── Check Configurable Bot Control Rules (Opt-Out, Human Handoff & Message Limit) ──
+    // ── Check Configurable Bot Control Rules (Opt-Out, Human Handoff, Message Limit & Auto-Reset) ──
     const bundle = this.prisma?.knowledgeBundle
       ? await this.prisma.knowledgeBundle.findUnique({
           where: { tenantId: payload.tenantId },
@@ -107,8 +97,48 @@ export class LlmListenerService {
       handoffMessage: 'Con gusto. En breve un asesor humano de nuestro equipo continuará la conversación contigo por acá.',
       enableMessageLimit: true,
       maxBotMessages: 10,
-      limitReachedMessage: 'Para brindarte una atención personalizada y revisar los detalles de tu caso, te transferiré con un asesor de nuestro equipo que te atenderá en breve.'
+      respondLastMessageBeforePause: true,
+      autoResetAfterTime: false,
+      resetHours: 24,
+      limitReachedMessage: ''
     };
+
+    // ── Check if conversation is paused / handed off to human (with Auto-Reset support) ──
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: payload.conversationId },
+    });
+
+    if (conversation && (conversation.status === 'HANDOFF' || conversation.status === 'PAUSED' || conversation.status === 'LOST' || conversation.status === 'RESOLVED')) {
+      // Check if auto-reset after time is enabled (for HANDOFF / PAUSED)
+      if (reglasBot.autoResetAfterTime && (conversation.status === 'HANDOFF' || conversation.status === 'PAUSED')) {
+        const resetHours = Number(reglasBot.resetHours) || 24;
+        const resetMs = resetHours * 3600 * 1000;
+        
+        const lastInteraction = this.prisma?.interaction?.findFirst
+          ? await this.prisma.interaction.findFirst({
+              where: { conversationId: payload.conversationId },
+              orderBy: { timestamp: 'desc' }
+            })
+          : null;
+
+        const lastUpdated = lastInteraction?.timestamp ? new Date(lastInteraction.timestamp).getTime() : 0;
+        const elapsed = Date.now() - lastUpdated;
+
+        if (elapsed >= resetMs) {
+          this.logger.log(`[Reglas Bot] Han transcurrido ${(elapsed / 3600000).toFixed(1)}h (límite: ${resetHours}h). Reactivando bot automáticamente para conversación ${payload.conversationId}.`);
+          await this.prisma.conversation.update({
+            where: { id: payload.conversationId },
+            data: { status: 'ACTIVE' }
+          });
+        } else {
+          this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}' (tiempo restante para reset: ${((resetMs - elapsed) / 3600000).toFixed(1)}h). Bot en pausa.`);
+          return;
+        }
+      } else {
+        this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}'. Bot en pausa para permitir atención humana manual.`);
+        return;
+      }
+    }
 
     const textNorm = (payload.content || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
@@ -276,7 +306,7 @@ export class LlmListenerService {
         : 0;
 
       if (botMessageCount >= maxMessages) {
-        this.logger.log(`[Reglas Bot] Conversación ${payload.conversationId} alcanzó el límite de ${maxMessages} mensajes del bot (${botMessageCount} enviados). Pausando bot.`);
+        this.logger.log(`[Reglas Bot] Conversación ${payload.conversationId} ya alcanzó el límite de ${maxMessages} mensajes del bot (${botMessageCount} enviados). Pausando bot silenciosamente.`);
         
         await this.prisma.conversation.update({
           where: { id: payload.conversationId },
@@ -287,23 +317,24 @@ export class LlmListenerService {
           where: { conversationId: payload.conversationId }
         });
 
-        const limitMsg = reglasBot.limitReachedMessage || 'Para brindarte una atención personalizada y revisar los detalles de tu caso, te transferiré con un asesor de nuestro equipo que te atenderá en breve.';
-        
-        await this.prisma.interaction.create({
-          data: {
-            conversationId: payload.conversationId,
-            direction: 'OUTBOUND',
-            type: 'TEXT',
-            content: limitMsg,
-            role: 'assistant'
-          }
-        });
+        const limitMsg = (reglasBot.limitReachedMessage || '').trim();
+        if (limitMsg) {
+          await this.prisma.interaction.create({
+            data: {
+              conversationId: payload.conversationId,
+              direction: 'OUTBOUND',
+              type: 'TEXT',
+              content: limitMsg,
+              role: 'assistant'
+            }
+          });
 
-        this.eventEmitter.emit('response.generated', new ResponseGeneratedEvent(
-          payload.tenantId,
-          payload.conversationId,
-          limitMsg
-        ));
+          this.eventEmitter.emit('response.generated', new ResponseGeneratedEvent(
+            payload.tenantId,
+            payload.conversationId,
+            limitMsg
+          ));
+        }
         return;
       }
     }
@@ -430,6 +461,31 @@ export class LlmListenerService {
           payload.conversationId,
           finalContent
         ));
+
+        // Si se alcanzó el límite tras responder este mensaje de forma natural, pausamos silenciosamente para los siguientes
+        if (reglasBot.enableMessageLimit !== false) {
+          const maxMessages = Number(reglasBot.maxBotMessages) || 10;
+          const currentCount = this.prisma?.interaction?.count
+            ? await this.prisma.interaction.count({
+                where: {
+                  conversationId: payload.conversationId,
+                  direction: 'OUTBOUND',
+                  role: 'assistant'
+                }
+              })
+            : 0;
+
+          if (currentCount >= maxMessages) {
+            this.logger.log(`[Reglas Bot] Conversación ${payload.conversationId} completó su respuesta #${currentCount} (límite: ${maxMessages}). Pausando bot silenciosamente para futuros mensajes.`);
+            await this.prisma.conversation.update({
+              where: { id: payload.conversationId },
+              data: { status: 'HANDOFF' }
+            });
+            await this.prisma.pendingOutboundMessage.deleteMany({
+              where: { conversationId: payload.conversationId }
+            });
+          }
+        }
       }
     } catch (error) {
       this.logger.error(`Error orquestando LLM:`, error);
