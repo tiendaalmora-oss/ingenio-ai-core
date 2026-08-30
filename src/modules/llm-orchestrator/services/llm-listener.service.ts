@@ -147,7 +147,7 @@ export class LlmListenerService {
         
         await this.prisma.conversation.update({
           where: { id: payload.conversationId },
-          data: { status: 'LOST', leadStatus: 'LOST' }
+          data: { status: 'LOST' }
         });
 
         const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } });
@@ -156,7 +156,6 @@ export class LlmListenerService {
         await this.prisma.businessMemory.upsert({
           where: { contactId: payload.contactId },
           create: {
-            tenantId: payload.tenantId,
             contactId: payload.contactId,
             leadStatus: 'LOST',
             tags: updatedTags
@@ -219,7 +218,7 @@ export class LlmListenerService {
         
         await this.prisma.conversation.update({
           where: { id: payload.conversationId },
-          data: { status: 'HANDOFF', leadStatus: 'HANDOFF' }
+          data: { status: 'HANDOFF' }
         });
 
         const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } });
@@ -228,7 +227,6 @@ export class LlmListenerService {
         await this.prisma.businessMemory.upsert({
           where: { contactId: payload.contactId },
           create: {
-            tenantId: payload.tenantId,
             contactId: payload.contactId,
             leadStatus: 'HANDOFF',
             tags: updatedTags
@@ -282,7 +280,7 @@ export class LlmListenerService {
         
         await this.prisma.conversation.update({
           where: { id: payload.conversationId },
-          data: { status: 'HANDOFF', leadStatus: 'HANDOFF' }
+          data: { status: 'HANDOFF' }
         });
 
         await this.prisma.pendingOutboundMessage.deleteMany({
