@@ -49,9 +49,21 @@ export class KnowledgeBundleComposer {
       business = "Información general del negocio.";
     }
 
+    // Normalizar enrutamiento / embudo de venta
+    let routing: any;
+    if (typeof raw.enrutamiento === 'string') {
+      routing = raw.enrutamiento;
+    } else if (raw.enrutamiento && typeof raw.enrutamiento === 'object') {
+      routing = raw.enrutamiento.prompt || raw.enrutamiento.estrategia || JSON.stringify(raw.enrutamiento, null, 2);
+    } else {
+      routing = "";
+    }
+
     return {
       identity,
       business,
+      routing,
+      botRules: raw.reglasBot || {},
       products: {
          categories: raw.categorias || [],
          items: raw.productos || []

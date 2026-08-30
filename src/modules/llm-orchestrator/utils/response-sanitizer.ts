@@ -27,5 +27,8 @@ export function sanitizeUserFacingResponse(rawContent: string): string {
   // 5. Limpiar saltos de línea excesivos
   text = text.replace(/\n{3,}/g, '\n\n').trim();
 
+  // 6. Convertir negrita de Markdown estándar (**) al formato de negrita nativo de WhatsApp (*)
+  text = text.replace(/\*\*([^*\n]+?)\*\*/g, '*$1*');
+
   return text;
 }

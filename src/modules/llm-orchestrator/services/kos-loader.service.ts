@@ -37,9 +37,13 @@ export class KosLoaderService {
       const kosData = bundle.systemPrompt;
       let finalBundle = kosData;
       
-      if (kosData && typeof kosData === 'object' && '_raw' in kosData) {
+      if (kosData && typeof kosData === 'object') {
+        const rawObj = (kosData as any)._raw || {};
         const { _raw, ...rest } = kosData as any;
-        finalBundle = rest;
+        finalBundle = {
+          ...rest,
+          ...rawObj,
+        };
       }
 
       const ttlMs = parseInt(process.env.KOS_CACHE_TTL_MS || '300000', 10);

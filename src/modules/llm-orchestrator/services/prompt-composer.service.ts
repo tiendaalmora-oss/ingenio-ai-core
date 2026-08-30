@@ -41,19 +41,22 @@ export class PromptComposerService {
     
     // 5. Build Tool Instructions
     const toolInstructions = this.buildToolInstructions();
-        // 6. Combine System Message
+    
+    // 6. Combine System Message
     let finalSystemContent = `${systemInstructions}\n${memoryContext}${summaryContext}${goalContext}${skillsContext}\n[REGLAS GENERALES DE VENTA Y ENRUTAMIENTO COMERCIAL]:
-- Responde siempre de forma clara, concisa, persuasiva y en español natural (tono WhatsApp amigable, educado y directo).
-- No envíes respuestas interminables ni repitas información en bucle.
-- Actúa estrictamente de acuerdo a tu base de conocimiento KOS. No inventes datos ni precios que no estén en tu configuración.
+- Responde siempre con el formato atractivo de WhatsApp: utiliza párrafos claros, espaciados agradables (\n\n), emojis persuasivos y negritas con un solo asterisco (*negrita*).
+- NUNCA uses Markdown con doble asterisco (**texto**) ni conviertas la presentación en listas secas con viñetas (•).
+- Utiliza fielmente los guiones, secuencias comerciales, ofertas y emojis definidos en tu configuración del embudo.
 
-[INSTRUCCIÓN CRÍTICA DE PRIORIDAD: EMBUDO DE VENTA VS BASE DE CONOCIMIENTO]:
+[INSTRUCCIÓN CRÍTICA: EMBUDO DE VENTA Y GUION COMERCIAL]:
 1. PRIORIDAD TOTAL A LA SECUENCIA DEL EMBUDO DE VENTA (GUION DE CIERRE):
-   - Tu objetivo comercial primordial e inquebrantable es avanzar paso a paso por la secuencia del embudo de venta hacia el cierre.
-   - Avanza de forma fluida: Saludo y Calificación -> Presentación de la Solución -> Oferta y Precio Promocional -> Métodos de Pago y Cierre.
+   - Tu objetivo comercial primordial es seguir los pasos del embudo de venta y guion comercial:
+     * Saludo y Calificación del prospecto.
+     * Presentación estructurada del Kit / Solución (con sus emojis, beneficios y oferta).
+     * Opciones de pago (Pago Móvil / Transferencia) y Cierre.
 2. BASE DE CONOCIMIENTO TÉCNICA (SOLO BAJO DEMANDA / PREGUNTAS TÉCNICAS PUNTUALES):
-   - La base de conocimiento de cada producto contiene fichas técnicas y detalles que SOLO debes consultar y responder cuando el cliente formule una pregunta técnica explícita y específica (ej: formato de archivos .docx/.pdf, temarios puntuales, requisitos).
-   - NUNCA interrumpas ni reemplaces los pasos del embudo de venta por soltar información técnica si el cliente no la ha solicitado de forma puntual.
+   - La base de conocimiento técnica de cada producto contiene fichas y detalles avanzados que SOLO debes consultar y responder cuando el cliente pregunte explícitamente algo técnico puntual (ej: formatos específicos .docx/.pdf, requisitos técnicos, temas curriculares).
+   - NUNCA reemplaces la presentación atractiva del embudo ni lances fichas técnicas extensas si el cliente solo pidió información general del kit.
 
 [REGLAS ESTRICTAS ANTI-BUCLE Y PROGRESIÓN COMERCIAL]:
 1. NUNCA REPETIR EL REGALO NI MENSAJES YA ENVIADOS:
@@ -144,67 +147,75 @@ export class PromptComposerService {
   }
   
   private buildSystemKOS(kosBundle: any): string {
-    let result = '[CONOCIMIENTO DEL NEGOCIO Y PRODUCTOS (KOS)]\n';
+    let result = '[CONOCIMIENTO DEL NEGOCIO Y CONFIGURACIÓN COMERCIAL (KOS)]\n';
     if (!kosBundle) return result;
-    
+
+    // 1. Identidad y Empresa
+    if (kosBundle.identity || kosBundle.identidad) {
+      const id = kosBundle.identity || kosBundle.identidad;
+      result += `### IDENTIDAD DEL BOT:\n${typeof id === 'string' ? id : JSON.stringify(id, null, 2)}\n\n`;
+    }
+    if (kosBundle.business || kosBundle.empresa) {
+      const bz = kosBundle.business || kosBundle.empresa;
+      result += `### DATOS DE LA EMPRESA:\n${typeof bz === 'string' ? bz : JSON.stringify(bz, null, 2)}\n\n`;
+    }
+
+    // 2. Estrategia y Embudo de Ventas (Máxima Prioridad)
+    const routingContent = kosBundle.routing || kosBundle.enrutamiento || kosBundle.estrategia;
+    if (routingContent) {
+      result += `### 🎯 ESTRATEGIA, EMBUDO DE VENTAS Y GUION PASO A PASO (SECUENCIA MAESTRA):\n${typeof routingContent === 'string' ? routingContent : JSON.stringify(routingContent, null, 2)}\n\n`;
+    }
+
+    // 3. Scripts Comerciales
+    const salesScripts = kosBundle.sales?.scripts || kosBundle.scriptsComerciales;
+    if (salesScripts) {
+      result += `### 📜 SCRIPTS COMERCIALES Y GUIONES DE CIERRE:\n${typeof salesScripts === 'string' ? salesScripts : JSON.stringify(salesScripts, null, 2)}\n\n`;
+    }
+
+    // 4. Catálogo de Productos
+    const productsData = kosBundle.products?.items || kosBundle.productos;
+    if (productsData) {
+      result += `### 📦 CATÁLOGO DE PRODUCTOS:\n`;
+      const items = Array.isArray(productsData) ? productsData : [];
+      if (items.length > 0) {
+        items.forEach((p: any, i: number) => {
+          result += `\n* PRODUCTO #${i + 1}: ${p.nombre || p.name || 'Sin nombre'}\n`;
+          if (p.precio || p.price) result += `  - Precio: ${p.precio || p.price}\n`;
+          if (p.categoria || p.category) result += `  - Categoría: ${p.categoria || p.category}\n`;
+          if (p.descripcion || p.description) result += `  - Descripción comercial / Oferta:\n    ${(p.descripcion || p.description).replace(/\n/g, '\n    ')}\n`;
+          if (p.beneficios) result += `  - Beneficios:\n    ${String(p.beneficios).replace(/\n/g, '\n    ')}\n`;
+          if (p.enlace || p.link) result += `  - Enlace: ${p.enlace || p.link}\n`;
+          if (p.baseConocimiento || p.detallesTecnicos) {
+            result += `  - [Ficha Técnica / Base de Conocimiento bajo demanda]: ${(p.baseConocimiento || p.detallesTecnicos).replace(/\n/g, ' ')}\n`;
+          }
+        });
+        result += '\n';
+      }
+    }
+
+    // 5. Resto de secciones (Faqs, Objeciones, Promociones, Políticas)
     for (const [key, value] of Object.entries(kosBundle)) {
       if (!value) continue;
-
-      if (key.toLowerCase() === 'products' || key.toLowerCase() === 'productos') {
-        result += `### CATÁLOGO DE PRODUCTOS:\n`;
-        const items = (value as any).items || (value as any).productos || (Array.isArray(value) ? value : []);
-        if (Array.isArray(items) && items.length > 0) {
-          items.forEach((p: any, i: number) => {
-            result += `\n📦 PRODUCTO #${i + 1}: ${p.nombre || p.name || 'Sin nombre'}\n`;
-            if (p.precio || p.price) result += `  - Precio: ${p.precio || p.price}\n`;
-            if (p.categoria || p.category) result += `  - Categoría: ${p.categoria || p.category}\n`;
-            if (p.descripcion || p.description) result += `  - Descripción comercial: ${p.descripcion || p.description}\n`;
-            if (p.beneficios) result += `  - Beneficios: ${p.beneficios}\n`;
-            if (p.enlace || p.link) result += `  - Enlace: ${p.enlace || p.link}\n`;
-            if (p.baseConocimiento || p.detallesTecnicos) {
-              result += `  - [Ficha Técnica / Base de Conocimiento bajo demanda]: ${(p.baseConocimiento || p.detallesTecnicos).replace(/\n/g, ' ')}\n`;
-            }
-          });
-          result += '\n';
-        }
+      const kLow = key.toLowerCase();
+      if (['identity', 'identidad', 'business', 'empresa', 'routing', 'enrutamiento', 'estrategia', 'sales', 'scriptscomerciales', 'products', 'productos', 'categorias', 'botrules', 'reglasbot'].includes(kLow)) {
         continue;
       }
 
       if (typeof value === 'string') {
         result += `### ${key.toUpperCase()}:\n${value}\n\n`;
-      } else if (Array.isArray(value)) {
-        if (value.length > 0) {
-          result += `### ${key.toUpperCase()}:\n`;
-          value.forEach((item, idx) => {
-            if (typeof item === 'string') {
-              result += `- ${item}\n`;
-            } else if (typeof item === 'object') {
-              result += `- Item ${idx + 1}: ${Object.entries(item).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(' | ')}\n`;
-            }
-          });
-          result += '\n';
-        }
-      } else if (typeof value === 'object') {
+      } else if (Array.isArray(value) && value.length > 0) {
         result += `### ${key.toUpperCase()}:\n`;
-        for (const [subK, subV] of Object.entries(value)) {
-          if (subV) {
-            if (typeof subV === 'string') {
-              result += `  * ${subK}: ${subV}\n`;
-            } else if (Array.isArray(subV)) {
-              if (subV.length > 0) {
-                result += `  * ${subK}:\n`;
-                subV.forEach((sv, i) => {
-                  result += `    - ${typeof sv === 'object' ? JSON.stringify(sv) : sv}\n`;
-                });
-              }
-            } else if (typeof subV === 'object') {
-              result += `  * ${subK}: ${JSON.stringify(subV)}\n`;
-            }
+        value.forEach((item, idx) => {
+          if (typeof item === 'string') {
+            result += `- ${item}\n`;
+          } else if (typeof item === 'object') {
+            result += `- Item ${idx + 1}: ${Object.entries(item).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(' | ')}\n`;
           }
-        }
+        });
         result += '\n';
       }
     }
+
     return result;
   }
   
