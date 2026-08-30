@@ -41,12 +41,19 @@ export class PromptComposerService {
     
     // 5. Build Tool Instructions
     const toolInstructions = this.buildToolInstructions();
-    
-    // 6. Combine System Message
+        // 6. Combine System Message
     let finalSystemContent = `${systemInstructions}\n${memoryContext}${summaryContext}${goalContext}${skillsContext}\n[REGLAS GENERALES DE VENTA Y ENRUTAMIENTO COMERCIAL]:
 - Responde siempre de forma clara, concisa, persuasiva y en español natural (tono WhatsApp amigable, educado y directo).
 - No envíes respuestas interminables ni repitas información en bucle.
 - Actúa estrictamente de acuerdo a tu base de conocimiento KOS. No inventes datos ni precios que no estén en tu configuración.
+
+[INSTRUCCIÓN CRÍTICA DE PRIORIDAD: EMBUDO DE VENTA VS BASE DE CONOCIMIENTO]:
+1. PRIORIDAD TOTAL A LA SECUENCIA DEL EMBUDO DE VENTA (GUION DE CIERRE):
+   - Tu objetivo comercial primordial e inquebrantable es avanzar paso a paso por la secuencia del embudo de venta hacia el cierre.
+   - Avanza de forma fluida: Saludo y Calificación -> Presentación de la Solución -> Oferta y Precio Promocional -> Métodos de Pago y Cierre.
+2. BASE DE CONOCIMIENTO TÉCNICA (SOLO BAJO DEMANDA / PREGUNTAS TÉCNICAS PUNTUALES):
+   - La base de conocimiento de cada producto contiene fichas técnicas y detalles que SOLO debes consultar y responder cuando el cliente formule una pregunta técnica explícita y específica (ej: formato de archivos .docx/.pdf, temarios puntuales, requisitos).
+   - NUNCA interrumpas ni reemplaces los pasos del embudo de venta por soltar información técnica si el cliente no la ha solicitado de forma puntual.
 
 [REGLAS ESTRICTAS ANTI-BUCLE Y PROGRESIÓN COMERCIAL]:
 1. NUNCA REPETIR EL REGALO NI MENSAJES YA ENVIADOS:
@@ -144,18 +151,18 @@ export class PromptComposerService {
       if (!value) continue;
 
       if (key.toLowerCase() === 'products' || key.toLowerCase() === 'productos') {
-        result += `### CATÁLOGO DE PRODUCTOS Y BASE DE CONOCIMIENTO TÉCNICA:\n`;
+        result += `### CATÁLOGO DE PRODUCTOS:\n`;
         const items = (value as any).items || (value as any).productos || (Array.isArray(value) ? value : []);
         if (Array.isArray(items) && items.length > 0) {
           items.forEach((p: any, i: number) => {
             result += `\n📦 PRODUCTO #${i + 1}: ${p.nombre || p.name || 'Sin nombre'}\n`;
             if (p.precio || p.price) result += `  - Precio: ${p.precio || p.price}\n`;
             if (p.categoria || p.category) result += `  - Categoría: ${p.categoria || p.category}\n`;
-            if (p.descripcion || p.description) result += `  - Descripción: ${p.descripcion || p.description}\n`;
+            if (p.descripcion || p.description) result += `  - Descripción comercial: ${p.descripcion || p.description}\n`;
             if (p.beneficios) result += `  - Beneficios: ${p.beneficios}\n`;
             if (p.enlace || p.link) result += `  - Enlace: ${p.enlace || p.link}\n`;
             if (p.baseConocimiento || p.detallesTecnicos) {
-              result += `  - 📚 BASE DE CONOCIMIENTO TÉCNICA:\n    ${(p.baseConocimiento || p.detallesTecnicos).replace(/\n/g, '\n    ')}\n`;
+              result += `  - [Ficha Técnica / Base de Conocimiento bajo demanda]: ${(p.baseConocimiento || p.detallesTecnicos).replace(/\n/g, ' ')}\n`;
             }
           });
           result += '\n';

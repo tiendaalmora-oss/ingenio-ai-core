@@ -17,7 +17,6 @@ export class PrismaConversationRepository implements IConversationRepository {
     const raw = await this.prisma.conversation.findFirst({
       where: {
         contactId,
-        status: { in: ['NEW', 'ACTIVE'] },
       },
     });
     if (!raw) return null;
