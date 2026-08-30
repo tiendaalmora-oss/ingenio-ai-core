@@ -17,17 +17,21 @@ export class ConversationHubController {
 
   /**
    * GET /conversations
-   * Lista conversaciones del tenant con paginación, búsqueda y filtro de estado.
+   * Lista conversaciones del tenant agrupadas por contacto único, con ordenamiento por último mensaje y paginación.
    */
   @Get()
   async listConversations(
     @TenantId() tenantId: string,
     @Query('page') page = '1',
-    @Query('limit') limit = '20',
+    @Query('limit') limit = '50',
     @Query('search') search?: string,
     @Query('status') status?: string,
   ) {
     if (!tenantId) throw new BadRequestException('tenantId is required');
+
+    // 1. Auto-consolidar conversaciones duplicadas por contacto si existen
+    await this.consolidateDuplicateConversations(tenantId);
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const take = parseInt(limit);
 
@@ -38,7 +42,11 @@ export class ConversationHubController {
     if (search) {
       where.contact = {
         ...where.contact,
-        name: { contains: search, mode: 'insensitive' },
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { phone: { contains: search, mode: 'insensitive' } },
+          { externalId: { contains: search, mode: 'insensitive' } },
+        ],
       };
     }
 
@@ -62,17 +70,25 @@ export class ConversationHubController {
       }),
     ]);
 
+    // Ordenar por timestamp del último mensaje más reciente para que el chat más activo esté arriba
+    const sortedConvs = conversations.sort((a, b) => {
+      const timeA = a.interactions[0]?.timestamp ? new Date(a.interactions[0].timestamp).getTime() : 0;
+      const timeB = b.interactions[0]?.timestamp ? new Date(b.interactions[0].timestamp).getTime() : 0;
+      return timeB - timeA;
+    });
+
     const responseData = {
       total,
       page: parseInt(page),
       limit: parseInt(limit),
-      data: conversations.map((c) => ({
+      data: sortedConvs.map((c) => ({
         id: c.id,
         status: c.status,
         contactId: c.contactId,
         contactName: c.contact.name,
         contactPhone: c.contact.phone || c.contact.externalId,
         leadStatus: c.contact.memory?.leadStatus ?? null,
+        tags: c.contact.memory?.tags ?? [],
         messageCount: c._count.interactions,
         lastMessage: c.interactions[0]
           ? {
@@ -86,6 +102,51 @@ export class ConversationHubController {
     };
 
     return responseData;
+  }
+
+  private async consolidateDuplicateConversations(tenantId: string) {
+    try {
+      // Buscar contactos que tengan más de 1 conversación
+      const contactsWithMultipleConvs = await this.prisma.contact.findMany({
+        where: { tenantId },
+        select: {
+          id: true,
+          conversations: {
+            select: { id: true, status: true },
+            orderBy: { id: 'desc' },
+          },
+        },
+      });
+
+      for (const contact of contactsWithMultipleConvs) {
+        if (contact.conversations && contact.conversations.length > 1) {
+          const masterConv = contact.conversations[0]; // la más reciente
+          const duplicateConvs = contact.conversations.slice(1);
+          const duplicateIds = duplicateConvs.map((c) => c.id);
+
+          // 1. Mover todas las interacciones a la conversación maestra
+          await this.prisma.interaction.updateMany({
+            where: { conversationId: { in: duplicateIds } },
+            data: { conversationId: masterConv.id },
+          });
+
+          // 2. Mover mensajes pendientes o funnels si los hubiera
+          await this.prisma.pendingOutboundMessage.updateMany({
+            where: { conversationId: { in: duplicateIds } },
+            data: { conversationId: masterConv.id },
+          });
+
+          // 3. Eliminar conversaciones vacías duplicadas
+          await this.prisma.conversation.deleteMany({
+            where: { id: { in: duplicateIds } },
+          });
+
+          this.logger.log(`[Consolidation] Contacto ${contact.id} consolidó ${duplicateIds.length} conversaciones duplicadas en la conversación maestra ${masterConv.id}`);
+        }
+      }
+    } catch (err: any) {
+      this.logger.warn(`[Consolidation] Error consolidando conversaciones: ${err.message}`);
+    }
   }
 
   /**

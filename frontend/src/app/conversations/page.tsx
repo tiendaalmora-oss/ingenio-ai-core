@@ -36,6 +36,8 @@ export default function ConversationsPage() {
   const queryClient = useQueryClient();
   const { addToast } = useToast();
 
+  const [showCrmDrawer, setShowCrmDrawer] = useState(false);
+
   // 1. Fetch conversations list
   const { 
     data: convsData, 
@@ -52,7 +54,7 @@ export default function ConversationsPage() {
       const res = await api.get(`/conversations?${params.toString()}`);
       return res.data;
     },
-    refetchInterval: 5000, // Poll every 5 seconds for new live chats
+    refetchInterval: 4000, // Poll every 4 seconds for new live chats
   });
 
   // Auto-select first conversation only on desktop screens
@@ -176,7 +178,7 @@ export default function ConversationsPage() {
 
   return (
     <div className="flex h-[calc(100vh-5rem)] md:h-[calc(100vh-6rem)] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      {/* ── LEFT: Conversations List ────────────────────────────────────────── */}
+      {/* ── LEFT: Conversations List (1 por contacto único) ─────────────────── */}
       <div
         className={`w-full md:w-80 lg:w-96 border-r border-gray-200 flex flex-col bg-gray-50/50 ${
           selectedConvId ? 'hidden md:flex' : 'flex'
@@ -192,7 +194,7 @@ export default function ConversationsPage() {
             <button
               onClick={() => refetchConvs()}
               className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition"
-              title="Refrescar"
+              title="Refrescar bandeja"
             >
               <RefreshCw className="w-4 h-4" />
             </button>
@@ -210,19 +212,20 @@ export default function ConversationsPage() {
           </div>
 
           {/* Filter Pills */}
-          <div className="flex gap-1 overflow-x-auto text-[11px] pb-0.5">
+          <div className="flex gap-1 overflow-x-auto text-[11px] pb-0.5 no-scrollbar">
             {[
               { label: 'Todos', value: '' },
-              { label: 'Activos', value: 'ACTIVE' },
-              { label: 'Handoff', value: 'HANDOFF' },
-              { label: 'Resueltos', value: 'RESOLVED' },
+              { label: '🤖 Bot Activo', value: 'ACTIVE' },
+              { label: '👤 En Asesor', value: 'HANDOFF' },
+              { label: '🛑 No Interesado', value: 'LOST' },
+              { label: '✅ Resueltos', value: 'RESOLVED' },
             ].map((f) => (
               <button
                 key={f.value}
                 onClick={() => setStatusFilter(f.value)}
                 className={`px-2.5 py-1 rounded-full font-medium transition whitespace-nowrap ${
                   statusFilter === f.value
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
@@ -242,7 +245,7 @@ export default function ConversationsPage() {
             </div>
           ) : conversations.length === 0 ? (
             <div className="p-8 text-center text-xs text-gray-400">
-              No hay conversaciones registradas aún.
+              No hay conversaciones en este filtro.
             </div>
           ) : (
             conversations.map((c: any) => {
@@ -271,18 +274,26 @@ export default function ConversationsPage() {
                       )}
                     </div>
 
-                    <p className="text-xs text-gray-500 truncate mb-1">
+                    <p className="text-xs text-gray-500 truncate mb-1.5">
                       {c.lastMessage?.content || 'Sin mensajes'}
                     </p>
 
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {c.status === 'HANDOFF' ? (
                         <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded">
-                          Handoff
+                          👤 Asesor
+                        </span>
+                      ) : c.status === 'LOST' ? (
+                        <span className="px-1.5 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-bold rounded">
+                          🛑 No Interesado
+                        </span>
+                      ) : c.status === 'RESOLVED' ? (
+                        <span className="px-1.5 py-0.5 bg-gray-100 text-gray-700 text-[10px] font-medium rounded">
+                          ✅ Resuelto
                         </span>
                       ) : (
-                        <span className="px-1.5 py-0.5 bg-green-100 text-green-800 text-[10px] font-medium rounded">
-                          Bot Activo
+                        <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-medium rounded">
+                          🤖 Bot Activo
                         </span>
                       )}
 
@@ -300,71 +311,93 @@ export default function ConversationsPage() {
         </div>
       </div>
 
-      {/* ── RIGHT: Chat Window ──────────────────────────────────────────────── */}
+      {/* ── RIGHT: Chat Window & Ficha CRM ──────────────────────────────────── */}
       {selectedConvId && currentConv ? (
-        <div className="flex-1 flex flex-col bg-slate-50 min-w-0 w-full">
-          {/* Top Bar */}
-          <div className="h-16 px-3 sm:px-6 bg-white border-b border-gray-200 flex items-center justify-between shrink-0 gap-2">
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              {/* Back button on mobile */}
-              <button
-                onClick={() => setSelectedConvId(null)}
-                className="md:hidden p-1.5 -ml-1 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 shrink-0"
-                aria-label="Volver a la lista"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
+        <div className="flex-1 flex bg-slate-50 min-w-0 w-full overflow-hidden">
+          {/* Main Chat Area */}
+          <div className="flex-1 flex flex-col min-w-0 h-full border-r border-gray-200">
+            {/* Top Bar */}
+            <div className="h-16 px-3 sm:px-4 bg-white border-b border-gray-200 flex items-center justify-between shrink-0 gap-2 flex-wrap">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                {/* Back button on mobile */}
+                <button
+                  onClick={() => setSelectedConvId(null)}
+                  className="md:hidden p-1.5 -ml-1 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 shrink-0"
+                  aria-label="Volver a la lista"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
 
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                {currentConv.contact.name ? currentConv.contact.name.charAt(0).toUpperCase() : 'U'}
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                  {currentConv.contact.name ? currentConv.contact.name.charAt(0).toUpperCase() : 'U'}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-xs sm:text-sm font-bold text-gray-900 truncate">
+                    {currentConv.contact.name || 'Prospecto'}
+                  </h3>
+                  <p className="text-[11px] text-gray-400 flex items-center gap-1 truncate">
+                    <Phone className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{currentConv.contact.phone || 'Sin número'}</span>
+                  </p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <h3 className="text-xs sm:text-sm font-bold text-gray-900 truncate">
-                  {currentConv.contact.name || 'Prospecto'}
-                </h3>
-                <p className="text-[11px] text-gray-400 flex items-center gap-1 truncate">
-                  <Phone className="w-3 h-3 shrink-0" />
-                  <span className="truncate">{currentConv.contact.phone || 'Sin número'}</span>
-                </p>
+
+              {/* Quick Actions Header */}
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                {/* Status Toggle Buttons */}
+                {currentConv.status === 'HANDOFF' || currentConv.status === 'PAUSED' || currentConv.status === 'LOST' ? (
+                  <button
+                    onClick={() => statusMutation.mutate({ id: selectedConvId, status: 'ACTIVE' })}
+                    className="px-2.5 py-1.5 text-xs text-emerald-800 bg-emerald-100 hover:bg-emerald-200 rounded-lg font-bold transition flex items-center gap-1"
+                    title="Reactivar bot para este contacto"
+                  >
+                    <Bot className="w-3.5 h-3.5" />
+                    Reanudar Bot
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => statusMutation.mutate({ id: selectedConvId, status: 'HANDOFF' })}
+                    className="px-2.5 py-1.5 text-xs text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg font-bold transition flex items-center gap-1"
+                    title="Pausar bot y tomar control como operador humano"
+                  >
+                    <UserCheck className="w-3.5 h-3.5" />
+                    Pausar Bot
+                  </button>
+                )}
+
+                {/* Mark as Resolved */}
+                {currentConv.status !== 'RESOLVED' && (
+                  <button
+                    onClick={() => statusMutation.mutate({ id: selectedConvId, status: 'RESOLVED' })}
+                    className="hidden sm:inline-flex px-2 py-1.5 text-xs text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition"
+                    title="Marcar como resuelto"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+
+                {/* Toggle CRM Drawer */}
+                <button
+                  onClick={() => setShowCrmDrawer(!showCrmDrawer)}
+                  className={`px-2.5 py-1.5 text-xs rounded-lg font-medium transition flex items-center gap-1 ${
+                    showCrmDrawer ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                  title="Ver ficha CRM del prospecto"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  Ficha CRM
+                </button>
+
+                {/* Reset History for Testing */}
+                <button
+                  onClick={() => setConfirmResetOpen(true)}
+                  className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition"
+                  title="Borrar historial para pruebas"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             </div>
-
-            {/* Quick Actions */}
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              <Link
-                href={`/crm`}
-                className="hidden sm:inline-flex px-2.5 py-1.5 text-xs text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition"
-              >
-                Ver en CRM
-              </Link>
-
-              {currentConv.status !== 'HANDOFF' ? (
-                <button
-                  onClick={() => statusMutation.mutate({ id: selectedConvId, status: 'HANDOFF' })}
-                  className="px-2 sm:px-2.5 py-1.5 text-[11px] sm:text-xs text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg font-medium transition"
-                >
-                  Pausar Bot
-                </button>
-              ) : (
-                <button
-                  onClick={() => statusMutation.mutate({ id: selectedConvId, status: 'ACTIVE' })}
-                  className="px-2 sm:px-2.5 py-1.5 text-[11px] sm:text-xs text-emerald-800 bg-emerald-100 hover:bg-emerald-200 rounded-lg font-medium transition"
-                >
-                  Reanudar Bot
-                </button>
-              )}
-
-              {/* Botón de Borrar Historial de Contacto para Pruebas */}
-              <button
-                onClick={() => setConfirmResetOpen(true)}
-                className="px-2.5 py-1.5 text-xs text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg font-medium transition flex items-center gap-1"
-                title="Borrar mensajes y memoria de este contacto para volver a probar desde cero"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Borrar Historial
-              </button>
-            </div>
-          </div>
 
           {/* Messages Timeline */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -467,14 +500,142 @@ export default function ConversationsPage() {
             </form>
           </div>
         </div>
-      ) : (
-        <div className="flex-1 flex items-center justify-center p-8 text-center bg-gray-50">
-          <EmptyState
-            title="Selecciona una conversación"
-            description="Elige un chat de la lista de la izquierda para ver el historial y responder en tiempo real."
-          />
-        </div>
-      )}
+
+        {/* ── Ficha CRM Drawer Panel ────────────────────────────────────────── */}
+        {showCrmDrawer && (
+          <div className="w-80 lg:w-96 border-l border-gray-200 bg-white flex flex-col h-full shadow-lg z-10 animate-in slide-in-from-right duration-200">
+            {/* Drawer Header */}
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+              <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <User className="w-4 h-4 text-blue-600" />
+                Ficha del Contacto (CRM)
+              </h4>
+              <button
+                onClick={() => setShowCrmDrawer(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-200 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Drawer Body */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-5 text-xs">
+              {/* Contact Main Info */}
+              <div className="flex items-center gap-3 p-3 bg-blue-50/60 border border-blue-100 rounded-xl">
+                <div className="w-11 h-11 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
+                  {currentConv.contact.name ? currentConv.contact.name.charAt(0).toUpperCase() : 'U'}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-gray-900 text-sm truncate">
+                    {currentConv.contact.name || 'Sin nombre asignado'}
+                  </p>
+                  <p className="text-gray-500 text-[11px] truncate flex items-center gap-1 mt-0.5">
+                    <Phone className="w-3 h-3" />
+                    {currentConv.contact.phone || 'Sin número'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Lead Stage & Status */}
+              <div className="space-y-2">
+                <span className="block font-bold text-gray-700 text-[11px] uppercase tracking-wider">
+                  Estado de Venta / Lead
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2.5 py-1 rounded-lg font-bold text-xs ${
+                    currentConv.contact.leadStatus === 'HOT' ? 'bg-red-100 text-red-700 border border-red-200' :
+                    currentConv.contact.leadStatus === 'WARM' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                    currentConv.contact.leadStatus === 'CLOSED' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
+                    'bg-gray-100 text-gray-700 border border-gray-200'
+                  }`}>
+                    {currentConv.contact.leadStatus || 'COLD (Nuevo)'}
+                  </span>
+                  <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-medium">
+                    {currentConv.messageCount || 0} mensajes
+                  </span>
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div className="space-y-2">
+                <span className="block font-bold text-gray-700 text-[11px] uppercase tracking-wider">
+                  Etiquetas Detectadas (Tags)
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {(currentConv.contact.tags && currentConv.contact.tags.length > 0) ? (
+                    currentConv.contact.tags.map((tag: string, i: number) => (
+                      <span
+                        key={i}
+                        className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-[10px] font-medium"
+                      >
+                        #{tag}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-gray-400 italic text-[11px]">Sin etiquetas registradas</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Interests */}
+              <div className="space-y-2">
+                <span className="block font-bold text-gray-700 text-[11px] uppercase tracking-wider">
+                  Intereses / Kits Consultados
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {(currentConv.contact.interests && currentConv.contact.interests.length > 0) ? (
+                    currentConv.contact.interests.map((int: string, i: number) => (
+                      <span
+                        key={i}
+                        className="px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-md text-[10px] font-medium"
+                      >
+                        📦 {int}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-gray-400 italic text-[11px]">Sin intereses registrados</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Objections */}
+              <div className="space-y-2">
+                <span className="block font-bold text-gray-700 text-[11px] uppercase tracking-wider">
+                  Objeciones o Dudas
+                </span>
+                {(currentConv.contact.objections && currentConv.contact.objections.length > 0) ? (
+                  <ul className="list-disc pl-4 space-y-1 text-gray-600 text-[11px]">
+                    {currentConv.contact.objections.map((obj: string, i: number) => (
+                      <li key={i}>{obj}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="text-gray-400 italic text-[11px]">Ninguna objeción registrada</span>
+                )}
+              </div>
+
+              {/* Full CRM Link Button */}
+              <div className="pt-3 border-t border-gray-100">
+                <Link
+                  href={`/crm`}
+                  className="w-full py-2.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-xs transition"
+                >
+                  Abrir Módulo CRM Completo
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    ) : (
+      <div className="flex-1 flex items-center justify-center p-8 text-center bg-gray-50">
+        <EmptyState
+          title="Selecciona una conversación"
+          description="Elige un chat de la lista de la izquierda para ver el historial y responder en tiempo real."
+        />
+      </div>
+    )}
 
       {/* Modal de confirmación de reset de historial y purga */}
       {confirmResetOpen && (
