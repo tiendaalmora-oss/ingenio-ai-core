@@ -66,7 +66,16 @@ export class KnowledgeBundleComposer {
       botRules: raw.reglasBot || {},
       products: {
          categories: raw.categorias || [],
-         items: raw.productos || []
+         items: Array.isArray(raw.productos)
+           ? raw.productos.map((p: any) => ({
+               id: p.id,
+               nombre: p.nombre || p.name || '',
+               embudoVenta: p.embudoVenta || p.secuenciaVenta || p.descripcion || p.description || '',
+               baseConocimiento: p.baseConocimiento || p.detallesTecnicos || '',
+               categoria: p.categoria || p.category || '',
+               link: p.link || p.enlace || '',
+             }))
+           : []
       },
       services: raw.servicios || [],
       faqs: raw.faqs || [],

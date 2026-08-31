@@ -426,19 +426,10 @@ export class LlmListenerService {
         finalContent = response.content;
       }
 
-      // Fallback de seguridad: Si la IA no generó texto tras la herramienta, generar respuesta contextual
+      // Fallback de seguridad: Si la IA no generó texto tras la herramienta, generar saludo cordial de contingencia
       if (!finalContent || finalContent.trim() === '') {
-        this.logger.warn(`[Executive Loop] LLM devolvió texto vacío tras herramienta. Generando respuesta contextual de contingencia...`);
-        const userMsg = (payload.content || '').toLowerCase();
-        if (userMsg.includes('matemática') || userMsg.includes('matematica')) {
-          finalContent = '¡Excelente, profe! Justamente para Matemática de bachillerato tenemos nuestro Mega Kit con planificaciones listas, evaluaciones resueltas y guías pedagógicas. ¿Qué años estás atendiendo actualmente (de 1° a 5° año) para orientarte mejor? 😊📐';
-        } else if (userMsg.includes('física') || userMsg.includes('fisica')) {
-          finalContent = '¡Excelente, profe! Para Física de bachillerato contamos con el Mega Kit completo de física. ¿Qué años estás atendiendo (de 3° a 5° año)? 😊⚡';
-        } else if (userMsg.includes('comprobante') || userMsg.includes('pago') || userMsg.includes('referencia')) {
-          finalContent = '¡Muchísimas gracias, profe! Hemos registrado tu comprobante con éxito. Ya estamos preparando los accesos para que puedas descargar todo el material de inmediato. 🎉🎒';
-        } else {
-          finalContent = '¡Hola, profe! Qué gusto saludarte. 👋 Cuéntame, ¿de qué materia o año estás buscando material para orientarte con la mejor opción? 📚';
-        }
+        this.logger.warn(`[Executive Loop] LLM devolvió texto vacío tras herramienta. Generando saludo cordial de contingencia...`);
+        finalContent = '¡Hola! Qué gusto saludarte. 👋 ¿En qué podemos ayudarte el día de hoy?';
       }
 
       if (finalContent) {

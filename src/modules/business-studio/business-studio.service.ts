@@ -127,7 +127,7 @@ export class BusinessStudioService {
       { key: 'empresa', title: 'Datos de la Empresa', description: 'Información general', icon: 'Building', editable: true, collection: false },
       { key: 'enrutamiento', title: 'Estrategia y Enrutamiento', description: 'Triaje, venta cruzada y flujo', icon: 'Compass', editable: true, collection: false },
       { key: 'reglasBot', title: 'Control y Pausa del Bot', description: 'Límites de mensajes y auto-pausa', icon: 'ShieldAlert', editable: true, collection: false },
-      { key: 'productos', title: 'Productos', description: 'Catálogo y Base de Conocimiento técnica', icon: 'Package', editable: true, collection: true },
+      { key: 'productos', title: 'Productos', description: 'Catálogo, Embudos de Venta y Fichas Técnicas', icon: 'Package', editable: true, collection: true },
       { key: 'categorias', title: 'Categorías', description: 'Categorías de productos', icon: 'Tags', editable: true, collection: true },
       { key: 'servicios', title: 'Servicios', description: 'Servicios ofrecidos', icon: 'Briefcase', editable: true, collection: true },
       { key: 'faqs', title: 'Preguntas Frecuentes', description: 'Respuestas automáticas', icon: 'HelpCircle', editable: true, collection: true },

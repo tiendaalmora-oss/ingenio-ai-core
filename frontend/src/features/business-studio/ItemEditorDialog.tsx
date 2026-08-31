@@ -20,16 +20,29 @@ interface FormFieldDef {
 
 const SECTION_FORM_CONFIGS: Record<string, { title: string; subtitle: string; fields: FormFieldDef[] }> = {
   productos: {
-    title: 'Producto u Oferta',
-    subtitle: 'Registra los productos que Hermes ofrecerá a los prospectos con sus precios y beneficios.',
+    title: 'Producto u Oferta Comercial',
+    subtitle: 'Define el producto, su embudo de venta paso a paso y su base de conocimiento técnica.',
     fields: [
-      { key: 'nombre', label: 'Nombre del Producto u Oferta', placeholder: 'Ej: Mega Kit de Matemática Secundaria Venezuela', type: 'text', required: true },
-      { key: 'precio', label: 'Precio / Valor', placeholder: 'Ej: 7.250 Bs (o $50 USD)', type: 'text', required: true },
-      { key: 'categoria', label: 'Categoría', placeholder: 'Ej: Material Educativo / Secundaria', type: 'text' },
-      { key: 'descripcion', label: 'Beneficios y Qué Incluye', placeholder: 'Ej: Incluye 83 evaluaciones editables, versiones resueltas por el profesor, planificaciones MPPE, proyectos y acceso de por vida.', type: 'textarea', required: true },
-      { key: 'baseConocimiento', label: '📚 Base de Conocimiento y Ficha Técnica Especializada (Temario, Formatos, Requisitos, FAQs)', placeholder: 'Escribe aquí los detalles técnicos específicos de este producto:\n- Formato de archivos (.docx/.pdf editables)\n- Temario detallado por nivel o año\n- Requisitos y contenidos incluidos\n- Respuestas a dudas técnicas específicas de este producto\nEl bot consultará esta información cuando pregunten por este producto.', type: 'textarea' },
-      { key: 'secuenciaVenta', label: 'Embudo de Venta y Secuencia Paso a Paso (Guion de Cierre)', placeholder: 'Paso 1: Saludar y confirmar el nivel educativo.\nPaso 2: Presentar los beneficios clave del kit.\nPaso 3: Dar el precio de oferta con acceso vitalicio.\nPaso 4: Pedir nombre y correo para enviar los datos bancarios.', type: 'textarea' },
-      { key: 'link', label: 'Enlace de Pago o Acceso', placeholder: 'Ej: https://mpago.la/... o enlace a Google Drive', type: 'text' },
+      { 
+        key: 'nombre', 
+        label: '1. Nombre del Producto u Oferta', 
+        placeholder: 'Ej: Mega Kit Docente de Matemática Secundaria', 
+        type: 'text', 
+        required: true 
+      },
+      { 
+        key: 'embudoVenta', 
+        label: '2. Embudo de Venta y Secuencia Paso a Paso (Guion de Cierre, Oferta y Precios)', 
+        placeholder: 'Escribe aquí el guion comercial y los pasos estructurados con sus emojis, textos y espaciados:\n\n*Paso 1 (Calificación / Regalo inicial):*\n¡Hola profe! ¿Para qué año o sección estás buscando material pedagógico?\n\n*Paso 2 (Presentación y Beneficios del Kit):*\nEl kit incluye más de 80 evaluaciones resueltas y planificaciones editables en Word...\n\n*Paso 3 (Oferta, Precio Promocional y Regalos):*\nPrecio de oferta: 7.250 Bs + 7 Regalos exclusivos incluidos hoy...\n\n*Paso 4 (Cierre y Métodos de Pago):*\nDisponemos de Pago Móvil y Transferencia Bancaria...', 
+        type: 'textarea', 
+        required: true 
+      },
+      { 
+        key: 'baseConocimiento', 
+        label: '3. 📚 Base de Conocimiento y Ficha Técnica Especializada (Solo bajo demanda)', 
+        placeholder: 'Escribe aquí los detalles técnicos específicos de este producto:\n- Formato de archivos (.docx/.pdf 100% editables)\n- Temario curricular detallado por nivel o año\n- Requisitos y contenidos específicos\n(El bot SOLO consultará esta información si el cliente hace una pregunta técnica puntual).', 
+        type: 'textarea' 
+      },
     ],
   },
   categorias: {
@@ -117,8 +130,12 @@ export default function ItemEditorDialog({
   useEffect(() => {
     if (isOpen) {
       if (item) {
-        setFormData({ ...item });
-        setJsonText(JSON.stringify(item, null, 2));
+        const itemCopy = { ...item };
+        if (sectionKey === 'productos') {
+          itemCopy.embudoVenta = itemCopy.embudoVenta || itemCopy.secuenciaVenta || itemCopy.descripcion || '';
+        }
+        setFormData(itemCopy);
+        setJsonText(JSON.stringify(itemCopy, null, 2));
       } else {
         const initial: Record<string, any> = {};
         config.fields.forEach(f => { initial[f.key] = ''; });

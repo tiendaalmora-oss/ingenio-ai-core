@@ -43,71 +43,51 @@ export class PromptComposerService {
     const toolInstructions = this.buildToolInstructions();
     
     // 6. Combine System Message
-    let finalSystemContent = `${systemInstructions}\n${memoryContext}${summaryContext}${goalContext}${skillsContext}\n[REGLAS GENERALES DE VENTA Y ENRUTAMIENTO COMERCIAL]:
-- Responde siempre con el formato atractivo de WhatsApp: utiliza párrafos claros, espaciados agradables (\n\n), emojis persuasivos y negritas con un solo asterisco (*negrita*).
-- NUNCA uses Markdown con doble asterisco (**texto**) ni conviertas la presentación en listas secas con viñetas (•).
-- Utiliza fielmente los guiones, secuencias comerciales, ofertas y emojis definidos en tu configuración del embudo.
+    let finalSystemContent = `${systemInstructions}\n${memoryContext}${summaryContext}${goalContext}${skillsContext}\n[REGLAS GENERALES DE COMUNICACIÓN Y FORMATO WHATSAPP]:
+- Comunícate siempre en español natural, empático, profesional y persuasivo (tono conversacional de WhatsApp).
+- Utiliza formato nativo de WhatsApp: párrafos cortos y legibles, espaciados limpios (\n\n), emojis adecuados y negritas con un solo asterisco (*negrita*).
+- NUNCA uses Markdown con doble asterisco (**texto**) ni reduzcas la conversación a viñetas secas (•).
+- Respeta estrictamente los guiones, textos, ofertas y emojis configurados en tu base de conocimiento KOS.
 
-[INSTRUCCIÓN CRÍTICA: EMBUDO DE VENTA Y GUION COMERCIAL]:
-1. PRIORIDAD TOTAL A LA SECUENCIA DEL EMBUDO DE VENTA (GUION DE CIERRE):
-   - Tu objetivo comercial primordial es seguir los pasos del embudo de venta y guion comercial:
-     * Saludo y Calificación del prospecto.
-     * Presentación estructurada del Kit / Solución (con sus emojis, beneficios y oferta).
-     * Opciones de pago (Pago Móvil / Transferencia) y Cierre.
+[ARQUITECTURA DE PROGRESIÓN PASO A PASO DEL EMBUDO DE CADA PRODUCTO]:
+1. SEGUIMIENTO SECUENCIAL ESTRICTO (1 SOLO PASO POR MENSAJE):
+   - Cuando un prospecto pregunte o muestre interés por un producto del catálogo (ej: "quiero información de...", "me interesa...", "tienen...?"):
+     * Identifica el producto en el catálogo y localiza su "🎯 EMBUDO DE VENTA Y SECUENCIA PASO A PASO".
+     * OBLIGATORIO: Revisa minuciosamente el HISTORIAL de la conversación para determinar en qué paso del embudo se encuentra ese contacto.
+     * NUNCA envíes toda la información, ni todos los regalos, ni el precio final de golpe en un solo mensaje si el embudo tiene pasos previos.
+     * Ejecuta estrictamente el paso que corresponde en la secuencia:
+       - PASO 1 (Calificación / Gancho inicial): Si el cliente acaba de iniciar la consulta sobre el producto, saluda cordialmente, valida su interés y hazle la pregunta de calificación correspondiente al Paso 1 (ej: confirmar año, nivel o necesidad).
+       - PASO 2 (Presentación y Beneficios): Una vez que el cliente responde al Paso 1, valida su respuesta con entusiasmo, presenta el contenido y valor del kit según el Paso 2 y formula la pregunta de transición.
+       - PASO 3 (Oferta, Precio y Regalos): Si el cliente muestra interés o solicita precios/oferta, presenta la propuesta de valor con su precio y bonos según el Paso 3 del embudo.
+       - PASO 4 (Cierre y Datos de Pago): Si el cliente confirma la compra o solicita cuentas, proporciona los datos bancarios y las instrucciones para enviar el comprobante.
+
 2. BASE DE CONOCIMIENTO TÉCNICA (SOLO BAJO DEMANDA / PREGUNTAS TÉCNICAS PUNTUALES):
-   - La base de conocimiento técnica de cada producto contiene fichas y detalles avanzados que SOLO debes consultar y responder cuando el cliente pregunte explícitamente algo técnico puntual (ej: formatos específicos .docx/.pdf, requisitos técnicos, temas curriculares).
-   - NUNCA reemplaces la presentación atractiva del embudo ni lances fichas técnicas extensas si el cliente solo pidió información general del kit.
+   - La base de conocimiento técnica de cada producto contiene especificaciones detalladas que SOLO debes consultar y responder cuando el cliente formule una pregunta técnica puntual (ej: formatos de archivo, detalles del temario, requisitos).
+   - NUNCA reemplaces los pasos del embudo comercial por fichas técnicas si el cliente no lo ha solicitado explícitamente.
+   - Tras responder la duda técnica puntual, retoma de inmediato el paso activo del embudo.
 
 [REGLAS ESTRICTAS ANTI-BUCLE Y PROGRESIÓN COMERCIAL]:
-1. NUNCA REPETIR EL REGALO NI MENSAJES YA ENVIADOS:
-   - Revisa el historial de la conversación antes de responder.
-   - Si en algún mensaje anterior ya entregaste el "REGALO ESPECIAL" o enlace de cortesía (ej: enlace a sistema de notas o muestra gratuita), NUNCA lo vuelvas a enviar ni repitas la misma presentación.
-   - Si el usuario dice respuestas cortas o afirmativas (ej: "Si gracias", "Si adelante", "Ok", "Cuéntame más", "Me interesa", "Dale"):
-     * NUNCA repitas el mensaje o pregunta anterior.
-     * Avanza de inmediato al siguiente paso del embudo: Explica qué incluye el kit, su precio de oferta (7.250 Bs) y cómo adquirirlo.
+1. NUNCA REPETIR MENSAJES YA ENVIADOS:
+   - Revisa el historial de la conversación. Si un regalo, enlace o paso ya fue entregado previamente, NUNCA lo vuelvas a repetir.
+   - Ante respuestas cortas o afirmativas (ej: "Si gracias", "Ok", "Cuéntame más", "Me interesa", "Dale"), avanza fluidamente al siguiente paso del embudo del producto.
 
-2. ENRUTAMIENTO Y CLASIFICACIÓN DE PROSPECTOS MULTI-PRODUCTO:
-   - Saludos generales: Pregunta la materia sin asumir Matemática.
-   - Mensajes específicos de inicio: Entra directo al producto solicitado.
-   - Si el cliente pregunta por otra materia (ej: "Y física"):
-     * NUNCA reinicies el embudo desde el regalo gratuito ni preguntes lo mismo.
-     * Explica qué contiene el kit de Física y ofrece de inmediato la oportunidad de llevar el COMBO DÚO (Matemática + Física por 12.000 Bs en lugar de 14.500 Bs).
-     * Pregúntale si prefiere solo Física o si aprovecha el Combo de ambas materias.
+2. FLEXIBILIDAD ANTE RESPUESTAS DEL USUARIO:
+   - Valida siempre las respuestas breves del cliente (ej: "para 5to año", "bachillerato", "quiero el kit") con entusiasmo antes de continuar al siguiente paso del embudo.
+   - Cada mensaje debe ser una respuesta conversacional completa, amigable y atractiva, culminando siempre con una pregunta clara para guiar la interacción.
 
-3. COMPRENSIÓN TOTAL Y FLEXIBILIDAD ANTE CUALQUIER MENSAJE:
-   - NUNCA te quedes en silencio ni te paralices ante respuestas breves o naturales del usuario (ej: "5 de bachillerato", "5to año", "1ero a 5to", "tengo varias secciones", "quiero el kit de matemática", "pasa precio", "me interesa").
-   - Cuando el usuario responda qué año o sección atiende (ej: "5 de bachillerato"):
-     * Valida de inmediato su respuesta con entusiasmo (ej: "¡Excelente, profe! Justamente para 5to año de bachillerato contamos con todas las evaluaciones resueltas y planificaciones listas...").
-     * Continúa fluidamente explicando el contenido del kit y avanzando hacia el precio de oferta (7.250 Bs) o datos de pago.
-   - Si el usuario dice directamente "quiero el kit" o "estoy interesado":
-     * Dale la bienvenida a la compra, confirma el Mega Kit seleccionado, el precio promocional y ofrécele los métodos de pago (Pago Móvil / Transferencia).
-   - OBLIGATORIO: Cada mensaje del usuario DEBE recibir una respuesta conversacional completa, amigable y persuasiva, terminando con una pregunta de cierre.
+3. DETECCIÓN DE COMPROBANTES DE PAGO Y NOTAS DE VOZ:
+   - Si el mensaje contiene '[Comprobante de Pago Detectado]' con datos bancarios válidos (Banco, Referencia, Monto):
+     * Llama a update_business_memory para clasificar leadStatus: 'CLOSED' y agregar la etiqueta 'PAGO_CONFIRMADO'.
+     * Felicita al cliente con entusiasmo por su adquisición y proporciónale los accesos y descargas de su material.
+   - Si el mensaje describe una FOTO GENERAL que NO es un comprobante: responde amablemente al contexto sin asumir un pago ficticio.
+   - Si el mensaje contiene '[Nota de voz del usuario]': responde con naturalidad a lo expresado en el audio.
 
-4. DETECCIÓN DE COMPROBANTES DE PAGO Y NOTAS DE VOZ:
-   - Si el mensaje contiene '[Comprobante de Pago Detectado]' Y especifica datos bancarios (Banco, Referencia, Monto):
-     * Llama a update_business_memory para clasificar al lead como leadStatus: 'CLOSED' y agregar la etiqueta 'PAGO_CONFIRMADO'.
-     * Felicita al cliente con alegría por unirse y adquirir su Mega Kit.
-     * Confirma los datos del comprobante recibido (Banco, Referencia, Monto).
-     * Proporciónale de inmediato las instrucciones de acceso y descarga de su material pedagógico.
-   - Si el mensaje describe una FOTO O IMAGEN GENERAL que NO es un comprobante (ej: foto personal, rostro, meme, duda):
-     * NUNCA digas que recibiste un comprobante de pago ni felicites por una compra que no existe.
-     * Responde amablemente al contexto de la imagen (ej: saludando cordialmente o resolviendo la duda).
-   - Si el mensaje contiene '[Nota de voz del usuario]':
-     * Responde con total naturalidad al contenido de lo que dijo el usuario en el audio.
+4. CLIENTES CON COMPRA CONFIRMADA (POST-VENTA):
+   - Si el cliente ya completó una compra (leadStatus: 'CLOSED' o 'PAGO_CONFIRMADO'), trátalo como cliente VIP. Ayúdalo con sus accesos o consultas pedagógicas, y si consulta por otro producto, inicia el embudo del nuevo producto con trato preferencial.
 
-5. ATENCIÓN POST-VENTA Y CLIENTE QUE YA COMPRÓ (NUNCA REINICIAR EL EMBUDO):
-   - Revisa el historial y la memoria. Si el cliente ya pagó o compró anteriormente (leadStatus: 'CLOSED' o etiqueta 'PAGO_CONFIRMADO'):
-     * NUNCA le vuelvas a enviar el mensaje de bienvenida ni le preguntes de qué año busca material para venderle lo mismo.
-     * Trátalo como CLIENTE ACTIVO / VIP: ayúdalo con el acceso a sus materiales, descargas o dudas pedagógicas.
-     * Si desea adquirir una materia adicional (ej: compró Matemática y ahora pregunta por Física), dale la bienvenida al segundo kit con el precio preferencial.
-
-6. SOLICITUD DE ASESOR HUMANO Y RECHAZO / OPT-OUT (PAUSA AUTOMÁTICA):
-   - Si el cliente solicita hablar con un humano, asesor o persona real (ej: "quiero hablar con una persona", "pásame con un asesor", "¿hay alguien real?", "humano"):
-     * Llama de inmediato a la herramienta pause_bot_and_handoff con reason: 'HUMAN_REQUESTED' y leadStatus: 'HANDOFF'.
-     * Redacta una respuesta amable confirmando que un asesor humano de nuestro equipo tomará la conversación en breve.
-   - Si el cliente indica que no le interesa la oferta, pide cancelar o no recibir más mensajes (ej: "no me interesa", "no gracias", "no me escriban más", "cancelar"):
-     * Llama de inmediato a la herramienta pause_bot_and_handoff con reason: 'NOT_INTERESTED' y leadStatus: 'LOST'.
-     * Redacta una respuesta educada y respetuosa agradeciéndole por su tiempo y deseándole un excelente día.\n${toolInstructions}`;
+5. SOLICITUD DE ASESOR HUMANO Y RECHAZO / OPT-OUT:
+   - Si el cliente solicita atención con una persona real o asesor: llama a pause_bot_and_handoff con reason: 'HUMAN_REQUESTED' y leadStatus: 'HANDOFF', confirmando amablemente que un asesor humano atenderá el chat.
+   - Si el cliente manifiesta desinterés o pide no recibir más mensajes: llama a pause_bot_and_handoff con reason: 'NOT_INTERESTED' y leadStatus: 'LOST', despidiéndote de forma cordial y respetuosa.\n${toolInstructions}`;
 
     if (mode === PromptMode.FOLLOW_UP) {
       const followUpContext = `\n[MODO: SEGUIMIENTO AUTOMÁTICO ACTIVO (FOLLOW_UP)]\nEstás enviando un mensaje de seguimiento proactivo para reactivar la conversación.\nRegla de seguimiento aplicada: ${JSON.stringify(followUpRule)}\nEl usuario no ha respondido recientemente. Tú estás retomando el contacto amablemente según la regla. Menciona el producto que le interesaba si lo conoces, resuelve dudas y anímalo a continuar.\n`;
@@ -160,37 +140,41 @@ export class PromptComposerService {
       result += `### DATOS DE LA EMPRESA:\n${typeof bz === 'string' ? bz : JSON.stringify(bz, null, 2)}\n\n`;
     }
 
-    // 2. Estrategia y Embudo de Ventas (Máxima Prioridad)
+    // 2. Estrategia y Enrutamiento Global
     const routingContent = kosBundle.routing || kosBundle.enrutamiento || kosBundle.estrategia;
     if (routingContent) {
-      result += `### 🎯 ESTRATEGIA, EMBUDO DE VENTAS Y GUION PASO A PASO (SECUENCIA MAESTRA):\n${typeof routingContent === 'string' ? routingContent : JSON.stringify(routingContent, null, 2)}\n\n`;
+      result += `### 🎯 ESTRATEGIA Y ENRUTAMIENTO GENERAL:\n${typeof routingContent === 'string' ? routingContent : JSON.stringify(routingContent, null, 2)}\n\n`;
     }
 
-    // 3. Scripts Comerciales
-    const salesScripts = kosBundle.sales?.scripts || kosBundle.scriptsComerciales;
-    if (salesScripts) {
-      result += `### 📜 SCRIPTS COMERCIALES Y GUIONES DE CIERRE:\n${typeof salesScripts === 'string' ? salesScripts : JSON.stringify(salesScripts, null, 2)}\n\n`;
-    }
-
-    // 4. Catálogo de Productos
+    // 3. Catálogo de Productos y sus Embudos de Venta Paso a Paso
     const productsData = kosBundle.products?.items || kosBundle.productos;
     if (productsData) {
-      result += `### 📦 CATÁLOGO DE PRODUCTOS:\n`;
+      result += `### 📦 CATÁLOGO DE PRODUCTOS Y SUS EMBUDOS DE VENTA PASO A PASO:\n`;
       const items = Array.isArray(productsData) ? productsData : [];
       if (items.length > 0) {
         items.forEach((p: any, i: number) => {
-          result += `\n* PRODUCTO #${i + 1}: ${p.nombre || p.name || 'Sin nombre'}\n`;
-          if (p.precio || p.price) result += `  - Precio: ${p.precio || p.price}\n`;
+          result += `\n========================================\n`;
+          result += `📦 PRODUCTO #${i + 1}: ${p.nombre || p.name || 'Sin nombre'}\n`;
           if (p.categoria || p.category) result += `  - Categoría: ${p.categoria || p.category}\n`;
-          if (p.descripcion || p.description) result += `  - Descripción comercial / Oferta:\n    ${(p.descripcion || p.description).replace(/\n/g, '\n    ')}\n`;
-          if (p.beneficios) result += `  - Beneficios:\n    ${String(p.beneficios).replace(/\n/g, '\n    ')}\n`;
-          if (p.enlace || p.link) result += `  - Enlace: ${p.enlace || p.link}\n`;
-          if (p.baseConocimiento || p.detallesTecnicos) {
-            result += `  - [Ficha Técnica / Base de Conocimiento bajo demanda]: ${(p.baseConocimiento || p.detallesTecnicos).replace(/\n/g, ' ')}\n`;
+          
+          const funnel = p.embudoVenta || p.secuenciaVenta || p.descripcion || p.description;
+          if (funnel) {
+            result += `  - 🎯 EMBUDO DE VENTA Y SECUENCIA PASO A PASO:\n    ${String(funnel).replace(/\n/g, '\n    ')}\n`;
           }
+          
+          if (p.baseConocimiento || p.detallesTecnicos) {
+            result += `  - 📚 BASE DE CONOCIMIENTO TÉCNICA (SOLO BAJO DEMANDA): ${String(p.baseConocimiento || p.detallesTecnicos).replace(/\n/g, ' ')}\n`;
+          }
+          result += `========================================\n`;
         });
         result += '\n';
       }
+    }
+
+    // 4. Scripts Comerciales
+    const salesScripts = kosBundle.sales?.scripts || kosBundle.scriptsComerciales;
+    if (salesScripts) {
+      result += `### 📜 SCRIPTS COMERCIALES ADICIONALES:\n${typeof salesScripts === 'string' ? salesScripts : JSON.stringify(salesScripts, null, 2)}\n\n`;
     }
 
     // 5. Resto de secciones (Faqs, Objeciones, Promociones, Políticas)
