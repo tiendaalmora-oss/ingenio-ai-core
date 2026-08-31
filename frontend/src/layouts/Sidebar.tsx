@@ -14,6 +14,7 @@ import {
   Settings,
   Menu,
   X,
+  Building2,
 } from 'lucide-react';
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -24,6 +25,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Brain,
   BarChart,
   Settings,
+  Building2,
 };
 
 interface MenuItem {
@@ -93,6 +95,28 @@ export default function Sidebar({ menu }: { menu: MenuItem[] }) {
                 </li>
               );
             })}
+
+            {/* ── Ítem fijo: Panel de Agencia ── */}
+            <li className="pt-2 mt-2 border-t border-gray-100">
+              <Link
+                href="/agency"
+                className={`flex items-center p-2 rounded-lg group transition-colors ${
+                  pathname === '/agency' || pathname.startsWith('/agency/')
+                    ? 'bg-blue-50 text-blue-700'
+                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                }`}
+                title={!sidebarOpen ? 'Panel de Agencia' : undefined}
+              >
+                <Building2
+                  className={`w-5 h-5 flex-shrink-0 ${
+                    pathname.startsWith('/agency') ? 'text-blue-700' : 'text-gray-500 group-hover:text-gray-900'
+                  }`}
+                />
+                {sidebarOpen && (
+                  <span className="ms-3 truncate text-sm font-medium">Panel de Agencia</span>
+                )}
+              </Link>
+            </li>
           </ul>
         </nav>
       </aside>
