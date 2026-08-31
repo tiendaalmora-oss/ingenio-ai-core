@@ -13,15 +13,55 @@ datasource db {
   provider = "postgresql"
 }
 
+// ─────────────────────────────────────────────────────────────
+// NIVEL 1: Agencia (Revendedor / White-Label)
+// ─────────────────────────────────────────────────────────────
+
+model Agency {
+  id           String       @id @default(uuid())
+  name         String
+  ownerEmail   String       @unique
+  plan         String       @default("free") // free, starter, pro, enterprise
+  logoUrl      String?
+  primaryColor String?      @default("#3B82F6")
+  customDomain String?      @unique
+  subaccounts  Tenant[]
+  users        AgencyUser[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model AgencyUser {
+  id        String   @id @default(uuid())
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id])
+  email     String
+  role      String   @default("member") // owner, admin, member
+  createdAt DateTime @default(now())
+
+  @@unique([agencyId, email])
+}
+
+// ─────────────────────────────────────────────────────────────
+// NIVEL 2: Subcuenta (Cliente del Revendedor)
+// ─────────────────────────────────────────────────────────────
+
 model Tenant {
   id                   String           @id @default(uuid())
   name                 String
+  // Vinculación a la Agencia (null = tenant standalone sin agencia)
+  agencyId             String?
+  agency               Agency?          @relation(fields: [agencyId], references: [id])
+  // Plan y estado de la subcuenta
+  status               String           @default("active") // active, paused, suspended
+  plan                 String           @default("starter") // starter, pro, enterprise
   wahaSession          String?          @unique
   contacts             Contact[]
   knowledgeBundle      KnowledgeBundle?
   currentBundleVersion String?
   funnels              Funnel[]
   createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 }
 
 model Contact {
