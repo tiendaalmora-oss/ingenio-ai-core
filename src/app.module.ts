@@ -19,6 +19,7 @@ import { FollowUpEngineModule } from './modules/follow-up-engine/follow-up-engin
 import { SettingsModule } from './modules/settings/settings.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { MediaProcessingModule } from './modules/media-processing/media-processing.module';
+import { AgencyModule } from './modules/agency/agency.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { MediaProcessingModule } from './modules/media-processing/media-processi
     FollowUpEngineModule,
     SettingsModule,
     AnalyticsModule,
+    AgencyModule,
   ],
   controllers: [AppController],
   providers: [AppService],
