@@ -53,16 +53,16 @@ export default function SubaccountSwitcher() {
       const res = await fetch(`${API_URL}/agency`, {
         headers: { 'x-api-key': API_KEY, 'Content-Type': 'application/json' },
       });
-      const data: any[] = await res.json();
+      const data: Agency[] = await res.json();
 
       // Para cada agencia, cargar sus subcuentas
-      const withSubs = await Promise.all(
-        data.map(async (ag) => {
+      const withSubs: Agency[] = await Promise.all(
+        data.map(async (ag: Agency) => {
           const subRes = await fetch(`${API_URL}/agency/${ag.id}/subaccounts`, {
             headers: { 'x-api-key': API_KEY },
           });
           const subs: Subaccount[] = await subRes.json();
-          return { ...ag, subaccounts: subs };
+          return { ...ag, subaccounts: subs } as Agency;
         }),
       );
       setAgencies(withSubs);
