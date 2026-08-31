@@ -4,82 +4,34 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider      = "prisma-client-js"
-  engineType    = "library"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
+  provider   = "prisma-client-js"
+  engineType = "library"
 }
 
 datasource db {
   provider = "postgresql"
 }
 
-// ─────────────────────────────────────────────────────────────
-// NIVEL 1: Agencia (Revendedor / White-Label)
-// ─────────────────────────────────────────────────────────────
-
-model Agency {
-  id           String       @id @default(uuid())
-  name         String
-  ownerEmail   String       @unique
-  plan         String       @default("free") // free, starter, pro, enterprise
-  logoUrl      String?
-  primaryColor String?      @default("#3B82F6")
-  customDomain String?      @unique
-  subaccounts  Tenant[]
-  users        AgencyUser[]
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @default(now()) @updatedAt
-}
-
-model AgencyUser {
-  id        String   @id @default(uuid())
-  agencyId  String
-  agency    Agency   @relation(fields: [agencyId], references: [id])
-  email     String
-  role      String   @default("member") // owner, admin, member
-  createdAt DateTime @default(now())
-
-  @@unique([agencyId, email])
-}
-
-// ─────────────────────────────────────────────────────────────
-// NIVEL 2: Subcuenta (Cliente del Revendedor)
-// ─────────────────────────────────────────────────────────────
-
 model Tenant {
   id                   String           @id @default(uuid())
   name                 String
-  // Vinculación a la Agencia (null = tenant standalone sin agencia)
-  agencyId             String?
-  agency               Agency?          @relation(fields: [agencyId], references: [id])
-  // Plan y estado de la subcuenta
-  status               String           @default("active") // active, paused, suspended
-  plan                 String           @default("starter") // starter, pro, enterprise
   wahaSession          String?          @unique
   contacts             Contact[]
   knowledgeBundle      KnowledgeBundle?
   currentBundleVersion String?
   funnels              Funnel[]
   createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @default(now()) @updatedAt
 }
 
 model Contact {
-  id               String         @id @default(uuid())
-  tenantId         String
-  tenant           Tenant         @relation(fields: [tenantId], references: [id])
-  /// Raw phone number as received (e.g. "5215551234567@c.us")
-  externalId       String?
-  /// Digits-only phone, e.g. "5215551234567"
-  phone            String?
-  /// Normalized phone without WAHA suffixes – used for multi-tenant uniqueness
-  phoneNormalized  String?
-  name             String
-  conversations    Conversation[]
-  memory           BusinessMemory?
-  tasks            Task[]
-
-  @@unique([tenantId, phoneNormalized])
+  id            String         @id @default(uuid())
+  tenantId      String
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  phone         String?
+  name          String
+  conversations Conversation[]
+  memory        BusinessMemory?
+  tasks         Task[]
 }
 
 model Conversation {
@@ -176,28 +128,3 @@ model ActiveFunnel {
   state          Json?
   updatedAt      DateTime     @updatedAt
 }
-
-model PendingOutboundMessage {
-  id             String       @id @default(uuid())
-  tenantId       String
-  conversationId String
-  contactId      String
-  message        String
-  followUpId     String?
-  status         String       @default("PENDING") // PENDING, PROCESSING, SENT, FAILED
-  retries        Int          @default(0)
-  sentAt         DateTime?
-  durationMs     Int?
-  providerResponse String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-}
-
-model IncomingMessageFailure {
-  id        String   @id @default(uuid())
-  payload   Json
-  error     String
-  createdAt DateTime @default(now())
-}
-
-
