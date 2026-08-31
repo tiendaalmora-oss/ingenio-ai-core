@@ -344,6 +344,138 @@ export class CrmController {
   }
 
   /**
+   * GET /crm/alerts
+   * Devuelve alertas en tiempo real para el operador humano (Pagos confirmados, Traspasos a Asesor, Leads Hot).
+   */
+  @Get('alerts')
+  async getAlerts(@TenantId() tenantId: string) {
+    if (!tenantId) throw new BadRequestException('tenantId is required');
+
+    const [handoffConvs, closedLeads, hotLeads] = await Promise.all([
+      // 1. Chats que requieren asesor humano
+      this.prisma.conversation.findMany({
+        where: {
+          contact: { tenantId },
+          status: 'HANDOFF',
+        },
+        include: {
+          contact: { include: { memory: true } },
+          interactions: { orderBy: { timestamp: 'desc' }, take: 1 },
+        },
+        orderBy: { id: 'desc' },
+        take: 20,
+      }),
+      // 2. Pagos confirmados recientes
+      this.prisma.contact.findMany({
+        where: {
+          tenantId,
+          memory: {
+            OR: [
+              { leadStatus: 'CLOSED' },
+              { tags: { has: 'PAGO_CONFIRMADO' } },
+            ],
+          },
+        },
+        include: {
+          memory: true,
+          conversations: {
+            include: {
+              interactions: { orderBy: { timestamp: 'desc' }, take: 1 },
+            },
+            take: 1,
+          },
+        },
+        orderBy: { id: 'desc' },
+        take: 20,
+      }),
+      // 3. Leads muy interesados (HOT)
+      this.prisma.contact.findMany({
+        where: {
+          tenantId,
+          memory: { leadStatus: 'HOT' },
+        },
+        include: {
+          memory: true,
+          conversations: {
+            include: {
+              interactions: { orderBy: { timestamp: 'desc' }, take: 1 },
+            },
+            take: 1,
+          },
+        },
+        orderBy: { id: 'desc' },
+        take: 10,
+      }),
+    ]);
+
+    const alerts: any[] = [];
+
+    // Formatear alertas de Pagos
+    for (const contact of closedLeads) {
+      const conv = contact.conversations[0];
+      const lastMsg = conv?.interactions[0];
+      alerts.push({
+        id: `pay-${contact.id}`,
+        type: 'PAYMENT',
+        priority: 'CRITICAL',
+        title: '💰 Pago Confirmado',
+        description: `${contact.name || contact.phone || 'Cliente'} completó su pago y compra.`,
+        contactId: contact.id,
+        contactName: contact.name || 'Cliente',
+        contactPhone: contact.phone || contact.externalId,
+        conversationId: conv?.id || null,
+        timestamp: lastMsg?.timestamp || contact.memory?.updatedAt || new Date(),
+      });
+    }
+
+    // Formatear alertas de Asesor Humano (Handoff)
+    for (const conv of handoffConvs) {
+      const lastMsg = conv.interactions[0];
+      alerts.push({
+        id: `handoff-${conv.id}`,
+        type: 'HANDOFF',
+        priority: 'HIGH',
+        title: '👤 Solicitud de Asesor Humano',
+        description: `${conv.contact.name || conv.contact.phone || 'Prospecto'} necesita atención manual: "${lastMsg?.content?.substring(0, 60) || 'Pausado por operador'}"`,
+        contactId: conv.contact.id,
+        contactName: conv.contact.name || 'Prospecto',
+        contactPhone: conv.contact.phone || conv.contact.externalId,
+        conversationId: conv.id,
+        timestamp: lastMsg?.timestamp || new Date(),
+      });
+    }
+
+    // Formatear alertas de Leads Calientes (HOT)
+    for (const contact of hotLeads) {
+      const conv = contact.conversations[0];
+      const lastMsg = conv?.interactions[0];
+      alerts.push({
+        id: `hot-${contact.id}`,
+        type: 'HOT_LEAD',
+        priority: 'MEDIUM',
+        title: '🔥 Lead Caliente (Listo para Cierre)',
+        description: `${contact.name || contact.phone || 'Prospecto'} tiene alta intención de compra.`,
+        contactId: contact.id,
+        contactName: contact.name || 'Prospecto',
+        contactPhone: contact.phone || contact.externalId,
+        conversationId: conv?.id || null,
+        timestamp: lastMsg?.timestamp || contact.memory?.updatedAt || new Date(),
+      });
+    }
+
+    // Ordenar alertas por fecha descendente
+    alerts.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    const urgentCount = alerts.filter((a) => a.priority === 'CRITICAL' || a.priority === 'HIGH').length;
+
+    return {
+      urgentCount,
+      totalAlerts: alerts.length,
+      alerts,
+    };
+  }
+
+  /**
    * DELETE /crm/leads/:id
    * Eliminar un contacto y todos sus datos relacionados.
    */

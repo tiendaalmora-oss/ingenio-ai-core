@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation';
 import { Activity, Clock, Database, Menu, Lock } from 'lucide-react';
 import { useUiStore } from '../store/ui.store';
 
+import NotificationCenter from '../components/NotificationCenter';
+
 interface HealthItem {
   name: string;
   status: string;
@@ -82,6 +84,9 @@ export default function Topbar({ tenant, version, timestamp, health }: TopbarPro
           </span>
           <span className="text-sm font-medium text-gray-700 hidden sm:inline">{globalStatusText}</span>
         </div>
+
+        {/* Human Operator Live Notification & Alert Center */}
+        <NotificationCenter />
 
         <button
           onClick={() => {
