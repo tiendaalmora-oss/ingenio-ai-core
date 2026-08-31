@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { usePathname } from 'next/navigation';
-import { Activity, Clock, Database, Menu, Lock } from 'lucide-react';
+import { Activity, Clock, Database, Menu } from 'lucide-react';
 import { useUiStore } from '../store/ui.store';
 
 import NotificationCenter from '../components/NotificationCenter';
