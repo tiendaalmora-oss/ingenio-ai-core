@@ -6,6 +6,7 @@ import { Activity, Clock, Database, Menu, Lock } from 'lucide-react';
 import { useUiStore } from '../store/ui.store';
 
 import NotificationCenter from '../components/NotificationCenter';
+import SubaccountSwitcher from '../components/SubaccountSwitcher';
 
 interface HealthItem {
   name: string;
@@ -86,6 +87,7 @@ export default function Topbar({ tenant, version, timestamp, health }: TopbarPro
         </div>
 
         {/* Human Operator Live Notification & Alert Center */}
+        <SubaccountSwitcher />
         <NotificationCenter />
 
         <button
