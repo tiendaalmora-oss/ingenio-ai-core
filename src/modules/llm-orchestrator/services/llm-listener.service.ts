@@ -339,6 +339,49 @@ export class LlmListenerService {
       }
     }
 
+    // ── Auto-Asignación Proactiva de Temperatura del Lead en CRM (COLD -> WARM -> HOT -> CLOSED) ──
+    try {
+      const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } });
+      const currentStatus = memory?.leadStatus || 'COLD';
+      let nextStatus = currentStatus;
+      const currentTags = (memory?.tags as string[]) || [];
+      const newTags = new Set(currentTags);
+
+      const isPaymentMsg = textNorm.includes('comprobante') || textNorm.includes('transferi') || textNorm.includes('pague') || textNorm.includes('pago realizado') || (payload.content || '').includes('[Comprobante de Pago');
+      const isHotMsg = textNorm.includes('precio') || textNorm.includes('costo') || textNorm.includes('cuanto vale') || textNorm.includes('como pago') || textNorm.includes('datos de pago') || textNorm.includes('pago movil') || textNorm.includes('transferencia') || textNorm.includes('quiero comprar') || textNorm.includes('comprar');
+      const isWarmMsg = textNorm.includes('me interesa') || textNorm.includes('informacion') || textNorm.includes('tienen de') || textNorm.includes('kit') || textNorm.includes('docente') || textNorm.includes('profesor') || textNorm.includes('para que ano') || textNorm.includes('bachillerato');
+
+      if (isPaymentMsg) {
+        nextStatus = 'CLOSED';
+        newTags.add('PAGO_CONFIRMADO');
+      } else if (isHotMsg && currentStatus !== 'CLOSED') {
+        nextStatus = 'HOT';
+        newTags.add('PIDIO_PRECIO');
+        newTags.add('ALTO_INTERES');
+      } else if (isWarmMsg && currentStatus === 'COLD') {
+        nextStatus = 'WARM';
+        newTags.add('INTERESADO');
+      }
+
+      if (nextStatus !== currentStatus || newTags.size !== currentTags.length) {
+        await this.prisma.businessMemory.upsert({
+          where: { contactId: payload.contactId },
+          create: {
+            contactId: payload.contactId,
+            leadStatus: nextStatus,
+            tags: Array.from(newTags),
+          },
+          update: {
+            leadStatus: nextStatus,
+            tags: Array.from(newTags),
+          }
+        });
+        this.logger.log(`[CRM Auto-Pipeline] Lead ${payload.contactId} actualizado de "${currentStatus}" a "${nextStatus}" (Tags: ${Array.from(newTags).join(', ')})`);
+      }
+    } catch (err: any) {
+      this.logger.warn(`Error en auto-asignación de temperatura CRM: ${err.message}`);
+    }
+
     this.incrementDepth(payload.conversationId);
 
     try {

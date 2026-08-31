@@ -431,16 +431,26 @@ export class CrmController {
     // Formatear alertas de Asesor Humano (Handoff)
     for (const conv of handoffConvs) {
       const lastMsg = conv.interactions[0];
+      const tags = (conv.contact.memory?.tags as string[]) || [];
+      const isExplicitHumanRequest = tags.includes('HANDOFF_HUMANO') || tags.includes('ASESOR_SOLICITADO');
+      const isWaitingHumanReply = lastMsg?.direction === 'INBOUND';
+
+      // Si el operador ya respondió el último mensaje, la alerta ya fue atendida
+      const priority = isWaitingHumanReply ? 'HIGH' : 'LOW';
+
       alerts.push({
         id: `handoff-${conv.id}`,
         type: 'HANDOFF',
-        priority: 'HIGH',
-        title: '👤 Solicitud de Asesor Humano',
-        description: `${conv.contact.name || conv.contact.phone || 'Prospecto'} necesita atención manual: "${lastMsg?.content?.substring(0, 60) || 'Pausado por operador'}"`,
+        priority,
+        title: isExplicitHumanRequest ? '👤 Solicitud de Asesor Humano' : '⏸️ Bot en Pausa (Atención Manual)',
+        description: isExplicitHumanRequest
+          ? `${conv.contact.name || conv.contact.phone || 'Prospecto'} solicitó hablar con un asesor: "${lastMsg?.content?.substring(0, 60) || 'Esperando respuesta...'}"`
+          : `${conv.contact.name || conv.contact.phone || 'Prospecto'} requiere atención del operador: "${lastMsg?.content?.substring(0, 60) || 'Pausado'}"`,
         contactId: conv.contact.id,
         contactName: conv.contact.name || 'Prospecto',
         contactPhone: conv.contact.phone || conv.contact.externalId,
         conversationId: conv.id,
+        isWaitingReply: isWaitingHumanReply,
         timestamp: lastMsg?.timestamp || new Date(),
       });
     }
@@ -466,6 +476,7 @@ export class CrmController {
     // Ordenar alertas por fecha descendente
     alerts.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
+    // Solo se consideran urgentes aquellas que requieren acción inmediata (Pagos o Handoffs sin responder)
     const urgentCount = alerts.filter((a) => a.priority === 'CRITICAL' || a.priority === 'HIGH').length;
 
     return {

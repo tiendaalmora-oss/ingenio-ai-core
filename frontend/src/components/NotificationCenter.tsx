@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, UserCheck, DollarSign, Flame, ArrowRight, ExternalLink } from 'lucide-react';
+import { Bell, UserCheck, DollarSign, Flame, ArrowRight, ExternalLink, X, CheckCheck } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../services/api';
 import Link from 'next/link';
@@ -9,8 +9,28 @@ import { useRouter } from 'next/navigation';
 
 export default function NotificationCenter() {
   const [isOpen, setIsOpen] = useState(false);
+  const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  // Load dismissed alert IDs from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('crm_dismissed_alerts');
+        if (stored) setDismissedIds(JSON.parse(stored));
+      } catch {}
+    }
+  }, []);
+
+  const saveDismissed = (newDismissed: string[]) => {
+    setDismissedIds(newDismissed);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('crm_dismissed_alerts', JSON.stringify(newDismissed));
+      } catch {}
+    }
+  };
 
   // Poll alerts every 5 seconds for real-time notifications
   const { data } = useQuery({
@@ -22,8 +42,10 @@ export default function NotificationCenter() {
     refetchInterval: 5000,
   });
 
-  const alerts = data?.alerts || [];
-  const urgentCount = data?.urgentCount || 0;
+  const rawAlerts: any[] = data?.alerts || [];
+  // Filter out locally dismissed alerts
+  const alerts = rawAlerts.filter((al: any) => !dismissedIds.includes(al.id));
+  const urgentCount = alerts.filter((al: any) => al.priority === 'CRITICAL' || al.priority === 'HIGH').length;
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -37,12 +59,25 @@ export default function NotificationCenter() {
   }, []);
 
   const handleAlertClick = (alert: any) => {
+    // Dismiss clicked alert so it won't keep nagging
+    saveDismissed([...dismissedIds, alert.id]);
     setIsOpen(false);
     if (alert.conversationId) {
       router.push(`/conversations?id=${alert.conversationId}`);
     } else {
       router.push(`/crm`);
     }
+  };
+
+  const handleDismissOne = (e: React.MouseEvent, alertId: string) => {
+    e.stopPropagation();
+    saveDismissed([...dismissedIds, alertId]);
+  };
+
+  const handleClearAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const allIds = rawAlerts.map((a: any) => a.id);
+    saveDismissed(allIds);
   };
 
   return (
@@ -52,10 +87,10 @@ export default function NotificationCenter() {
         onClick={() => setIsOpen(!isOpen)}
         className={`relative p-2 rounded-xl transition-all duration-200 ${
           urgentCount > 0
-            ? 'text-amber-600 bg-amber-50 hover:bg-amber-100 hover:text-amber-700'
+            ? 'text-amber-600 bg-amber-50 hover:bg-amber-100 hover:text-amber-700 shadow-xs'
             : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
         }`}
-        title={urgentCount > 0 ? `${urgentCount} alertas urgentes de operador` : 'Notificaciones del CRM'}
+        title={urgentCount > 0 ? `${urgentCount} alertas de operador pendientes` : 'Centro de Notificaciones'}
       >
         <Bell className="w-5 h-5" />
         
@@ -80,11 +115,23 @@ export default function NotificationCenter() {
                 Alertas de Asesor y Pagos
               </h4>
             </div>
-            {urgentCount > 0 && (
-              <span className="px-2 py-0.5 bg-red-500/80 text-white text-[10px] font-bold rounded-full">
-                {urgentCount} urgentes
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {alerts.length > 0 && (
+                <button
+                  onClick={handleClearAll}
+                  className="text-[11px] text-gray-300 hover:text-white flex items-center gap-1 bg-slate-800 hover:bg-slate-700 px-2 py-0.5 rounded-lg transition"
+                  title="Marcar todas como leídas"
+                >
+                  <CheckCheck className="w-3 h-3" />
+                  Limpiar
+                </button>
+              )}
+              {urgentCount > 0 && (
+                <span className="px-2 py-0.5 bg-red-500/90 text-white text-[10px] font-bold rounded-full">
+                  {urgentCount} urgentes
+                </span>
+              )}
+            </div>
           </div>
 
           {/* List */}
@@ -92,7 +139,7 @@ export default function NotificationCenter() {
             {alerts.length === 0 ? (
               <div className="p-8 text-center text-xs text-gray-400 space-y-1">
                 <p className="font-semibold text-gray-600">¡Todo al día!</p>
-                <p>No hay alertas de pagos ni solicitudes de asesor pendientes.</p>
+                <p>No tienes alertas pendientes de pagos ni solicitudes de asesor.</p>
               </div>
             ) : (
               alerts.map((al: any) => {
@@ -103,7 +150,7 @@ export default function NotificationCenter() {
                   <div
                     key={al.id}
                     onClick={() => handleAlertClick(al)}
-                    className={`p-3.5 text-left transition hover:bg-gray-50 cursor-pointer flex gap-3 ${
+                    className={`group p-3.5 text-left transition hover:bg-gray-50 cursor-pointer flex gap-3 relative ${
                       isPayment ? 'bg-emerald-50/40 hover:bg-emerald-50/70' :
                       isHandoff ? 'bg-amber-50/40 hover:bg-amber-50/70' :
                       'bg-white'
@@ -119,7 +166,7 @@ export default function NotificationCenter() {
                        <Flame className="w-4 h-4" />}
                     </div>
 
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 pr-4">
                       <div className="flex items-center justify-between gap-1 mb-0.5">
                         <p className="text-xs font-bold text-gray-900 truncate">
                           {al.title}
@@ -142,6 +189,15 @@ export default function NotificationCenter() {
                         </span>
                       </div>
                     </div>
+
+                    {/* Dismiss (X) button */}
+                    <button
+                      onClick={(e) => handleDismissOne(e, al.id)}
+                      className="absolute top-3 right-3 text-gray-300 hover:text-gray-600 p-1 rounded-md hover:bg-gray-200/60 opacity-60 group-hover:opacity-100 transition"
+                      title="Descartar notificación"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 );
               })
