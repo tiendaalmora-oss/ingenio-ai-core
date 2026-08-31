@@ -1,11 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../shared/database/prisma.service';
+import { MetaChannelAdapterService } from './meta-channel-adapter.service';
 
 @Injectable()
 export class WahaAdapterService {
   private readonly logger = new Logger(WahaAdapterService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly metaChannelAdapter: MetaChannelAdapterService
+  ) {}
 
   /**
    * Normalizes a raw phone/externalId into a valid WhatsApp JID.
@@ -31,6 +35,12 @@ export class WahaAdapterService {
 
   async sendMessage(tenantId: string, contactIdOrPhone: string, content: string): Promise<string> {
     let rawPhone = contactIdOrPhone;
+
+    // Si contactIdOrPhone es un ID de Instagram o Facebook Messenger, enviar vía Meta API
+    if (rawPhone && (rawPhone.startsWith('ig_') || rawPhone.startsWith('instagram_') || rawPhone.startsWith('fb_') || rawPhone.startsWith('messenger_'))) {
+      this.logger.log(`Enrutando mensaje omnicanal hacia Meta (Instagram/FB): ${rawPhone}`);
+      return this.metaChannelAdapter.sendMessage(rawPhone, content);
+    }
 
     // Si contactIdOrPhone es un ID de Contacto de base de datos o UUID, resolvemos el contacto
     if (contactIdOrPhone && !contactIdOrPhone.includes('@')) {

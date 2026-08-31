@@ -106,14 +106,20 @@ export class MetaWebhookController {
       }
       // CASO B: Meta Cloud API Oficial (Instagram Direct / Facebook Messenger)
       else if (body.object === 'page' || body.object === 'instagram') {
-        const messaging = body.entry?.[0]?.messaging?.[0];
+        const entry = body.entry?.[0];
+        const messaging = entry?.messaging?.[0];
         if (!messaging || !messaging.message || messaging.message.is_echo) {
           this.logger.debug('Ignoring non-message or echo event from Meta');
           return;
         }
 
-        contactId = messaging.sender?.id;
-        tenantId = await this.tenantResolver.resolveFromWahaSession('ferreos');
+        const isInstagram = body.object === 'instagram' || String(entry?.id || '').startsWith('ig_');
+        const prefix = isInstagram ? 'ig_' : 'fb_';
+        contactId = `${prefix}${messaging.sender?.id}`;
+
+        // Resolver tenant dinámicamente
+        const defaultTenant = await this.prisma.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
+        tenantId = defaultTenant?.id || 'dba1c54c-89c6-41e9-ae9d-03613377a5b3';
 
         const attachment = messaging.message?.attachments?.[0];
         if (attachment?.type === 'audio') {
@@ -128,7 +134,8 @@ export class MetaWebhookController {
       else {
         contactId = body.contactId || 'contact-demo-123';
         content = body.content || 'Mensaje de prueba';
-        tenantId = await this.tenantResolver.resolveFromWahaSession(body.session || 'ferreos');
+        const defaultTenant = await this.prisma.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
+        tenantId = defaultTenant?.id || 'dba1c54c-89c6-41e9-ae9d-03613377a5b3';
       }
 
       if (!contactId || !content) {
