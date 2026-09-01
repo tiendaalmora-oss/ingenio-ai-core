@@ -33,7 +33,9 @@ export default function DashboardPage() {
           
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm text-gray-500">
             <span className="flex items-center gap-1 bg-gray-100 px-2 py-0.5 rounded text-gray-700 font-mono text-xs truncate max-w-[220px] sm:max-w-none">
-              Tenant: {tenant || 'N/A'}
+              {typeof tenant === 'object' && tenant !== null
+                ? `${(tenant as any).name}` 
+                : `Tenant: ${tenant || 'N/A'}`}
             </span>
             <span className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5"/> Sincronizado: {timestamp ? new Date(timestamp).toLocaleTimeString() : 'N/A'}

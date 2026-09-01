@@ -52,7 +52,8 @@ export class AgencyService {
     const agency = await this.prisma.agency.findUnique({ where: { id: agencyId } });
     if (!agency) throw new NotFoundException('Agencia no encontrada.');
 
-    return this.prisma.tenant.create({
+    // Crear el tenant (subcuenta)
+    const tenant = await this.prisma.tenant.create({
       data: {
         name: data.name,
         agencyId,
@@ -60,6 +61,24 @@ export class AgencyService {
         status: 'active',
       },
     });
+
+    // Inicializar KnowledgeBundle vacío para que el bootstrap funcione de inmediato
+    await this.prisma.knowledgeBundle.create({
+      data: {
+        tenantId: tenant.id,
+        systemPrompt: {
+          business: { name: data.name, description: '', industry: '' },
+          products: [],
+          services: [],
+          faqs: [],
+          objections: [],
+          followUpSequences: [],
+        },
+        version: 1,
+      },
+    });
+
+    return tenant;
   }
 
   async findSubaccountsByAgency(agencyId: string) {

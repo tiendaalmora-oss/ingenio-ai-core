@@ -15,6 +15,12 @@ export class BootstrapService {
       where: { tenantId }
     });
 
+    // Fetch tenant name for display in the UI
+    const tenantRecord = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true, name: true, plan: true, status: true },
+    });
+
     // Reuse it across orchestrations to avoid duplicate Prisma queries
     const menu = this.studioService.getMenu();
     const knowledgeSchema = this.studioService.getSchema();
@@ -38,7 +44,7 @@ export class BootstrapService {
       stats,
       knowledgeSchema,
       knowledgeBundle,
-      tenant: tenantId,
+      tenant: tenantRecord ?? { id: tenantId, name: tenantId },
       version: bundle?.version || 0,
       cacheStatus: bundle ? 'HIT' : 'MISSING',
       timestamp: new Date()
