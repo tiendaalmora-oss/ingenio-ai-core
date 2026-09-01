@@ -330,8 +330,11 @@ export default function AgencyPage() {
                             Pausar
                           </button>
                         )}
-                        <Link
-                          href={`/dashboard?tenantId=${sub.id}`}
+                        <button
+                          onClick={() => {
+                            localStorage.setItem('tenant_id', sub.id);
+                            window.location.href = '/dashboard';
+                          }}
                           className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors flex items-center gap-1"
                         >
                           <BarChart2 className="w-3 h-3" /> Ver CRM
