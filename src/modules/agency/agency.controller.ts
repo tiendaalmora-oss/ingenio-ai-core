@@ -47,6 +47,15 @@ export class AgencyController {
   }
 
   /**
+   * GET /agency/overview
+   * Retorna agencias y todas las subcuentas principales/no asignadas
+   */
+  @Get('overview')
+  getOverview() {
+    return this.agencyService.getOverview();
+  }
+
+  /**
    * GET /agency
    * Listar todas las agencias
    */

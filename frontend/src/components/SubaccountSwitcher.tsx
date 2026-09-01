@@ -21,6 +21,7 @@ interface Agency {
 export default function SubaccountSwitcher() {
   const [open, setOpen] = useState(false);
   const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [unassigned, setUnassigned] = useState<Subaccount[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTenantId, setActiveTenantId] = useState<string | null>(null);
   const [activeName, setActiveName] = useState<string>('');
@@ -45,50 +46,63 @@ export default function SubaccountSwitcher() {
 
   // Cargar agencias y subcuentas al abrir
   async function loadAgencies() {
-    if (agencies.length > 0) return; // ya cargadas
     setLoading(true);
     try {
-      const { data } = await api.get<Agency[]>('/agency');
+      const { data } = await api.get<{ agencies: Agency[]; unassignedTenants: Subaccount[] }>('/agency/overview');
+      const loadedAgencies = data?.agencies || [];
+      const loadedUnassigned = data?.unassignedTenants || [];
 
-      // Para cada agencia, cargar sus subcuentas
-      const withSubs: Agency[] = await Promise.all(
-        data.map(async (ag: Agency) => {
-          const subRes = await api.get<Subaccount[]>(`/agency/${ag.id}/subaccounts`);
-          return { ...ag, subaccounts: subRes.data } as Agency;
-        }),
-      );
-      setAgencies(withSubs);
+      setAgencies(loadedAgencies);
+      setUnassigned(loadedUnassigned);
 
       // Resolver el nombre del tenant activo
       const stored = localStorage.getItem('tenant_id');
       if (stored) {
-        for (const ag of withSubs) {
-          const found = ag.subaccounts.find((s) => s.id === stored);
-          if (found) { setActiveName(found.name); break; }
+        // 1. Buscar en unassigned (Cuenta Principal)
+        const unassignedMatch = loadedUnassigned.find((u) => u.id === stored);
+        if (unassignedMatch) {
+          setActiveName(unassignedMatch.name || 'Cuenta Principal');
+        } else {
+          // 2. Buscar en agencias
+          for (const ag of loadedAgencies) {
+            const found = ag.subaccounts?.find((s) => s.id === stored);
+            if (found) {
+              setActiveName(found.name);
+              break;
+            }
+          }
         }
       }
     } catch {
-      // silenciar error si no hay agencias todavía
+      // Fallback a /agency
+      try {
+        const { data } = await api.get<Agency[]>('/agency');
+        setAgencies(Array.isArray(data) ? data : []);
+      } catch {}
     } finally {
       setLoading(false);
     }
   }
 
-  function handleSwitch(sub: Subaccount) {
+  function handleSwitch(sub: { id: string; name?: string }) {
     localStorage.setItem('tenant_id', sub.id);
     setActiveTenantId(sub.id);
-    setActiveName(sub.name);
+    if (sub.name) setActiveName(sub.name);
     setOpen(false);
     // Recargar la página para que el bootstrap se actualice con el nuevo tenant
     window.location.reload();
   }
 
-  const totalSubs = agencies.reduce((acc, ag) => acc + ag.subaccounts.length, 0);
+  const totalSubs =
+    unassigned.length + agencies.reduce((acc, ag) => acc + (ag.subaccounts?.length || 0), 0);
 
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => { setOpen(!open); loadAgencies(); }}
+        onClick={() => {
+          setOpen(!open);
+          loadAgencies();
+        }}
         className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm font-medium text-gray-700 transition-colors max-w-[200px]"
         title="Cambiar subcuenta"
       >
@@ -101,7 +115,11 @@ export default function SubaccountSwitcher() {
             {totalSubs}
           </span>
         )}
-        <ChevronDown className={`w-3.5 h-3.5 text-gray-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-gray-400 flex-shrink-0 transition-transform ${
+            open ? 'rotate-180' : ''
+          }`}
+        />
       </button>
 
       {open && (
@@ -126,9 +144,9 @@ export default function SubaccountSwitcher() {
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
               </div>
-            ) : agencies.length === 0 ? (
+            ) : unassigned.length === 0 && agencies.length === 0 ? (
               <div className="px-4 py-6 text-center">
-                <p className="text-sm text-gray-400">No hay agencias creadas.</p>
+                <p className="text-sm text-gray-400">No hay cuentas disponibles.</p>
                 <Link
                   href="/agency"
                   onClick={() => setOpen(false)}
@@ -138,39 +156,70 @@ export default function SubaccountSwitcher() {
                 </Link>
               </div>
             ) : (
-              agencies.map((ag) => (
-                <div key={ag.id}>
-                  {/* Nombre de la agencia */}
-                  <div className="px-4 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50">
-                    {ag.name}
+              <>
+                {/* Cuentas Principales (Original operativa) */}
+                {unassigned.length > 0 && (
+                  <div>
+                    <div className="px-4 py-1.5 text-xs font-bold text-blue-600 uppercase tracking-wide bg-blue-50/60 flex items-center justify-between">
+                      <span>Cuenta Principal (Operativa)</span>
+                    </div>
+                    {unassigned.map((sub) => (
+                      <button
+                        key={sub.id}
+                        onClick={() => handleSwitch(sub)}
+                        className={`w-full text-left flex items-center justify-between px-4 py-2.5 hover:bg-blue-50 transition-colors ${
+                          activeTenantId === sub.id ? 'bg-blue-50' : ''
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">
+                            {sub.name || 'CRM Principal'}
+                          </p>
+                          <p className="text-xs text-gray-500">Cuenta Original con todos tus datos</p>
+                        </div>
+                        {activeTenantId === sub.id && (
+                          <Check className="w-4 h-4 text-blue-600 flex-shrink-0 ml-2" />
+                        )}
+                      </button>
+                    ))}
                   </div>
+                )}
 
-                  {/* Subcuentas de esa agencia */}
-                  {ag.subaccounts.length === 0 ? (
-                    <div className="px-4 py-2 text-xs text-gray-400 italic">Sin subcuentas</div>
-                  ) : (
-                    ag.subaccounts
-                      .filter((s) => s.status !== 'suspended')
-                      .map((sub) => (
-                        <button
-                          key={sub.id}
-                          onClick={() => handleSwitch(sub)}
-                          className={`w-full text-left flex items-center justify-between px-4 py-2.5 hover:bg-blue-50 transition-colors ${
-                            activeTenantId === sub.id ? 'bg-blue-50' : ''
-                          }`}
-                        >
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-800 truncate">{sub.name}</p>
-                            <p className="text-xs text-gray-400 capitalize">{sub.plan} · {sub.status}</p>
-                          </div>
-                          {activeTenantId === sub.id && (
-                            <Check className="w-4 h-4 text-blue-600 flex-shrink-0 ml-2" />
-                          )}
-                        </button>
-                      ))
-                  )}
-                </div>
-              ))
+                {/* Agencias y sus Subcuentas */}
+                {agencies.map((ag) => (
+                  <div key={ag.id} className="border-t border-gray-100">
+                    <div className="px-4 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50">
+                      {ag.name}
+                    </div>
+
+                    {!ag.subaccounts || ag.subaccounts.length === 0 ? (
+                      <div className="px-4 py-2 text-xs text-gray-400 italic">Sin subcuentas</div>
+                    ) : (
+                      ag.subaccounts
+                        .filter((s) => s.status !== 'suspended')
+                        .map((sub) => (
+                          <button
+                            key={sub.id}
+                            onClick={() => handleSwitch(sub)}
+                            className={`w-full text-left flex items-center justify-between px-4 py-2.5 hover:bg-blue-50 transition-colors ${
+                              activeTenantId === sub.id ? 'bg-blue-50' : ''
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-800 truncate">{sub.name}</p>
+                              <p className="text-xs text-gray-400 capitalize">
+                                {sub.plan} · {sub.status}
+                              </p>
+                            </div>
+                            {activeTenantId === sub.id && (
+                              <Check className="w-4 h-4 text-blue-600 flex-shrink-0 ml-2" />
+                            )}
+                          </button>
+                        ))
+                    )}
+                  </div>
+                ))}
+              </>
             )}
           </div>
         </div>
@@ -178,3 +227,4 @@ export default function SubaccountSwitcher() {
     </div>
   );
 }
+

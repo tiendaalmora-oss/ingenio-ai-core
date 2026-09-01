@@ -125,4 +125,28 @@ export class AgencyService {
 
     return { totalSubaccounts, activeSubaccounts, totalContacts };
   }
+
+  // ── OVERVIEW / TODAS LAS CUENTAS (INCLUIDA LA PRINCIPAL) ──
+
+  async getOverview() {
+    const [agencies, unassignedTenants] = await Promise.all([
+      this.prisma.agency.findMany({
+        include: {
+          subaccounts: {
+            select: { id: true, name: true, status: true, plan: true, createdAt: true },
+            orderBy: { createdAt: 'desc' },
+          },
+          _count: { select: { subaccounts: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.tenant.findMany({
+        where: { agencyId: null },
+        select: { id: true, name: true, status: true, plan: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+
+    return { agencies, unassignedTenants };
+  }
 }
