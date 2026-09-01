@@ -137,13 +137,50 @@ export class WahaAdapterService {
       }
 
       const result = await response.json();
-      this.logger.log(`WAHA confirmó el envío a ${chatId}. ID: ${result.id || 'N/A'}`);
-      
-      return result.id || `waha_msg_${Date.now()}`;
-    } catch (error: any) {
-      this.logger.error(`Error crítico enviando mensaje a ${chatId}: ${error.message}`);
-      throw error;
+      this.logger.log(`Mensaje entregado exitosamente a WAHA. MessageId: ${result.id || result.key?.id || 'ok'}`);
+      return result.id || result.key?.id || 'waha-msg-ok';
+    } catch (err: any) {
+      this.logger.error(`Excepción comunicando con WAHA para ${chatId}: ${err.message}`);
+      throw err;
     }
+  }
+
+  async startTyping(tenantId: string, contactIdOrPhone: string): Promise<void> {
+    try {
+      const wahaUrl = process.env.WAHA_API_URL;
+      if (!wahaUrl) return;
+      const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+      const session = process.env.WAHA_SESSION || tenant?.wahaSession || 'default';
+      const apiKey = process.env.WAHA_API_KEY || '';
+      const chatId = this.normalizeJid(contactIdOrPhone);
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (apiKey) headers['X-Api-Key'] = apiKey;
+
+      await fetch(`${wahaUrl}/api/startTyping`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ chatId, session })
+      }).catch(() => {});
+    } catch {}
+  }
+
+  async stopTyping(tenantId: string, contactIdOrPhone: string): Promise<void> {
+    try {
+      const wahaUrl = process.env.WAHA_API_URL;
+      if (!wahaUrl) return;
+      const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+      const session = process.env.WAHA_SESSION || tenant?.wahaSession || 'default';
+      const apiKey = process.env.WAHA_API_KEY || '';
+      const chatId = this.normalizeJid(contactIdOrPhone);
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (apiKey) headers['X-Api-Key'] = apiKey;
+
+      await fetch(`${wahaUrl}/api/stopTyping`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ chatId, session })
+      }).catch(() => {});
+    } catch {}
   }
 
   /**

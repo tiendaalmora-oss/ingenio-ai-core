@@ -338,7 +338,7 @@ export default function AgencyPage() {
                           className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors flex items-center gap-1"
                         >
                           <BarChart2 className="w-3 h-3" /> Ver CRM
-                        </Link>
+                        </button>
                       </div>
                     </div>
                   ))}

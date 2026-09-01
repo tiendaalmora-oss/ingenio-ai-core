@@ -113,6 +113,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       >
         <Topbar
           tenant={data.tenant}
+          tenantName={data.tenantName}
           version={data.version}
           timestamp={data.timestamp}
           health={data.health}

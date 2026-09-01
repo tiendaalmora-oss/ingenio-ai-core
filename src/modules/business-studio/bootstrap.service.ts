@@ -44,7 +44,9 @@ export class BootstrapService {
       stats,
       knowledgeSchema,
       knowledgeBundle,
-      tenant: tenantRecord ?? { id: tenantId, name: tenantId },
+      tenant: tenantId,
+      tenantName: tenantRecord?.name ?? tenantId,
+      tenantPlan: tenantRecord?.plan ?? 'starter',
       version: bundle?.version || 0,
       cacheStatus: bundle ? 'HIT' : 'MISSING',
       timestamp: new Date()

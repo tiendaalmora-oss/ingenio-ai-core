@@ -15,12 +15,13 @@ interface HealthItem {
 
 interface TopbarProps {
   tenant: string;
+  tenantName?: string;
   version: number;
   timestamp: string;
   health: HealthItem[];
 }
 
-export default function Topbar({ tenant, version, timestamp, health }: TopbarProps) {
+export default function Topbar({ tenant, tenantName, version, timestamp, health }: TopbarProps) {
   const pathname = usePathname();
   const { toggleMobileMenu } = useUiStore();
 
@@ -58,7 +59,7 @@ export default function Topbar({ tenant, version, timestamp, health }: TopbarPro
         <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 font-medium bg-gray-100 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full flex-shrink-0">
           <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 shrink-0" />
           <span className="truncate max-w-[90px] sm:max-w-[160px]">
-            {typeof tenant === 'object' && tenant !== null ? (tenant as any).name : tenant}
+            {tenantName || tenant}
           </span>
         </div>
 

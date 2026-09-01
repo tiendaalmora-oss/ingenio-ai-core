@@ -59,6 +59,10 @@ interface ReglasBotData {
   autoResetAfterTime: boolean;
   resetHours: number;
   limitReachedMessage: string;
+  enableResponseDelay: boolean;
+  minDelaySeconds: number;
+  maxDelaySeconds: number;
+  simulateTyping: boolean;
 }
 
 const DEFAULT_REGLAS_BOT: ReglasBotData = {
@@ -71,7 +75,11 @@ const DEFAULT_REGLAS_BOT: ReglasBotData = {
   respondLastMessageBeforePause: true,
   autoResetAfterTime: false,
   resetHours: 24,
-  limitReachedMessage: ''
+  limitReachedMessage: '',
+  enableResponseDelay: true,
+  minDelaySeconds: 4,
+  maxDelaySeconds: 10,
+  simulateTyping: true,
 };
 
 export default function KnowledgeEditor({ sectionKey, initialData, editable }: KnowledgeEditorProps) {
@@ -93,7 +101,11 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
       respondLastMessageBeforePause: d.respondLastMessageBeforePause !== undefined ? Boolean(d.respondLastMessageBeforePause) : true,
       autoResetAfterTime: d.autoResetAfterTime !== undefined ? Boolean(d.autoResetAfterTime) : false,
       resetHours: Number(d.resetHours) || 24,
-      limitReachedMessage: d.limitReachedMessage || ''
+      limitReachedMessage: d.limitReachedMessage || '',
+      enableResponseDelay: d.enableResponseDelay !== undefined ? Boolean(d.enableResponseDelay) : true,
+      minDelaySeconds: Math.max(1, Number(d.minDelaySeconds) || 4),
+      maxDelaySeconds: Math.max(1, Number(d.maxDelaySeconds) || 10),
+      simulateTyping: d.simulateTyping !== undefined ? Boolean(d.simulateTyping) : true,
     };
   };
 
@@ -438,6 +450,101 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
                     }}
                     className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none placeholder:text-gray-400"
                   />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Card 4: Tiempo de Respuesta & Simulación Humana ("Escribiendo...") */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  ⏳ Tiempo de Respuesta y Simulación Humana ("Escribiendo...")
+                </h4>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Evita que el bot responda de forma instantánea o robótica, agregando un intervalo de espera natural y mostrando el estado "Escribiendo..." en WhatsApp.
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={reglasData.enableResponseDelay}
+                  onChange={(e) => {
+                    setReglasData({ ...reglasData, enableResponseDelay: e.target.checked });
+                    setIsDirty(true);
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+
+            {reglasData.enableResponseDelay && (
+              <div className="space-y-4 pt-2 border-t border-gray-100">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-gray-50 rounded-xl">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-800 mb-1">
+                      Tiempo Mínimo de Espera:
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        max={60}
+                        value={reglasData.minDelaySeconds}
+                        onChange={(e) => {
+                          setReglasData({ ...reglasData, minDelaySeconds: Number(e.target.value) || 1 });
+                          setIsDirty(true);
+                        }}
+                        className="w-20 p-2 text-sm bg-white border border-gray-200 rounded-lg text-center font-bold text-blue-600 focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                      <span className="text-xs text-gray-600 font-medium">segundos</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-800 mb-1">
+                      Tiempo Máximo de Espera:
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        max={120}
+                        value={reglasData.maxDelaySeconds}
+                        onChange={(e) => {
+                          setReglasData({ ...reglasData, maxDelaySeconds: Number(e.target.value) || 1 });
+                          setIsDirty(true);
+                        }}
+                        className="w-20 p-2 text-sm bg-white border border-gray-200 rounded-lg text-center font-bold text-blue-600 focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                      <span className="text-xs text-gray-600 font-medium">segundos</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl">
+                  <div>
+                    <span className="block text-xs font-bold text-emerald-900">
+                      💬 Mostrar estado "Escribiendo..." en WhatsApp
+                    </span>
+                    <p className="text-[11px] text-emerald-700/80 mt-0.5">
+                      Activa la animación de escritura en la app del cliente mientras transcurre el tiempo de espera.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={reglasData.simulateTyping}
+                      onChange={(e) => {
+                        setReglasData({ ...reglasData, simulateTyping: e.target.checked });
+                        setIsDirty(true);
+                      }}
+                      className="sr-only peer"
+                    />
+                    <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                  </label>
                 </div>
               </div>
             )}

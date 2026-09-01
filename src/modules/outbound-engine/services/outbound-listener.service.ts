@@ -44,14 +44,43 @@ export class OutboundListenerService {
         conversation.contact.phone ||
         conversation.contactId;
 
-      // 3. Enviar usando el adaptador
+      // 3. Obtener configuración de Reglas del Bot (Tiempo de Respuesta y Simulación de Escritura)
+      const bundle = await this.prisma.knowledgeBundle.findUnique({
+        where: { tenantId: conversation.contact.tenantId }
+      });
+      const rawPrompt: any = bundle?.systemPrompt || {};
+      const rawData = rawPrompt['_raw'] || rawPrompt;
+      const reglasBot = rawData.reglasBot || {};
+
+      const enableDelay = reglasBot.enableResponseDelay !== false;
+      const minSec = Math.max(1, Number(reglasBot.minDelaySeconds) || 4);
+      const maxSec = Math.max(minSec, Number(reglasBot.maxDelaySeconds) || 10);
+      const simulateTyping = reglasBot.simulateTyping !== false;
+
+      if (enableDelay) {
+        const delaySec = Math.floor(Math.random() * (maxSec - minSec + 1)) + minSec;
+        const delayMs = delaySec * 1000;
+        this.logger.log(`[Human Typing Delay] Simulando tiempo de respuesta humano (${delaySec}s) para ${targetChatId}...`);
+
+        if (simulateTyping) {
+          await this.wahaAdapter.startTyping(conversation.contact.tenantId, targetChatId);
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+        if (simulateTyping) {
+          await this.wahaAdapter.stopTyping(conversation.contact.tenantId, targetChatId);
+        }
+      }
+
+      // 4. Enviar usando el adaptador
       const messageId = await this.wahaAdapter.sendMessage(
         conversation.contact.tenantId,
         targetChatId,
         payload.generatedContent
       );
 
-      // 3. Emitir mensaje enviado
+      // 5. Emitir mensaje enviado
       this.eventEmitter.emit(
         'message.sent',
         new MessageSentEvent(payload.tenantId, payload.conversationId, messageId, channel)
