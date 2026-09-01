@@ -3,9 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Building2, ChevronDown, Check, Loader2, Plus } from 'lucide-react';
 import Link from 'next/link';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://core.ai.ingeniodigital.shop';
-const API_KEY = process.env.NEXT_PUBLIC_ADMIN_API_KEY || '';
+import api from '@/services/api';
 
 interface Subaccount {
   id: string;
@@ -50,19 +48,13 @@ export default function SubaccountSwitcher() {
     if (agencies.length > 0) return; // ya cargadas
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/agency`, {
-        headers: { 'x-api-key': API_KEY, 'Content-Type': 'application/json' },
-      });
-      const data: Agency[] = await res.json();
+      const { data } = await api.get<Agency[]>('/agency');
 
       // Para cada agencia, cargar sus subcuentas
       const withSubs: Agency[] = await Promise.all(
         data.map(async (ag: Agency) => {
-          const subRes = await fetch(`${API_URL}/agency/${ag.id}/subaccounts`, {
-            headers: { 'x-api-key': API_KEY },
-          });
-          const subs: Subaccount[] = await subRes.json();
-          return { ...ag, subaccounts: subs } as Agency;
+          const subRes = await api.get<Subaccount[]>(`/agency/${ag.id}/subaccounts`);
+          return { ...ag, subaccounts: subRes.data } as Agency;
         }),
       );
       setAgencies(withSubs);
@@ -75,6 +67,8 @@ export default function SubaccountSwitcher() {
           if (found) { setActiveName(found.name); break; }
         }
       }
+    } catch {
+      // silenciar error si no hay agencias todavía
     } finally {
       setLoading(false);
     }

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import PageContainer from '@/components/PageContainer';
 import PageHeader from '@/components/PageHeader';
+import api from '@/services/api';
 import {
   Building2,
   Plus,
@@ -14,15 +15,8 @@ import {
   ChevronRight,
   BarChart2,
   Loader2,
+  AlertCircle,
 } from 'lucide-react';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-const API_KEY = process.env.NEXT_PUBLIC_ADMIN_API_KEY;
-
-const headers = {
-  'Content-Type': 'application/json',
-  'x-api-key': API_KEY || '',
-};
 
 // ── Tipos ─────────────────────────────────────────────────────
 
@@ -104,9 +98,10 @@ export default function AgencyPage() {
   async function fetchAgencies() {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/agency`, { headers });
-      const data = await res.json();
+      const { data } = await api.get('/agency');
       setAgencies(Array.isArray(data) ? data : []);
+    } catch {
+      setAgencies([]);
     } finally {
       setLoading(false);
     }
@@ -117,11 +112,13 @@ export default function AgencyPage() {
     setLoadingSubs(true);
     try {
       const [subRes, statsRes] = await Promise.all([
-        fetch(`${API_URL}/agency/${agency.id}/subaccounts`, { headers }),
-        fetch(`${API_URL}/agency/${agency.id}/stats`, { headers }),
+        api.get(`/agency/${agency.id}/subaccounts`),
+        api.get(`/agency/${agency.id}/stats`),
       ]);
-      setSubaccounts(await subRes.json());
-      setStats(await statsRes.json());
+      setSubaccounts(subRes.data);
+      setStats(statsRes.data);
+    } catch {
+      setSubaccounts([]);
     } finally {
       setLoadingSubs(false);
     }
@@ -133,16 +130,12 @@ export default function AgencyPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/agency`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(newAgency),
-      });
-      if (res.ok) {
-        setShowNewAgency(false);
-        setNewAgency({ name: '', ownerEmail: '', plan: 'free' });
-        fetchAgencies();
-      }
+      await api.post('/agency', newAgency);
+      setShowNewAgency(false);
+      setNewAgency({ name: '', ownerEmail: '', plan: 'free' });
+      fetchAgencies();
+    } catch (err: any) {
+      alert(err?.response?.data?.message || 'Error al crear la agencia');
     } finally {
       setSaving(false);
     }
@@ -155,16 +148,12 @@ export default function AgencyPage() {
     if (!selected) return;
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/agency/${selected.id}/subaccounts`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(newSub),
-      });
-      if (res.ok) {
-        setShowNewSub(false);
-        setNewSub({ name: '', plan: 'starter' });
-        selectAgency(selected);
-      }
+      await api.post(`/agency/${selected.id}/subaccounts`, newSub);
+      setShowNewSub(false);
+      setNewSub({ name: '', plan: 'starter' });
+      selectAgency(selected);
+    } catch (err: any) {
+      alert(err?.response?.data?.message || 'Error al crear la subcuenta');
     } finally {
       setSaving(false);
     }
@@ -173,11 +162,11 @@ export default function AgencyPage() {
   // ── Cambiar estado subcuenta ─────────────────────────────
 
   async function handleStatusChange(tenantId: string, status: 'active' | 'paused' | 'suspended') {
-    await fetch(`${API_URL}/agency/subaccounts/${tenantId}/status`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({ status }),
-    });
+    try {
+      await api.patch(`/agency/subaccounts/${tenantId}/status`, { status });
+    } catch {
+      alert('Error al cambiar el estado');
+    }
     if (selected) selectAgency(selected);
   }
 
