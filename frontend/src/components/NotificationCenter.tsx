@@ -1,7 +1,7 @@
 ﻿'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Bell, UserCheck, DollarSign, Flame, ArrowRight, ExternalLink, X, CheckCheck } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Bell, UserCheck, DollarSign, Flame, ArrowRight, ExternalLink, X, CheckCheck, Sparkles, AlertCircle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../services/api';
 import Link from 'next/link';
@@ -14,7 +14,7 @@ export default function NotificationCenter() {
   const router = useRouter();
 
   // Load dismissed alert IDs from localStorage
-  useEffect(() => {
+  const loadDismissed = useCallback(() => {
     if (typeof window !== 'undefined') {
       try {
         const stored = localStorage.getItem('crm_dismissed_alerts');
@@ -22,6 +22,13 @@ export default function NotificationCenter() {
       } catch {}
     }
   }, []);
+
+  useEffect(() => {
+    loadDismissed();
+    const handleSync = () => loadDismissed();
+    window.addEventListener('crm_alerts_updated', handleSync);
+    return () => window.removeEventListener('crm_alerts_updated', handleSync);
+  }, [loadDismissed]);
 
   const saveDismissed = (newDismissed: string[]) => {
     setDismissedIds(newDismissed);
@@ -32,14 +39,14 @@ export default function NotificationCenter() {
     }
   };
 
-  // Poll alerts every 5 seconds for real-time notifications
+  // Poll alerts every 4 seconds for real-time notifications
   const { data } = useQuery({
     queryKey: ['operator-alerts'],
     queryFn: async () => {
       const res = await api.get('/crm/alerts');
       return res.data;
     },
-    refetchInterval: 5000,
+    refetchInterval: 4000,
   });
 
   const rawAlerts: any[] = data?.alerts || [];
@@ -60,9 +67,12 @@ export default function NotificationCenter() {
 
   const handleAlertClick = (alert: any) => {
     // Dismiss clicked alert so it won't keep nagging
-    saveDismissed([...dismissedIds, alert.id]);
+    saveDismissed(Array.from(new Set([...dismissedIds, alert.id])));
     setIsOpen(false);
     if (alert.conversationId) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('crm_open_conversation', { detail: { conversationId: alert.conversationId } }));
+      }
       router.push(`/conversations?id=${alert.conversationId}`);
     } else {
       router.push(`/crm`);
@@ -71,7 +81,7 @@ export default function NotificationCenter() {
 
   const handleDismissOne = (e: React.MouseEvent, alertId: string) => {
     e.stopPropagation();
-    saveDismissed([...dismissedIds, alertId]);
+    saveDismissed(Array.from(new Set([...dismissedIds, alertId])));
   };
 
   const handleClearAll = (e: React.MouseEvent) => {
@@ -87,17 +97,17 @@ export default function NotificationCenter() {
         onClick={() => setIsOpen(!isOpen)}
         className={`relative p-2 rounded-xl transition-all duration-200 ${
           urgentCount > 0
-            ? 'text-amber-600 bg-amber-50 hover:bg-amber-100 hover:text-amber-700 shadow-xs'
+            ? 'text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-700 shadow-xs'
             : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
         }`}
-        title={urgentCount > 0 ? `${urgentCount} alertas de operador pendientes` : 'Centro de Notificaciones'}
+        title={urgentCount > 0 ? `${urgentCount} alertas prioritarias pendientes` : 'Centro de Notificaciones'}
       >
         <Bell className="w-5 h-5" />
         
         {urgentCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex h-5 w-5 items-center justify-center">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-4 w-4 bg-red-600 text-white text-[10px] font-bold items-center justify-center shadow-xs">
+          <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+            <span className="relative inline-flex rounded-full h-4 w-4 bg-red-600 text-white text-[10px] font-extrabold items-center justify-center shadow-xs">
               {urgentCount > 9 ? '9+' : urgentCount}
             </span>
           </span>
@@ -106,13 +116,13 @@ export default function NotificationCenter() {
 
       {/* Dropdown Panel */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+        <div className="absolute right-0 mt-2 w-84 sm:w-[420px] bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
           {/* Header */}
           <div className="p-3.5 bg-slate-900 text-white flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Bell className="w-4 h-4 text-amber-400" />
               <h4 className="text-xs font-bold uppercase tracking-wider">
-                Alertas de Asesor y Pagos
+                Panel de Alertas y Prioridades
               </h4>
             </div>
             <div className="flex items-center gap-2">
@@ -123,19 +133,19 @@ export default function NotificationCenter() {
                   title="Marcar todas como leídas"
                 >
                   <CheckCheck className="w-3 h-3" />
-                  Limpiar
+                  Limpiar Todo
                 </button>
               )}
               {urgentCount > 0 && (
-                <span className="px-2 py-0.5 bg-red-500/90 text-white text-[10px] font-bold rounded-full">
-                  {urgentCount} urgentes
+                <span className="px-2 py-0.5 bg-red-500 text-white text-[10px] font-extrabold rounded-full animate-pulse">
+                  {urgentCount} URGENTES
                 </span>
               )}
             </div>
           </div>
 
           {/* List */}
-          <div className="max-h-96 overflow-y-auto divide-y divide-gray-100">
+          <div className="max-h-[420px] overflow-y-auto divide-y divide-gray-100">
             {alerts.length === 0 ? (
               <div className="p-8 text-center text-xs text-gray-400 space-y-1">
                 <p className="font-semibold text-gray-600">¡Todo al día!</p>
@@ -145,47 +155,61 @@ export default function NotificationCenter() {
               alerts.map((al: any) => {
                 const isPayment = al.type === 'PAYMENT';
                 const isHandoff = al.type === 'HANDOFF';
+                const isCritical = al.priority === 'CRITICAL';
+                const isHigh = al.priority === 'HIGH';
 
                 return (
                   <div
                     key={al.id}
                     onClick={() => handleAlertClick(al)}
                     className={`group p-3.5 text-left transition hover:bg-gray-50 cursor-pointer flex gap-3 relative ${
-                      isPayment ? 'bg-emerald-50/40 hover:bg-emerald-50/70' :
-                      isHandoff ? 'bg-amber-50/40 hover:bg-amber-50/70' :
-                      'bg-white'
+                      isCritical ? 'bg-emerald-50/50 hover:bg-emerald-50/80 border-l-4 border-l-emerald-500' :
+                      isHigh ? 'bg-amber-50/50 hover:bg-amber-50/80 border-l-4 border-l-amber-500' :
+                      'bg-white hover:bg-gray-50 border-l-4 border-l-blue-400'
                     }`}
                   >
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-xs ${
-                      isPayment ? 'bg-emerald-600 shadow-emerald-200 shadow-sm' :
-                      isHandoff ? 'bg-amber-600 shadow-amber-200 shadow-sm' :
-                      'bg-orange-500 shadow-orange-200 shadow-sm'
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-white font-bold text-xs shadow-xs ${
+                      isPayment ? 'bg-emerald-600 shadow-emerald-200' :
+                      isHandoff ? 'bg-amber-600 shadow-amber-200' :
+                      'bg-orange-500 shadow-orange-200'
                     }`}>
-                      {isPayment ? <DollarSign className="w-4 h-4" /> :
-                       isHandoff ? <UserCheck className="w-4 h-4" /> :
-                       <Flame className="w-4 h-4" />}
+                      {isPayment ? <DollarSign className="w-5 h-5" /> :
+                       isHandoff ? <UserCheck className="w-5 h-5" /> :
+                       <Flame className="w-5 h-5" />}
                     </div>
 
                     <div className="flex-1 min-w-0 pr-4">
-                      <div className="flex items-center justify-between gap-1 mb-0.5">
-                        <p className="text-xs font-bold text-gray-900 truncate">
-                          {al.title}
-                        </p>
-                        <span className="text-[10px] text-gray-400 shrink-0">
+                      {/* Badge and Time */}
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-extrabold tracking-wide uppercase ${
+                          isPayment ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                          isHandoff ? 'bg-amber-100 text-amber-900 border border-amber-300' :
+                          'bg-orange-100 text-orange-900 border border-orange-300'
+                        }`}>
+                          {al.tagLabel || (isPayment ? 'PAGO ENVIADO' : isHandoff ? 'ASESOR SOLICITADO' : 'LEAD CALIENTE')}
+                        </span>
+                        <span className="text-[10px] text-gray-400 shrink-0 font-medium">
                           {al.timestamp ? new Date(al.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                         </span>
                       </div>
 
-                      <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed mb-1">
+                      {/* Title */}
+                      <p className="text-xs font-bold text-gray-900 leading-snug mb-1">
+                        {al.title}
+                      </p>
+
+                      {/* Description */}
+                      <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed mb-2 bg-white/70 p-1.5 rounded-lg border border-gray-100 font-normal">
                         {al.description}
                       </p>
 
+                      {/* Contact and Action */}
                       <div className="flex items-center justify-between text-[11px] text-blue-600 font-medium">
-                        <span className="truncate text-gray-500 font-normal">
-                          {al.contactName} • {al.contactPhone}
+                        <span className="truncate text-gray-700 font-semibold max-w-[180px]">
+                          {al.contactName} {al.contactPhone ? `• ${al.contactPhone}` : ''}
                         </span>
-                        <span className="inline-flex items-center gap-1 font-bold shrink-0 ml-1">
-                          Ver chat <ArrowRight className="w-3 h-3" />
+                        <span className="inline-flex items-center gap-1 font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md hover:bg-blue-100 transition shrink-0 ml-1 shadow-xs">
+                          {al.actionLabel || 'Ver chat'} <ArrowRight className="w-3 h-3" />
                         </span>
                       </div>
                     </div>
@@ -193,7 +217,7 @@ export default function NotificationCenter() {
                     {/* Dismiss (X) button */}
                     <button
                       onClick={(e) => handleDismissOne(e, al.id)}
-                      className="absolute top-3 right-3 text-gray-300 hover:text-gray-600 p-1 rounded-md hover:bg-gray-200/60 opacity-60 group-hover:opacity-100 transition"
+                      className="absolute top-2.5 right-2.5 text-gray-300 hover:text-gray-700 p-1 rounded-md hover:bg-gray-200/70 opacity-60 group-hover:opacity-100 transition"
                       title="Descartar notificación"
                     >
                       <X className="w-3.5 h-3.5" />

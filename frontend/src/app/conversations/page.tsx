@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
 import api from '@/services/api';
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton';
 import EmptyState from '@/components/ui/EmptyState';
@@ -25,10 +26,13 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-export default function ConversationsPage() {
+function ConversationsView() {
+  const searchParams = useSearchParams();
+  const urlConvId = searchParams ? searchParams.get('id') : null;
+
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
+  const [selectedConvId, setSelectedConvId] = useState<string | null>(urlConvId || null);
   const [replyText, setReplyText] = useState('');
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -37,6 +41,23 @@ export default function ConversationsPage() {
   const { addToast } = useToast();
 
   const [showCrmDrawer, setShowCrmDrawer] = useState(false);
+
+  // Sync selected conversation when URL param 'id' changes or custom event fires
+  useEffect(() => {
+    if (urlConvId) {
+      setSelectedConvId(urlConvId);
+    }
+  }, [urlConvId]);
+
+  useEffect(() => {
+    const handleOpen = (e: any) => {
+      if (e?.detail?.conversationId) {
+        setSelectedConvId(e.detail.conversationId);
+      }
+    };
+    window.addEventListener('crm_open_conversation', handleOpen);
+    return () => window.removeEventListener('crm_open_conversation', handleOpen);
+  }, []);
 
   // 1. Fetch conversations list
   const { 
@@ -57,14 +78,14 @@ export default function ConversationsPage() {
     refetchInterval: 4000, // Poll every 4 seconds for new live chats
   });
 
-  // Auto-select first conversation only on desktop screens
+  // Auto-select first conversation on desktop only if no conversation is selected from URL
   useEffect(() => {
     if (typeof window !== 'undefined' && window.innerWidth >= 768) {
-      if (convsData?.data && convsData.data.length > 0 && !selectedConvId) {
+      if (convsData?.data && convsData.data.length > 0 && !selectedConvId && !urlConvId) {
         setSelectedConvId(convsData.data[0].id);
       }
     }
-  }, [convsData, selectedConvId]);
+  }, [convsData, selectedConvId, urlConvId]);
 
   // 2. Fetch selected conversation detail
   const { data: currentConv } = useQuery({
@@ -97,6 +118,25 @@ export default function ConversationsPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messagesData]);
+
+  // When the operator enters/views a conversation, auto-dismiss any alert for that conversation/contact
+  useEffect(() => {
+    if (selectedConvId && typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('crm_dismissed_alerts');
+        const dismissed: string[] = stored ? JSON.parse(stored) : [];
+        const toAdd = [`handoff-${selectedConvId}`];
+        if (currentConv?.contact?.id) {
+          toAdd.push(`pay-${currentConv.contact.id}`, `hot-${currentConv.contact.id}`);
+        }
+        const updated = Array.from(new Set([...dismissed, ...toAdd]));
+        if (updated.length !== dismissed.length) {
+          localStorage.setItem('crm_dismissed_alerts', JSON.stringify(updated));
+          window.dispatchEvent(new Event('crm_alerts_updated'));
+        }
+      } catch {}
+    }
+  }, [selectedConvId, currentConv]);
 
   // 4. Send manual human message mutation
   const sendMutation = useMutation({
@@ -696,5 +736,13 @@ export default function ConversationsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ConversationsPage() {
+  return (
+    <Suspense fallback={<LoadingSkeleton />}>
+      <ConversationsView />
+    </Suspense>
   );
 }
