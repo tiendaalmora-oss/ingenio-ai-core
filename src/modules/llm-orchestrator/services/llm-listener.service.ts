@@ -347,9 +347,37 @@ export class LlmListenerService {
       const currentTags = (memory?.tags as string[]) || [];
       const newTags = new Set(currentTags);
 
-      const isPaymentMsg = textNorm.includes('comprobante') || textNorm.includes('transferi') || textNorm.includes('pague') || textNorm.includes('pago realizado') || (payload.content || '').includes('[Comprobante de Pago');
-      const isHotMsg = textNorm.includes('precio') || textNorm.includes('costo') || textNorm.includes('cuanto vale') || textNorm.includes('como pago') || textNorm.includes('datos de pago') || textNorm.includes('pago movil') || textNorm.includes('transferencia') || textNorm.includes('quiero comprar') || textNorm.includes('comprar');
-      const isWarmMsg = textNorm.includes('me interesa') || textNorm.includes('informacion') || textNorm.includes('tienen de') || textNorm.includes('kit') || textNorm.includes('docente') || textNorm.includes('profesor') || textNorm.includes('para que ano') || textNorm.includes('bachillerato');
+      // Detección estricta y segura de comprobante de pago real (sin falsos positivos por preguntas)
+      const hasImageVoucher = (payload.content || '').includes('[Comprobante de Pago');
+      const isExplicitPaymentProof = 
+        textNorm.includes('ya transferi') || 
+        textNorm.includes('ya pague') || 
+        textNorm.includes('ya realice el pago') || 
+        textNorm.includes('listo el pago') || 
+        textNorm.includes('pago listo') || 
+        textNorm.includes('te envie el pago') || 
+        textNorm.includes('aqui esta el capture') || 
+        textNorm.includes('aqui esta el comprobante') || 
+        textNorm.includes('adjunto el capture') || 
+        textNorm.includes('adjunto el comprobante') || 
+        textNorm.includes('adjunto capture') || 
+        textNorm.includes('adjunto comprobante') || 
+        /(ref|referencia|nro comprobante|operacion)[\s#:]*\d{4,}/i.test(textNorm);
+
+      const isQuestionOrInquiry = 
+        textNorm.includes('?') || 
+        textNorm.includes('donde') || 
+        textNorm.includes('como') || 
+        textNorm.includes('cuando') || 
+        textNorm.includes('si pago') || 
+        textNorm.includes('para pagar') || 
+        textNorm.includes('puedo pagar') || 
+        textNorm.includes('cuanto tarda');
+
+      const isPaymentMsg = hasImageVoucher || (isExplicitPaymentProof && !isQuestionOrInquiry);
+
+      const isHotMsg = textNorm.includes('precio') || textNorm.includes('costo') || textNorm.includes('cuanto vale') || textNorm.includes('como pago') || textNorm.includes('datos de pago') || textNorm.includes('pago movil') || textNorm.includes('transferencia') || textNorm.includes('quiero comprar') || textNorm.includes('comprar') || textNorm.includes('cuenta');
+      const isWarmMsg = textNorm.includes('me interesa') || textNorm.includes('informacion') || textNorm.includes('tienen de') || textNorm.includes('kit') || textNorm.includes('docente') || textNorm.includes('profesor') || textNorm.includes('para que ano') || textNorm.includes('bachillerato') || textNorm.includes('primaria');
 
       if (isPaymentMsg) {
         nextStatus = 'CLOSED';
