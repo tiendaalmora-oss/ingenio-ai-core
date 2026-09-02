@@ -88,11 +88,12 @@ const SECTION_FORM_CONFIGS: Record<string, { title: string; subtitle: string; fi
     ],
   },
   seguimientos: {
-    title: 'Regla de Seguimiento',
-    subtitle: 'Reactivación inteligente de prospectos según el tiempo y el estado del chat.',
+    title: 'Regla de Seguimiento Inteligente (Reactivación con IA)',
+    subtitle: 'Hermes analiza el contexto del chat y genera un mensaje creativo único sin repetir el mismo texto.',
     fields: [
-      { key: 'tiempo', label: 'Momento de Activación (Horas / Días)', placeholder: 'Ej: 2 horas / 24 horas / 48 horas', type: 'text', required: true },
-      { key: 'mensaje', label: 'Mensaje Sugerido (Opcional: Hermes creará uno con IA si lo dejas vacío)', placeholder: 'Déjalo en blanco para que Hermes genere una pregunta contextual con IA, o escribe un texto como: "Hola {nombre}, ¿pudiste revisar el kit?"', type: 'textarea' },
+      { key: 'tiempo', label: '1. Momento de Activación (Horas o Días de inactividad)', placeholder: 'Ej: 2 horas / 24 horas / 48 horas', type: 'text', required: true },
+      { key: 'enfoque', label: '2. 🎯 Enfoque o Ángulo Comercial', placeholder: 'Ej: Recordatorio de Ahorro de Tiempo / Cupo y Oferta Reservada / Pregunta de Ayuda y Muestra / Consulta de Pago', type: 'text' },
+      { key: 'pautaCreativa', label: '3. 💡 Pauta o Instrucción para la IA (Opcional)', placeholder: 'Describe la idea principal que quieres que Hermes use creativamente. Ej: Resaltar que las evaluaciones vienen listas con escala de estimación y preguntarle si necesita el material para esta semana.', type: 'textarea' },
     ],
   },
   soporte: {

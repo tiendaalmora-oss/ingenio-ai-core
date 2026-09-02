@@ -104,13 +104,41 @@ export class PromptComposerService {
 
     // 8. Add Current Message or Follow-Up trigger
     if (mode === PromptMode.FOLLOW_UP) {
-      const ruleText = typeof followUpRule === 'string' 
-        ? followUpRule 
-        : (followUpRule?.instruccion || followUpRule?.condicion || followUpRule?.mensaje || followUpRule?.tiempo || 'Retomar contacto amablemente');
-      
+      const ruleObj = typeof followUpRule === 'object' ? followUpRule : {};
+      const ruleText = typeof followUpRule === 'string'
+        ? followUpRule
+        : (ruleObj.pautaCreativa || ruleObj.enfoque || ruleObj.instruccion || ruleObj.mensaje || ruleObj.condicion || ruleObj.tiempo || 'Reactivar la conversación con una pregunta de interés');
+
+      // Extraer los últimos mensajes que envió el bot para prohibir repeticiones
+      const pastBotMessages = history
+        .filter((h: any) => h.role === 'assistant' || h.direction === 'OUTBOUND')
+        .slice(-4)
+        .map((h: any) => `"${(h.content || '').substring(0, 120).trim()}..."`);
+
+      const pastContextNotice = pastBotMessages.length > 0
+        ? `\nÚLTIMOS MENSAJES YA ENVIADOS POR EL BOT (¡PROHIBIDO REPETIR ESTAS PALABRAS, ESTRUCTURA O PREGUNTAS!):\n${pastBotMessages.join('\n')}`
+        : '';
+
+      const leadState = memory?.leadStatus || 'COLD';
+      const interestedProduct = memory?.interests?.[0] || 'el material pedagógico';
+
       messages.push({
         role: 'user',
-        content: `[INSTRUCCIÓN DE SEGUIMIENTO AUTOMÁTICO]: El cliente lleva un tiempo sin responder. Redacta un mensaje de WhatsApp corto, amable y persuasivo aplicando esta pauta: "${ruleText}". Menciona su nombre o el producto de interés si lo conoces, y hazle una pregunta clara para continuar la conversación.`
+        content: `[MISIÓN: SEGUIMIENTO COMERCIAL CREATIVO Y PERSUASIVO - CERO REPETICIÓN]
+El cliente lleva un tiempo en silencio. Tu objetivo es reactivar la conversación con un mensaje de WhatsApp fresco, espontáneo, cálido y diseñado para que el cliente responda con ganas.
+
+🎯 PAUTA / ENFOQUE DEL SEGUIMIENTO: "${ruleText}"
+👤 ESTADO DEL PROSPECTO: ${leadState} | INTERÉS: ${interestedProduct}${pastContextNotice}
+
+REGLAS DE ORO DE COPYWRITING PARA REACTIVACIÓN:
+1. 🚫 CERO REPETICIÓN: Usa un ángulo totalmente distinto al de tus mensajes anteriores. NO repitas saludos idénticos ni la misma pregunta anterior.
+2. 💡 ÁNGULOS CREATIVOS RECOMENDADOS SEGÚN EL CASO:
+   - Si el cliente ya vio el precio: Pregúntale amablemente si tuvo algún problema con su banco/Pago Móvil o si prefiere pagar en otra moneda/método.
+   - Si estaba viendo los contenidos: Resáltale un beneficio práctico (ej: "las evaluaciones ya vienen listas con su escala de estimación y te ahorran más de 15 horas de trabajo").
+   - Empatía docente: Conéctate con su realidad ("Hola profe, sé que planificar la semana de clases siempre toma mucho tiempo...").
+3. ⚡ ULTRA CONCISO: Máximo 2 a 3 líneas breves de WhatsApp. Directo al grano y agradable a la vista.
+4. ❓ PREGUNTA FINAL DE BAJA FRICCIÓN: Termina con UNA sola pregunta súper sencilla de responder (ej: "¿Te paso una muestra de cómo vienen organizadas las evaluaciones?", "¿Pudiste chequear los datos bancarios?", "¿Aún te gustaría que te aparte el kit con el precio promocional?").
+5. ✨ TONO: Espontáneo, humano, empático, sin sonar como un robot de cobranza.`
       });
     } else if (currentMessage) {
       // Only append if it's not the last message in history
