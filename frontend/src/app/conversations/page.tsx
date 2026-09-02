@@ -25,6 +25,7 @@ import {
   Trash2
 } from 'lucide-react';
 import Link from 'next/link';
+import QuickRepliesBar from '@/features/conversations/QuickRepliesBar';
 
 function ConversationsView() {
   const searchParams = useSearchParams();
@@ -519,20 +520,36 @@ function ConversationsView() {
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Quick Replies Bar */}
+          <QuickRepliesBar
+            tenantId={currentConv?.contact?.tenantId}
+            onSelectReply={(text) => {
+              setReplyText(text);
+            }}
+          />
+
           {/* Reply Box */}
-          <div className="p-4 bg-white border-t border-gray-200">
-            <form onSubmit={handleSendMessage} className="flex gap-2 items-center">
-              <input
-                type="text"
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                placeholder="Escribe una respuesta manual (se enviará por WhatsApp)..."
-                className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none"
-              />
+          <div className="p-3 bg-white border-t border-gray-200">
+            <form onSubmit={handleSendMessage} className="flex gap-2 items-end">
+              <div className="flex-1 relative">
+                <textarea
+                  rows={replyText.includes('\n') ? 3 : 1}
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage(e);
+                    }
+                  }}
+                  placeholder="Escribe una respuesta manual o pulsa una Respuesta Rápida (Enter para enviar, Shift+Enter nueva línea)..."
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs leading-relaxed focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none resize-none"
+                />
+              </div>
               <button
                 type="submit"
                 disabled={!replyText.trim() || sendMutation.isPending}
-                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition disabled:opacity-50"
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition disabled:opacity-50 shrink-0 h-[38px]"
               >
                 <Send className="w-3.5 h-3.5" />
                 {sendMutation.isPending ? 'Enviando...' : 'Enviar'}
