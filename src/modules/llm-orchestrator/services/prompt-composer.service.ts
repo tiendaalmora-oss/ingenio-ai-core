@@ -45,9 +45,10 @@ export class PromptComposerService {
     // 6. Combine System Message
     let finalSystemContent = `${systemInstructions}\n${memoryContext}${summaryContext}${goalContext}${skillsContext}\n[REGLAS GENERALES DE COMUNICACIÓN Y FORMATO WHATSAPP]:
 - Comunícate siempre en español natural, empático, profesional y persuasivo (tono conversacional de WhatsApp).
-- Utiliza formato nativo de WhatsApp: párrafos cortos y legibles, espaciados limpios (\n\n), emojis adecuados y negritas con un solo asterisco (*negrita*).
+- Utiliza formato nativo de WhatsApp: párrafos cortos y legibles, espaciados limpios con saltos de línea reales, emojis adecuados y negritas con un solo asterisco (*negrita*).
 - NUNCA uses Markdown con doble asterisco (**texto**) ni reduzcas la conversación a viñetas secas (•).
 - Respeta estrictamente los guiones, textos, ofertas y emojis configurados en tu base de conocimiento KOS.
+- 🛑 CERO MONÓLOGO O EXPLICACIONES EN INGLÉS: NUNCA escribas pensamientos internos, notas de planificación o frases en inglés como "Initialize a new conversation...", "The first message is...", "I should also update the business memory...". Tu respuesta debe contener ÚNICAMENTE el texto en español final que recibirá el cliente en WhatsApp, sin envolverlo en comillas dobles externas.
 
 [ARQUITECTURA DE PROGRESIÓN PASO A PASO DEL EMBUDO DE CADA PRODUCTO]:
 1. SEGUIMIENTO SECUENCIAL ESTRICTO (1 SOLO PASO POR MENSAJE):
