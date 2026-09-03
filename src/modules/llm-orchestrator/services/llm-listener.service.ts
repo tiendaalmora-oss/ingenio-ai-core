@@ -379,9 +379,60 @@ export class LlmListenerService {
       const isHotMsg = textNorm.includes('precio') || textNorm.includes('costo') || textNorm.includes('cuanto vale') || textNorm.includes('como pago') || textNorm.includes('datos de pago') || textNorm.includes('pago movil') || textNorm.includes('transferencia') || textNorm.includes('quiero comprar') || textNorm.includes('comprar') || textNorm.includes('cuenta');
       const isWarmMsg = textNorm.includes('me interesa') || textNorm.includes('informacion') || textNorm.includes('tienen de') || textNorm.includes('kit') || textNorm.includes('docente') || textNorm.includes('profesor') || textNorm.includes('para que ano') || textNorm.includes('bachillerato') || textNorm.includes('primaria');
 
-      if (isPaymentMsg) {
+      if (isPaymentMsg && reglasBot.autoPausePayment !== false) {
+        this.logger.log(`[Reglas Bot / Pagos] Detectado comprobante de pago ("${payload.content}"). Pausando bot permanentemente para atención humana y entrega.`);
+        
+        // 1. Pausar conversación en HANDOFF
+        await this.prisma.conversation.update({
+          where: { id: payload.conversationId },
+          data: { status: 'HANDOFF' }
+        });
+
+        // 2. Actualizar Business Memory a CLOSED con tags de pago
+        newTags.add('PAGO_CONFIRMADO');
+        newTags.add('COMPROBANTE_RECIBIDO');
+        await this.prisma.businessMemory.upsert({
+          where: { contactId: payload.contactId },
+          create: {
+            contactId: payload.contactId,
+            leadStatus: 'CLOSED',
+            tags: Array.from(newTags),
+          },
+          update: {
+            leadStatus: 'CLOSED',
+            tags: Array.from(newTags),
+          }
+        });
+
+        // 3. Cancelar seguimientos automáticos pendientes
+        await this.prisma.pendingOutboundMessage.deleteMany({
+          where: { conversationId: payload.conversationId }
+        });
+
+        // 4. Enviar mensaje de recepción de comprobante y aviso de entrega por asesor
+        const paymentAckMsg = (reglasBot.paymentReceivedMessage || '').trim() || 
+          '¡Muchas gracias! 🎉 Hemos recibido tu comprobante de pago. En breve un asesor de nuestro equipo verificará los datos de la transferencia y te entregará el acceso a tu material por este medio. ¡Quedamos a tu completa orden!';
+
+        await this.prisma.interaction.create({
+          data: {
+            conversationId: payload.conversationId,
+            direction: 'OUTBOUND',
+            type: 'TEXT',
+            content: paymentAckMsg,
+            role: 'assistant'
+          }
+        });
+
+        this.eventEmitter.emit('response.generated', new ResponseGeneratedEvent(
+          payload.tenantId,
+          payload.conversationId,
+          paymentAckMsg
+        ));
+        return;
+      } else if (isPaymentMsg) {
         nextStatus = 'CLOSED';
         newTags.add('PAGO_CONFIRMADO');
+        newTags.add('COMPROBANTE_RECIBIDO');
       } else if (isHotMsg && currentStatus !== 'CLOSED') {
         nextStatus = 'HOT';
         newTags.add('PIDIO_PRECIO');

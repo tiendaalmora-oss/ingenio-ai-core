@@ -53,6 +53,8 @@ interface ReglasBotData {
   optOutMessage: string;
   autoPauseHandoff: boolean;
   handoffMessage: string;
+  autoPausePayment: boolean;
+  paymentReceivedMessage: string;
   enableMessageLimit: boolean;
   maxBotMessages: number;
   respondLastMessageBeforePause: boolean;
@@ -70,6 +72,8 @@ const DEFAULT_REGLAS_BOT: ReglasBotData = {
   optOutMessage: 'Entendido perfectamente. Agradecemos mucho tu tiempo y honestidad. ¡Que tengas un excelente día!',
   autoPauseHandoff: true,
   handoffMessage: 'Con gusto. En breve un asesor humano de nuestro equipo continuará la conversación contigo por acá.',
+  autoPausePayment: true,
+  paymentReceivedMessage: '¡Muchas gracias! 🎉 Hemos recibido tu comprobante de pago. En breve un asesor de nuestro equipo verificará los datos de la transferencia y te entregará el acceso a tu material por este medio. ¡Quedamos a tu completa orden!',
   enableMessageLimit: true,
   maxBotMessages: 10,
   respondLastMessageBeforePause: true,
@@ -96,6 +100,8 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
       optOutMessage: d.optOutMessage || DEFAULT_REGLAS_BOT.optOutMessage,
       autoPauseHandoff: d.autoPauseHandoff !== undefined ? Boolean(d.autoPauseHandoff) : true,
       handoffMessage: d.handoffMessage || DEFAULT_REGLAS_BOT.handoffMessage,
+      autoPausePayment: d.autoPausePayment !== undefined ? Boolean(d.autoPausePayment) : true,
+      paymentReceivedMessage: d.paymentReceivedMessage || DEFAULT_REGLAS_BOT.paymentReceivedMessage,
       enableMessageLimit: d.enableMessageLimit !== undefined ? Boolean(d.enableMessageLimit) : true,
       maxBotMessages: Number(d.maxBotMessages) || 10,
       respondLastMessageBeforePause: d.respondLastMessageBeforePause !== undefined ? Boolean(d.respondLastMessageBeforePause) : true,
@@ -342,7 +348,50 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
             )}
           </div>
 
-          {/* Card 3: Message Limit & Auto-Reset (Token Saver & Flow Preserver) */}
+          {/* Card 3: Payment Receipt Auto-Pause */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  💰 Auto-Pausa por Recepción de Comprobante de Pago
+                </h4>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Pausa el bot de inmediato y cancela seguimientos cuando el cliente envía su comprobante de pago o capture de transferencia, alertando al asesor para verificar y entregar el material.
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={reglasData.autoPausePayment}
+                  onChange={(e) => {
+                    setReglasData({ ...reglasData, autoPausePayment: e.target.checked });
+                    setIsDirty(true);
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+              </label>
+            </div>
+
+            {reglasData.autoPausePayment && (
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                  Mensaje de confirmación enviado al cliente al recibir el pago:
+                </label>
+                <textarea
+                  rows={3}
+                  value={reglasData.paymentReceivedMessage}
+                  onChange={(e) => {
+                    setReglasData({ ...reglasData, paymentReceivedMessage: e.target.value });
+                    setIsDirty(true);
+                  }}
+                  className="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Card 4: Message Limit & Auto-Reset (Token Saver & Flow Preserver) */}
           <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-4">
             <div className="flex items-center justify-between">
               <div>
