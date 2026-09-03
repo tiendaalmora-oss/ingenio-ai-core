@@ -22,10 +22,46 @@ import {
   ArrowRight,
   ArrowLeft,
   ShieldAlert,
-  Trash2
+  Trash2,
+  X
 } from 'lucide-react';
 import Link from 'next/link';
 import QuickRepliesBar from '@/features/conversations/QuickRepliesBar';
+
+function formatWhatsAppTime(dateString?: string | null) {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  
+  const yesterday = new Date();
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+
+  if (isToday) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  if (isYesterday) {
+    return 'Ayer';
+  }
+  const diffDays = Math.round((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays < 7) {
+    const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    return days[date.getDay()];
+  }
+  return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
+}
+
+function formatLastMessage(lastMsg: any) {
+  if (!lastMsg) return 'Sin mensajes aún';
+  const isOutbound = lastMsg.direction === 'OUTBOUND' || lastMsg.role === 'assistant';
+  const prefix = isOutbound ? '✓ ' : '';
+  const content = (lastMsg.content || '').trim();
+  if (content.includes('[Comprobante de Pago')) return `${prefix}📸 Comprobante de pago`;
+  if (content.includes('[Nota de voz')) return `${prefix}🎤 Mensaje de voz`;
+  if (content.startsWith('📸') || content.startsWith('📷')) return `${prefix}📷 Imagen`;
+  return `${prefix}${content}`;
+}
 
 function ConversationsView() {
   const searchParams = useSearchParams();
@@ -76,7 +112,7 @@ function ConversationsView() {
       const res = await api.get(`/conversations?${params.toString()}`);
       return res.data;
     },
-    refetchInterval: 4000, // Poll every 4 seconds for new live chats
+    refetchInterval: 2500, // Poll every 2.5s for instant WhatsApp-like reactivity
   });
 
   // Auto-select first conversation on desktop only if no conversation is selected from URL
@@ -112,7 +148,7 @@ function ConversationsView() {
       return res.data;
     },
     enabled: !!selectedConvId,
-    refetchInterval: 3000, // Poll messages every 3s
+    refetchInterval: 2500, // Poll messages every 2.5s
   });
 
   // Scroll to bottom when messages update
@@ -229,8 +265,8 @@ function ConversationsView() {
         <div className="p-3 sm:p-4 border-b border-gray-200 bg-white space-y-2.5 sm:space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-              <MessageSquare className="w-5 h-5 text-blue-600" />
-              Live Chat Hub
+              <MessageSquare className="w-5 h-5 text-emerald-600" />
+              WhatsApp Live Hub
             </h2>
             <button
               onClick={() => refetchConvs()}
@@ -242,22 +278,43 @@ function ConversationsView() {
           </div>
 
           <div className="relative">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              placeholder="Buscar por nombre o número..."
+              placeholder="Buscar por número (ej: 0412...), nombre o texto..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none"
+              className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none transition"
             />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200 transition"
+                title="Limpiar búsqueda"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
+
+          {search && (
+            <div className="flex items-center justify-between text-[11px] text-gray-500 px-1">
+              <span>{conversations.length} {conversations.length === 1 ? 'chat encontrado' : 'chats encontrados'}</span>
+              <button
+                onClick={() => setSearch('')}
+                className="text-blue-600 hover:underline font-medium"
+              >
+                Ver todos
+              </button>
+            </div>
+          )}
 
           {/* Filter Pills */}
           <div className="flex gap-1 overflow-x-auto text-[11px] pb-0.5 no-scrollbar">
             {[
               { label: 'Todos', value: '' },
-              { label: '🤖 Bot Activo', value: 'ACTIVE' },
               { label: '👤 En Asesor', value: 'HANDOFF' },
+              { label: '🤖 Bot Activo', value: 'ACTIVE' },
               { label: '🛑 No Interesado', value: 'LOST' },
               { label: '✅ Resueltos', value: 'RESOLVED' },
             ].map((f) => (
@@ -266,7 +323,7 @@ function ConversationsView() {
                 onClick={() => setStatusFilter(f.value)}
                 className={`px-2.5 py-1 rounded-full font-medium transition whitespace-nowrap ${
                   statusFilter === f.value
-                    ? 'bg-blue-600 text-white shadow-xs'
+                    ? 'bg-emerald-600 text-white shadow-xs'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
@@ -281,66 +338,94 @@ function ConversationsView() {
           {isConvsLoading ? (
             <div className="p-4 space-y-3">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-16 bg-gray-200/60 animate-pulse rounded-lg" />
+                <div key={i} className="h-16 bg-gray-200/60 animate-pulse rounded-xl" />
               ))}
             </div>
           ) : conversations.length === 0 ? (
-            <div className="p-8 text-center text-xs text-gray-400">
-              No hay conversaciones en este filtro.
+            <div className="p-8 text-center text-xs text-gray-400 space-y-2">
+              <p>No se encontraron conversaciones.</p>
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="text-emerald-600 font-semibold text-xs hover:underline"
+                >
+                  Limpiar búsqueda
+                </button>
+              )}
             </div>
           ) : (
             conversations.map((c: any) => {
               const isSelected = selectedConvId === c.id;
+              const formattedTime = formatWhatsAppTime(c.lastMessage?.timestamp);
+              const previewText = formatLastMessage(c.lastMessage);
+              const isHandoff = c.status === 'HANDOFF';
+              const hasPaymentTag = (c.tags || []).includes('PAGO_CONFIRMADO') || (c.tags || []).includes('COMPROBANTE_RECIBIDO');
+
               return (
                 <button
                   key={c.id}
                   onClick={() => setSelectedConvId(c.id)}
-                  className={`w-full p-3 sm:p-3.5 text-left flex gap-3 transition hover:bg-gray-100/80 ${
-                    isSelected ? 'bg-blue-50/80 border-l-4 border-blue-600' : 'bg-white'
+                  className={`w-full p-3 sm:p-3.5 text-left flex gap-3 transition hover:bg-gray-100/90 ${
+                    isSelected ? 'bg-emerald-50/70 border-l-4 border-emerald-600' : 'bg-white'
                   }`}
                 >
-                  <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0">
-                    {c.contactName ? c.contactName.charAt(0).toUpperCase() : 'U'}
+                  <div className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs ${
+                    hasPaymentTag
+                      ? 'bg-emerald-100 text-emerald-700 ring-2 ring-emerald-400'
+                      : isHandoff
+                      ? 'bg-amber-100 text-amber-800 ring-2 ring-amber-400'
+                      : 'bg-slate-100 text-slate-700'
+                  }`}>
+                    {c.contactName ? c.contactName.charAt(0).toUpperCase() : <User className="w-5 h-5 opacity-70" />}
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1 mb-0.5">
-                      <p className="text-xs font-semibold text-gray-900 truncate">
+                      <p className="text-xs font-bold text-gray-900 truncate">
                         {c.contactName || c.contactPhone || 'Prospecto'}
                       </p>
-                      {c.lastMessage?.timestamp && (
-                        <span className="text-[10px] text-gray-400 shrink-0">
-                          {new Date(c.lastMessage.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {formattedTime && (
+                        <span className={`text-[10px] shrink-0 font-medium ${isHandoff ? 'text-amber-700 font-semibold' : 'text-gray-400'}`}>
+                          {formattedTime}
                         </span>
                       )}
                     </div>
 
-                    <p className="text-xs text-gray-500 truncate mb-1.5">
-                      {c.lastMessage?.content || 'Sin mensajes'}
+                    <p className="text-xs text-gray-500 truncate mb-1.5 font-normal leading-relaxed">
+                      {previewText}
                     </p>
 
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      {c.status === 'HANDOFF' ? (
-                        <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded">
-                          👤 Asesor
+                      {hasPaymentTag ? (
+                        <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-md">
+                          💰 Comprobante
+                        </span>
+                      ) : isHandoff ? (
+                        <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-md animate-pulse">
+                          👤 Asesor Requerido
                         </span>
                       ) : c.status === 'LOST' ? (
-                        <span className="px-1.5 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-bold rounded">
+                        <span className="px-1.5 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-bold rounded-md">
                           🛑 No Interesado
                         </span>
                       ) : c.status === 'RESOLVED' ? (
-                        <span className="px-1.5 py-0.5 bg-gray-100 text-gray-700 text-[10px] font-medium rounded">
+                        <span className="px-1.5 py-0.5 bg-gray-100 text-gray-700 text-[10px] font-medium rounded-md">
                           ✅ Resuelto
                         </span>
                       ) : (
-                        <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-medium rounded">
+                        <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-medium rounded-md">
                           🤖 Bot Activo
                         </span>
                       )}
 
-                      {c.leadStatus && (
-                        <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-medium rounded">
-                          {c.leadStatus}
+                      {c.leadStatus && c.leadStatus !== 'NEW' && (
+                        <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-md ${
+                          c.leadStatus === 'HOT' ? 'bg-orange-100 text-orange-700' :
+                          c.leadStatus === 'WARM' ? 'bg-amber-100 text-amber-700' :
+                          c.leadStatus === 'CLOSED' ? 'bg-emerald-100 text-emerald-700' :
+                          'bg-purple-100 text-purple-700'
+                        }`}>
+                          {c.leadStatus === 'HOT' ? '🔥 HOT' : c.leadStatus === 'WARM' ? '⚡ WARM' : c.leadStatus === 'CLOSED' ? '✅ CERRADO' : c.leadStatus}
                         </span>
                       )}
                     </div>

@@ -35,28 +35,59 @@ export class ConversationHubController {
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const take = parseInt(limit);
 
-    const where: any = {
-      contact: { tenantId },
-    };
+    const where: any = {};
     if (status) where.status = status;
-    if (search) {
-      where.contact = {
-        ...where.contact,
-        OR: [
-          { name: { contains: search, mode: 'insensitive' } },
-          { phone: { contains: search, mode: 'insensitive' } },
-          { externalId: { contains: search, mode: 'insensitive' } },
-        ],
-      };
+
+    if (search && search.trim()) {
+      const searchRaw = search.trim();
+      const searchDigits = searchRaw.replace(/\D/g, '');
+      const searchWithoutZero = searchDigits.startsWith('0') ? searchDigits.replace(/^0+/, '') : searchDigits;
+      const searchWith58 = searchDigits.startsWith('58') ? searchDigits : (searchWithoutZero ? `58${searchWithoutZero}` : '');
+
+      const searchOrClauses: any[] = [
+        { contact: { name: { contains: searchRaw, mode: 'insensitive' } } },
+        { contact: { phone: { contains: searchRaw, mode: 'insensitive' } } },
+        { contact: { phoneNormalized: { contains: searchRaw, mode: 'insensitive' } } },
+        { contact: { externalId: { contains: searchRaw, mode: 'insensitive' } } },
+        { interactions: { some: { content: { contains: searchRaw, mode: 'insensitive' } } } },
+      ];
+
+      if (searchDigits.length >= 3) {
+        searchOrClauses.push(
+          { contact: { phone: { contains: searchDigits, mode: 'insensitive' } } },
+          { contact: { phoneNormalized: { contains: searchDigits, mode: 'insensitive' } } },
+          { contact: { externalId: { contains: searchDigits, mode: 'insensitive' } } },
+        );
+      }
+
+      if (searchWithoutZero && searchWithoutZero.length >= 4) {
+        searchOrClauses.push(
+          { contact: { phone: { contains: searchWithoutZero, mode: 'insensitive' } } },
+          { contact: { phoneNormalized: { contains: searchWithoutZero, mode: 'insensitive' } } },
+          { contact: { externalId: { contains: searchWithoutZero, mode: 'insensitive' } } },
+        );
+      }
+
+      if (searchWith58 && searchWith58.length >= 5) {
+        searchOrClauses.push(
+          { contact: { phone: { contains: searchWith58, mode: 'insensitive' } } },
+          { contact: { phoneNormalized: { contains: searchWith58, mode: 'insensitive' } } },
+          { contact: { externalId: { contains: searchWith58, mode: 'insensitive' } } },
+        );
+      }
+
+      where.AND = [
+        { contact: { tenantId } },
+        { OR: searchOrClauses },
+      ];
+    } else {
+      where.contact = { tenantId };
     }
 
-    const [total, conversations] = await Promise.all([
+    const [total, rawConversations] = await Promise.all([
       this.prisma.conversation.count({ where }),
       this.prisma.conversation.findMany({
         where,
-        skip,
-        take,
-        orderBy: { id: 'desc' },
         include: {
           contact: {
             include: { memory: true },
@@ -70,18 +101,20 @@ export class ConversationHubController {
       }),
     ]);
 
-    // Ordenar por timestamp del último mensaje más reciente para que el chat más activo esté arriba
-    const sortedConvs = conversations.sort((a, b) => {
+    // Ordenamiento estricto idéntico a WhatsApp: Los chats con interacción más reciente van primero
+    const sortedConvs = rawConversations.sort((a, b) => {
       const timeA = a.interactions[0]?.timestamp ? new Date(a.interactions[0].timestamp).getTime() : 0;
       const timeB = b.interactions[0]?.timestamp ? new Date(b.interactions[0].timestamp).getTime() : 0;
       return timeB - timeA;
     });
 
+    const paginatedConvs = sortedConvs.slice(skip, skip + take);
+
     const responseData = {
       total,
       page: parseInt(page),
       limit: parseInt(limit),
-      data: sortedConvs.map((c) => ({
+      data: paginatedConvs.map((c) => ({
         id: c.id,
         status: c.status,
         contactId: c.contactId,
