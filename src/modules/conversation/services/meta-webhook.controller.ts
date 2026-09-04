@@ -60,56 +60,32 @@ export class MetaWebhookController {
         const payload = body.payload || {};
         const isFromMe = Boolean(payload.fromMe);
 
-        // 1. Extraer identificador real de WhatsApp (resolviendo @lid y sufijos de dispositivo :12)
-        let rawTarget = isFromMe ? (payload.to || payload.from) : (payload.from || payload.to);
-        if (rawTarget && rawTarget.includes('@lid')) {
-          const candidate = payload._data?.key?.remoteJid || 
-                            payload._data?.remoteJid || 
-                            payload._data?.author || 
-                            payload.author || 
-                            payload.to;
-          if (candidate && !candidate.includes('@lid') && (candidate.includes('@c.us') || candidate.includes('@s.whatsapp.net'))) {
-            rawTarget = candidate;
-          }
-        }
-        contactId = (rawTarget || '').replace(/:\d+@/, '@');
-
-        if (contactId && contactId.endsWith('@g.us')) {
-          this.logger.debug(`Ignoring group message: ${contactId}`);
-          return;
-        }
-
-        tenantId = await this.tenantResolver.resolveFromWahaSession(body.session || 'default');
-
-        // Sincronizar la sesión activa de WAHA en el tenant
-        if (body.session && tenantId) {
-          try {
-            await this.prisma.tenant.update({
-              where: { id: tenantId },
-              data: { wahaSession: body.session }
-            });
-          } catch {
-            // Ignorar si el tenant no existe aún
-          }
-        }
-
-        // Extraer nombre del perfil de WhatsApp del usuario
-        pushName = payload.notifyName || payload._data?.notifyName || payload.pushName || payload._data?.pushName;
-
-        // 2. Si el mensaje fue enviado manualmente desde el teléfono físico (fromMe: true)
+        // ── CASO A1: Mensaje SALIENTE desde el teléfono físico (fromMe = true) ──
+        // Sincronizar al CRM sin procesarlo con la IA
         if (isFromMe) {
+          // Ignorar event message.any para evitar duplicados
+          if (body.event === 'message.any') return;
+
+          tenantId = await this.tenantResolver.resolveFromWahaSession(body.session || 'default');
+          if (!tenantId) return;
+
+          // El destinatario real es payload.to (a quien le escribiste)
+          const toRaw = (payload.to || '').replace(/:\d+@/, '@');
+          if (!toRaw || toRaw.endsWith('@g.us')) return; // ignorar grupos
+
+          const toDigits = toRaw.replace(/@(c\.us|lid|s\.whatsapp\.net)$/, '').replace(/\D/g, '');
           const manualText = payload.body || payload.caption || '';
-          if (manualText && contactId && tenantId) {
-            this.logger.log(`[WhatsApp Mobile Sync] Mensaje saliente manual detectado desde el teléfono físico para ${contactId}: "${manualText.substring(0, 40)}..."`);
-            
-            const cleanDigits = contactId.replace(/@(c\.us|lid|s\.whatsapp\.net)$/, '').replace(/\D/g, '');
+
+          if (manualText && toDigits) {
+            this.logger.log(`[Mobile Sync] Msg saliente manual para ${toRaw}: "${manualText.substring(0, 40)}..."`);
+
             const existingContact = await this.prisma.contact.findFirst({
               where: {
                 tenantId,
                 OR: [
-                  { externalId: contactId },
-                  { phone: cleanDigits },
-                  { phoneNormalized: cleanDigits }
+                  { externalId: toRaw },
+                  { phone: toDigits },
+                  { phoneNormalized: toDigits },
                 ]
               }
             });
@@ -118,9 +94,7 @@ export class MetaWebhookController {
               const conv = await this.prisma.conversation.findFirst({
                 where: { contactId: existingContact.id }
               });
-
               if (conv) {
-                // Registrar la respuesta en el historial del CRM
                 await this.prisma.interaction.create({
                   data: {
                     conversationId: conv.id,
@@ -130,26 +104,45 @@ export class MetaWebhookController {
                     role: 'assistant',
                   }
                 });
-
-                // Pausar el bot para permitir que el operador continúe la conversación
                 await this.prisma.conversation.update({
                   where: { id: conv.id },
                   data: { status: 'HANDOFF' }
                 });
-
-                // Cancelar seguimientos automáticos pendientes
                 await this.prisma.pendingOutboundMessage.deleteMany({
                   where: { conversationId: conv.id }
                 });
-
-                this.logger.log(`[WhatsApp Mobile Sync] Conversación ${conv.id} sincronizada y pausada en HANDOFF.`);
+                this.logger.log(`[Mobile Sync] Conversación ${conv.id} sincronizada y pausada en HANDOFF.`);
               }
             }
           }
+          return; // No procesar con la IA
+        }
+
+        // ── CASO A2: Mensaje ENTRANTE del cliente (fromMe = false) ──
+        if (body.event === 'message.any') return; // ignorar duplicados
+
+        // El remitente real es payload.from
+        contactId = (payload.from || '').replace(/:\d+@/, '@');
+
+        if (!contactId || contactId.endsWith('@g.us')) {
+          this.logger.debug(`Ignoring group or empty contactId: ${contactId}`);
           return;
         }
 
-        if (body.event === 'message.any') return;
+        tenantId = await this.tenantResolver.resolveFromWahaSession(body.session || 'default');
+
+        // Sincronizar wahaSession en el tenant
+        if (body.session && tenantId) {
+          try {
+            await this.prisma.tenant.update({
+              where: { id: tenantId },
+              data: { wahaSession: body.session }
+            });
+          } catch { /* ignorar */ }
+        }
+
+        // Nombre del perfil de WhatsApp
+        pushName = payload.notifyName || payload._data?.notifyName || payload.pushName || payload._data?.pushName;
 
         // Procesamiento Multimedia vs Texto
         const hasMedia = payload.hasMedia || Boolean(payload.media);
@@ -157,19 +150,14 @@ export class MetaWebhookController {
         const mimetype = (media.mimetype || payload._data?.mimetype || '').toLowerCase();
         const messageType = (payload.type || '').toLowerCase();
 
-        // 1. Audio o Nota de Voz
         if (hasMedia && (mimetype.startsWith('audio/') || messageType === 'ptt' || messageType === 'audio')) {
           this.logger.log(`Procesando nota de voz entrante de ${contactId}...`);
           content = await this.audioTranscriptionService.transcribe(media);
-        }
-        // 2. Imagen o Captura de Comprobante
-        else if (hasMedia && (mimetype.startsWith('image/') || messageType === 'image')) {
+        } else if (hasMedia && (mimetype.startsWith('image/') || messageType === 'image')) {
           this.logger.log(`Procesando imagen entrante de ${contactId}...`);
           const caption = payload.body || payload.caption || '';
           content = await this.mediaVisionService.analyzeImage(media, caption);
-        }
-        // 3. Mensaje de Texto Normal
-        else {
+        } else {
           content = payload.body || '';
         }
       }

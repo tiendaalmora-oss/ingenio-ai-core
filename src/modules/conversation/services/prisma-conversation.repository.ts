@@ -24,27 +24,41 @@ export class PrismaConversationRepository implements IConversationRepository {
   }
 
   async ensureContactExists(tenantId: string, externalId: string, pushName?: string): Promise<string> {
-    // 1. Limpiar sufijos de dispositivo como ":12@c.us" o ":0@c.us"
+    // 1. Limpiar SOLO sufijos de dispositivo multi-dispositivo como ":12@c.us" → "@c.us"
     const cleanExternalId = externalId.replace(/:\d+@/, '@');
 
-    // 2. Extraer dígitos reales normalizados
-    const phoneNormalized = cleanExternalId.replace(/@(c\.us|lid|s\.whatsapp\.net)$/, '').replace(/\D/g, '');
+    // 2. Extraer phoneNormalized: solo dígitos, sin el sufijo @c.us / @lid / etc.
+    const phoneNormalized = cleanExternalId
+      .replace(/@(c\.us|lid|s\.whatsapp\.net)$/, '')
+      .replace(/\D/g, '');
+
+    // 3. phone: igual que phoneNormalized
     const phone = phoneNormalized;
 
-    // 3. Nombre del contacto: si viene pushName (nombre de perfil de WhatsApp), usarlo
+    // 4. Nombre del contacto: si viene pushName (nombre de perfil de WhatsApp), usarlo
     const trimmedPushName = pushName && pushName.trim() ? pushName.trim() : undefined;
+
+    // 5. Para el externalId guardado, preferir siempre @c.us sobre @lid para que el
+    //    WAHA adapter pueda enrutar correctamente. Solo si el externalId es @lid y
+    //    ya tenemos los dígitos, convertir a @c.us.
+    let safeExternalId = cleanExternalId;
+    if (safeExternalId.includes('@lid') && phoneNormalized) {
+      safeExternalId = `${phoneNormalized}@c.us`;
+    }
 
     const contact = await this.prisma.contact.upsert({
       where: {
         tenantId_phoneNormalized: { tenantId, phoneNormalized },
       },
       update: {
-        externalId: cleanExternalId,
+        // Solo actualizar externalId si el nuevo es @c.us (más confiable para routing)
+        // No degradar de @c.us a @lid
+        ...(safeExternalId.includes('@c.us') ? { externalId: safeExternalId } : {}),
         phone,
         ...(trimmedPushName ? { name: trimmedPushName } : {}),
       },
       create: {
-        externalId: cleanExternalId,
+        externalId: safeExternalId,
         phone,
         phoneNormalized,
         name: trimmedPushName || phoneNormalized || 'Prospecto',
