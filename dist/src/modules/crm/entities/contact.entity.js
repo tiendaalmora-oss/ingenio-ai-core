@@ -6,11 +6,15 @@ class Contact {
     tenantId;
     name;
     phone;
-    constructor(id, tenantId, name, phone) {
+    phoneNormalized;
+    externalId;
+    constructor(id, tenantId, name, phone, phoneNormalized, externalId) {
         this.id = id;
         this.tenantId = tenantId;
         this.name = name;
         this.phone = phone;
+        this.phoneNormalized = phoneNormalized;
+        this.externalId = externalId;
     }
 }
 exports.Contact = Contact;

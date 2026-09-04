@@ -6,6 +6,7 @@ export declare class ReceiveMessageService {
     private readonly interactionRepo;
     private readonly eventEmitter;
     private readonly logger;
+    private readonly recentMessages;
     constructor(conversationRepo: IConversationRepository, interactionRepo: IInteractionRepository, eventEmitter: EventEmitter2);
-    execute(tenantId: string, contactId: string, content: string): Promise<void>;
+    execute(tenantId: string, externalId: string, content: string, pushName?: string): Promise<void>;
 }

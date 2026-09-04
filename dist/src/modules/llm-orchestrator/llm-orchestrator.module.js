@@ -12,6 +12,7 @@ const llm_listener_service_1 = require("./services/llm-listener.service");
 const context_builder_service_1 = require("./services/context-builder.service");
 const hermes_client_service_1 = require("./services/hermes-client.service");
 const kos_loader_service_1 = require("./services/kos-loader.service");
+const prompt_composer_service_1 = require("./services/prompt-composer.service");
 const database_module_1 = require("../../shared/database/database.module");
 const funnel_engine_module_1 = require("../funnel-engine/funnel-engine.module");
 const ai_provider_factory_1 = require("./providers/ai-provider.factory");
@@ -32,7 +33,9 @@ exports.LlmOrchestratorModule = LlmOrchestratorModule = __decorate([
             context_builder_service_1.ContextBuilderService,
             hermes_client_service_1.HermesClientService,
             kos_loader_service_1.KosLoaderService,
+            prompt_composer_service_1.PromptComposerService,
         ],
+        exports: [context_builder_service_1.ContextBuilderService, hermes_client_service_1.HermesClientService]
     })
 ], LlmOrchestratorModule);
 //# sourceMappingURL=llm-orchestrator.module.js.map

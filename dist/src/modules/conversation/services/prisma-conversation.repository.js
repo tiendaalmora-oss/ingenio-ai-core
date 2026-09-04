@@ -28,20 +28,37 @@ let PrismaConversationRepository = class PrismaConversationRepository {
         const raw = await this.prisma.conversation.findFirst({
             where: {
                 contactId,
-                status: { in: ['NEW', 'ACTIVE'] },
             },
         });
         if (!raw)
             return null;
         return new conversation_entity_1.Conversation(raw.id, raw.contactId, raw.status);
     }
-    async ensureContactExists(tenantId, contactId) {
-        await this.prisma.contact.upsert({
-            where: { id: contactId },
-            update: {},
+    async ensureContactExists(tenantId, externalId, pushName) {
+        const cleanExternalId = externalId.replace(/:\d+@/, '@');
+        const phoneNormalized = cleanExternalId
+            .replace(/@(c\.us|lid|s\.whatsapp\.net)$/, '')
+            .replace(/\D/g, '');
+        const phone = phoneNormalized;
+        const trimmedPushName = pushName && pushName.trim() ? pushName.trim() : undefined;
+        let safeExternalId = cleanExternalId;
+        if (safeExternalId.includes('@lid') && phoneNormalized) {
+            safeExternalId = `${phoneNormalized}@c.us`;
+        }
+        const contact = await this.prisma.contact.upsert({
+            where: {
+                tenantId_phoneNormalized: { tenantId, phoneNormalized },
+            },
+            update: {
+                ...(safeExternalId.includes('@c.us') ? { externalId: safeExternalId } : {}),
+                phone,
+                ...(trimmedPushName ? { name: trimmedPushName } : {}),
+            },
             create: {
-                id: contactId,
-                name: contactId,
+                externalId: safeExternalId,
+                phone,
+                phoneNormalized,
+                name: trimmedPushName || phoneNormalized || 'Prospecto',
                 tenant: {
                     connectOrCreate: {
                         where: { id: tenantId },
@@ -49,7 +66,9 @@ let PrismaConversationRepository = class PrismaConversationRepository {
                     },
                 },
             },
+            select: { id: true },
         });
+        return contact.id;
     }
     async save(conversation) {
         await this.prisma.conversation.upsert({

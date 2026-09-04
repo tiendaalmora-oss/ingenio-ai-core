@@ -9,11 +9,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SkillEngineModule = void 0;
 const common_1 = require("@nestjs/common");
 const tool_call_listener_service_1 = require("./services/tool-call-listener.service");
+const database_module_1 = require("../../shared/database/database.module");
 let SkillEngineModule = class SkillEngineModule {
 };
 exports.SkillEngineModule = SkillEngineModule;
 exports.SkillEngineModule = SkillEngineModule = __decorate([
     (0, common_1.Module)({
+        imports: [database_module_1.DatabaseModule],
         providers: [tool_call_listener_service_1.ToolCallListenerService],
     })
 ], SkillEngineModule);

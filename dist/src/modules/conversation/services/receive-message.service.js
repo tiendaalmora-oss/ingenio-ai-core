@@ -28,31 +28,47 @@ let ReceiveMessageService = ReceiveMessageService_1 = class ReceiveMessageServic
     interactionRepo;
     eventEmitter;
     logger = new common_1.Logger(ReceiveMessageService_1.name);
+    recentMessages = new Map();
     constructor(conversationRepo, interactionRepo, eventEmitter) {
         this.conversationRepo = conversationRepo;
         this.interactionRepo = interactionRepo;
         this.eventEmitter = eventEmitter;
     }
-    async execute(tenantId, contactId, content) {
-        console.log('[2] ReceiveMessageService ejecutado');
-        await this.conversationRepo.ensureContactExists(tenantId, contactId);
-        let conversation = await this.conversationRepo.findActiveByContact(contactId);
+    async execute(tenantId, externalId, content, pushName) {
+        const dedupeKey = `${tenantId}:${externalId}:${content.trim()}`;
+        const now = Date.now();
+        const lastSeen = this.recentMessages.get(dedupeKey);
+        if (lastSeen && (now - lastSeen) < 4000) {
+            this.logger.warn(`Ignorando mensaje duplicado recibido en <4s para ${externalId}: "${content.substring(0, 30)}..."`);
+            return;
+        }
+        this.recentMessages.set(dedupeKey, now);
+        if (this.recentMessages.size > 500) {
+            for (const [k, ts] of this.recentMessages.entries()) {
+                if (now - ts > 30000)
+                    this.recentMessages.delete(k);
+            }
+        }
+        this.logger.debug(`ReceiveMessageService executing for tenant=${tenantId} externalId=${externalId}`);
+        const contactUuid = await this.conversationRepo.ensureContactExists(tenantId, externalId, pushName);
+        this.logger.debug(`Contact resolved: uuid=${contactUuid} externalId=${externalId}`);
+        let conversation = await this.conversationRepo.findActiveByContact(contactUuid);
         let conversationCreated = false;
         if (!conversation) {
-            conversation = new conversation_entity_1.Conversation((0, crypto_1.randomUUID)(), contactId, 'NEW');
+            conversation = new conversation_entity_1.Conversation((0, crypto_1.randomUUID)(), contactUuid, 'NEW');
             conversationCreated = true;
         }
         await this.conversationRepo.save(conversation);
-        console.log('[4] Conversation creada');
+        this.logger.debug(`Conversation ${conversationCreated ? 'created' : 'found'}: ${conversation.id}`);
         if (conversationCreated) {
             this.eventEmitter.emit('conversation.updated', new conversation_updated_event_1.ConversationUpdatedEvent(tenantId, conversation.id, conversation.status));
         }
         const interaction = new interaction_entity_1.Interaction((0, crypto_1.randomUUID)(), conversation.id, 'INBOUND', 'TEXT', content, new Date());
         await this.interactionRepo.save(interaction);
-        console.log('[3] Interaction creada');
-        this.eventEmitter.emit('interaction.received', new interaction_received_event_1.InteractionReceivedEvent(tenantId, conversation.id, interaction.id, contactId, content));
+        this.logger.debug(`Interaction ${interaction.id} persisted`);
+        this.eventEmitter.emit('interaction.received', new interaction_received_event_1.InteractionReceivedEvent(tenantId, conversation.id, interaction.id, contactUuid, content));
         this.logger.log(`Interaction ${interaction.id} received and broadcasted.`);
-        console.log('[9] Conversation Hub actualizado');
+        this.logger.debug(`Conversation Hub updated: interactionId=${interaction.id}`);
     }
 };
 exports.ReceiveMessageService = ReceiveMessageService;

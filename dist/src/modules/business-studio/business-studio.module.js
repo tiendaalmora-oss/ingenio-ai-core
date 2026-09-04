@@ -11,6 +11,8 @@ const common_1 = require("@nestjs/common");
 const business_studio_controller_1 = require("./business-studio.controller");
 const business_studio_service_1 = require("./business-studio.service");
 const database_module_1 = require("../../shared/database/database.module");
+const knowledge_bundle_composer_1 = require("./knowledge-bundle.composer");
+const bootstrap_service_1 = require("./bootstrap.service");
 let BusinessStudioModule = class BusinessStudioModule {
 };
 exports.BusinessStudioModule = BusinessStudioModule;
@@ -18,7 +20,8 @@ exports.BusinessStudioModule = BusinessStudioModule = __decorate([
     (0, common_1.Module)({
         imports: [database_module_1.DatabaseModule],
         controllers: [business_studio_controller_1.BusinessStudioController],
-        providers: [business_studio_service_1.BusinessStudioService],
+        providers: [business_studio_service_1.BusinessStudioService, knowledge_bundle_composer_1.KnowledgeBundleComposer, bootstrap_service_1.BootstrapService],
+        exports: [business_studio_service_1.BusinessStudioService],
     })
 ], BusinessStudioModule);
 //# sourceMappingURL=business-studio.module.js.map

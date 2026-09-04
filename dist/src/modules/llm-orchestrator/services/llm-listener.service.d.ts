@@ -13,6 +13,14 @@ export declare class LlmListenerService {
     private readonly funnelEngine;
     private readonly runtimeEngine;
     private readonly logger;
+    private readonly loopDepths;
+    private readonly MAX_LOOP_DEPTH;
+    private readonly LOOP_RESET_MS;
     constructor(contextBuilder: ContextBuilderService, hermesClient: HermesClientService, eventEmitter: EventEmitter2, prisma: PrismaService, funnelEngine: FunnelEngineService, runtimeEngine: RuntimeEngineService);
     handleInteraction(payload: InteractionReceivedEvent): Promise<void>;
+    private canEnterLoop;
+    private incrementDepth;
+    private decrementDepth;
+    private pruneStaleEntries;
+    getLoopDepth(conversationId: string): number;
 }

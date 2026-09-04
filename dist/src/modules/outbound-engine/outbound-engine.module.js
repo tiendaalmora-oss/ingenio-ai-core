@@ -9,13 +9,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.OutboundEngineModule = void 0;
 const common_1 = require("@nestjs/common");
 const waha_adapter_service_1 = require("./services/waha-adapter.service");
+const meta_channel_adapter_service_1 = require("./services/meta-channel-adapter.service");
 const outbound_listener_service_1 = require("./services/outbound-listener.service");
+const outbound_dispatcher_service_1 = require("./services/outbound-dispatcher.service");
+const database_module_1 = require("../../shared/database/database.module");
 let OutboundEngineModule = class OutboundEngineModule {
 };
 exports.OutboundEngineModule = OutboundEngineModule;
 exports.OutboundEngineModule = OutboundEngineModule = __decorate([
     (0, common_1.Module)({
-        providers: [waha_adapter_service_1.WahaAdapterService, outbound_listener_service_1.OutboundListenerService],
+        imports: [database_module_1.DatabaseModule],
+        providers: [waha_adapter_service_1.WahaAdapterService, meta_channel_adapter_service_1.MetaChannelAdapterService, outbound_listener_service_1.OutboundListenerService, outbound_dispatcher_service_1.OutboundDispatcherService],
+        exports: [waha_adapter_service_1.WahaAdapterService, meta_channel_adapter_service_1.MetaChannelAdapterService],
     })
 ], OutboundEngineModule);
 //# sourceMappingURL=outbound-engine.module.js.map

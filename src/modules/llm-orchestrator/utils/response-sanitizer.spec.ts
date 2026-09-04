@@ -36,4 +36,22 @@ Excelente! Para continuar, por favor, indícame tu nombre completo y correo elec
     expect(cleaned).toContain('¿Qué años de bachillerato estás atendiendo actualmente');
     expect(cleaned).not.toContain('\\n');
   });
+
+  it('should strip hallucinated image and attachment placeholders', () => {
+    const raw = `¡Claro que sí, profe! Con mucho gusto te muestro. 🙌\n\nMira, cada evaluación viene diseñada para que solo tengas que aplicarla:\n\n[IMAGEN DE UNA EVALUACIÓN DE MATEMÁTICA EN WORD CON ESPACIO PARA NOMBRE Y ESCALA DE 20 PUNTOS]\n\n¿Te parece práctico para tu día a día? 😊`;
+    const cleaned = sanitizeUserFacingResponse(raw);
+    expect(cleaned).not.toContain('[IMAGEN DE UNA EVALUACIÓN');
+    expect(cleaned).toContain('¡Claro que sí, profe!');
+    expect(cleaned).toContain('¿Te parece práctico para tu día a día? 😊');
+  });
+
+  it('should strip various attachment placeholders like [FOTO DE...], [CAPTURE...], [ARCHIVO...]', () => {
+    const raw = 'Aquí tienes el detalle:\n[FOTO DE LA PLANIFICACIÓN ANUAL]\n[CAPTURE DEL DRIVE]\n[ARCHIVO ADJUNTO]\n¿Qué te parece?';
+    const cleaned = sanitizeUserFacingResponse(raw);
+    expect(cleaned).not.toContain('[FOTO');
+    expect(cleaned).not.toContain('[CAPTURE');
+    expect(cleaned).not.toContain('[ARCHIVO');
+    expect(cleaned).toContain('Aquí tienes el detalle:');
+    expect(cleaned).toContain('¿Qué te parece?');
+  });
 });

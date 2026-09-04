@@ -205,7 +205,17 @@ export class BusinessStudioService {
       const { rawData, currentVersion } = await this.getRawBundleTx(tx, tenantId);
       this.checkOptimisticLock(currentVersion, expectedVersion);
       
-      rawData[section] = data;
+      // Fusión segura: Si es reglasBot, preservar cualquier campo existente previo
+      if (section === 'reglasBot' && typeof data === 'object' && data !== null) {
+        const previousRules = (typeof rawData.reglasBot === 'object' && rawData.reglasBot !== null) ? rawData.reglasBot : {};
+        rawData.reglasBot = {
+          ...previousRules,
+          ...data
+        };
+      } else {
+        rawData[section] = data;
+      }
+
       await this.saveRawBundleTx(tx, tenantId, rawData, section, currentVersion);
       return rawData[section];
     });

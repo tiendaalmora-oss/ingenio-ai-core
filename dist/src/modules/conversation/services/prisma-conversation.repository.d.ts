@@ -6,6 +6,6 @@ export declare class PrismaConversationRepository implements IConversationReposi
     constructor(prisma: PrismaService);
     findById(id: string): Promise<Conversation | null>;
     findActiveByContact(contactId: string): Promise<Conversation | null>;
-    ensureContactExists(tenantId: string, contactId: string): Promise<void>;
+    ensureContactExists(tenantId: string, externalId: string, pushName?: string): Promise<string>;
     save(conversation: Conversation): Promise<void>;
 }

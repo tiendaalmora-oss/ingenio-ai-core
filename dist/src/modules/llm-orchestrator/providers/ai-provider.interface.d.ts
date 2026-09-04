@@ -1,0 +1,34 @@
+export declare abstract class IAiProvider {
+    abstract chat(messages: AiMessage[], options?: AiOptions): Promise<AiResponse>;
+}
+export interface AiMessage {
+    role: 'system' | 'user' | 'assistant' | 'tool';
+    content: string | null;
+    tool_call_id?: string;
+    tool_calls?: any[];
+}
+export interface AiOptions {
+    tools?: AiTool[];
+    toolChoice?: 'auto' | 'none' | 'required';
+    temperature?: number;
+    maxTokens?: number;
+}
+export interface AiTool {
+    type: 'function';
+    function: {
+        name: string;
+        description: string;
+        parameters: Record<string, any>;
+    };
+}
+export interface AiResponse {
+    content?: string;
+    toolCalls?: AiToolCall[];
+    provider: string;
+    model: string;
+}
+export interface AiToolCall {
+    id: string;
+    name: string;
+    arguments: Record<string, any>;
+}

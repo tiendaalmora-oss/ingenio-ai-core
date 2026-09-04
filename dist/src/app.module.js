@@ -12,7 +12,6 @@ const event_emitter_1 = require("@nestjs/event-emitter");
 const app_controller_1 = require("./app.controller");
 const app_service_1 = require("./app.service");
 const crm_module_1 = require("./modules/crm/crm.module");
-const fake_module_1 = require("./modules/fake/fake.module");
 const conversation_module_1 = require("./modules/conversation/conversation.module");
 const llm_orchestrator_module_1 = require("./modules/llm-orchestrator/llm-orchestrator.module");
 const outbound_engine_module_1 = require("./modules/outbound-engine/outbound-engine.module");
@@ -23,6 +22,13 @@ const health_module_1 = require("./modules/health/health.module");
 const funnel_engine_module_1 = require("./modules/funnel-engine/funnel-engine.module");
 const memory_module_1 = require("./modules/memory/memory.module");
 const tenant_module_1 = require("./modules/tenant/tenant.module");
+const event_bus_1 = require("./shared/event-bus");
+const schedule_1 = require("@nestjs/schedule");
+const follow_up_engine_module_1 = require("./modules/follow-up-engine/follow-up-engine.module");
+const settings_module_1 = require("./modules/settings/settings.module");
+const analytics_module_1 = require("./modules/analytics/analytics.module");
+const media_processing_module_1 = require("./modules/media-processing/media-processing.module");
+const agency_module_1 = require("./modules/agency/agency.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -33,18 +39,24 @@ exports.AppModule = AppModule = __decorate([
                 wildcard: true,
                 delimiter: '.',
             }),
+            event_bus_1.EventBusModule,
             database_module_1.DatabaseModule,
             crm_module_1.CrmModule,
             conversation_module_1.ConversationModule,
+            media_processing_module_1.MediaProcessingModule,
             funnel_engine_module_1.FunnelEngineModule,
             llm_orchestrator_module_1.LlmOrchestratorModule,
             outbound_engine_module_1.OutboundEngineModule,
             skill_engine_module_1.SkillEngineModule,
-            fake_module_1.FakeModule,
             business_studio_module_1.BusinessStudioModule,
             health_module_1.HealthModule,
             memory_module_1.MemoryModule,
             tenant_module_1.TenantModule,
+            schedule_1.ScheduleModule.forRoot(),
+            follow_up_engine_module_1.FollowUpEngineModule,
+            settings_module_1.SettingsModule,
+            analytics_module_1.AnalyticsModule,
+            agency_module_1.AgencyModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

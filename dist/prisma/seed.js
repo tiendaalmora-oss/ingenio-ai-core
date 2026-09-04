@@ -38,15 +38,21 @@ async function main() {
             data: {
                 tenantId: mainTenantId,
                 systemPrompt: {
-                    empresa: "FerreOS",
-                    descripcion: "Sistema de gestión para ferreterías.",
-                    tono: "Profesional, conciso y vendedor.",
-                    productos: ["Suscripción Mensual", "Suscripción Anual", "Módulo de Facturación"],
-                    precios: {
-                        "Suscripción Mensual": "$50 USD",
-                        "Suscripción Anual": "$500 USD"
+                    _raw: {
+                        identidad: { nombre: 'Asistente Virtual', tono: 'Profesional, empático y vendedor' },
+                        empresa: { nombre: '', descripcion: '', sitioWeb: '' },
+                        productos: [],
+                        categorias: [],
+                        servicios: [],
+                        faqs: [],
+                        objeciones: [],
+                        scriptsComerciales: [],
+                        promociones: [],
+                        seguimientos: [],
+                        soporte: [],
+                        politicasAtencion: []
                     },
-                    instrucciones: "Eres el asistente virtual de FerreOS. Responde preguntas sobre precios y características. Si el usuario quiere comprar, pídele sus datos de contacto."
+                    instrucciones: "El asistente se encuentra listo para configurar. Carga tus productos y servicios desde el Business Studio."
                 },
                 version: 1
             }

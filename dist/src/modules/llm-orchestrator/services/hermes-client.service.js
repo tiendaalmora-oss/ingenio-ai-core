@@ -56,13 +56,56 @@ const HERMES_TOOLS = [
         type: 'function',
         function: {
             name: 'handoff_to_human',
-            description: 'Transfiere la conversación a un agente humano cuando la situación lo requiere.',
+            description: 'Transfiere la conversación a un agente humano cuando el cliente lo solicita explícitamente.',
             parameters: {
                 type: 'object',
                 properties: {
-                    reason: { type: 'string', description: 'Motivo del traspaso' },
+                    reason: { type: 'string', description: 'Motivo del traspaso (ej: "Cliente solicitó hablar con un asesor humano")' },
                 },
                 required: ['reason'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'pause_bot_and_handoff',
+            description: 'Pausa el bot de inmediato y cancela todos los mensajes de seguimiento cuando el cliente solicita un asesor humano o expresa desinterés total (opt-out).',
+            parameters: {
+                type: 'object',
+                properties: {
+                    reason: {
+                        type: 'string',
+                        enum: ['HUMAN_REQUESTED', 'NOT_INTERESTED', 'MANUAL_PAUSE'],
+                        description: 'Razón de la pausa: HUMAN_REQUESTED si pidió hablar con una persona o asesor, NOT_INTERESTED si no le interesa la oferta o pide no recibir más mensajes.',
+                    },
+                    closingMessage: {
+                        type: 'string',
+                        description: 'Mensaje cordial de confirmación de transferencia humana o despedida que se enviará al usuario por WhatsApp.',
+                    },
+                    leadStatus: {
+                        type: 'string',
+                        enum: ['HANDOFF', 'LOST'],
+                        description: 'Nuevo estado del lead en CRM: HANDOFF para atención humana, LOST para no interesado.',
+                    },
+                },
+                required: ['reason', 'closingMessage'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'schedule_meeting',
+            description: 'Agenda una demo o reunión de ventas con el cliente. Úsala cuando el cliente acepte tener una reunión.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    date: { type: 'string', description: 'Fecha sugerida por el cliente (ej. Mañana, Lunes, 15 de Octubre)' },
+                    time: { type: 'string', description: 'Hora sugerida o franja horaria (ej. Por la mañana, a las 15:00)' },
+                    notes: { type: 'string', description: 'Notas adicionales sobre lo que se quiere ver en la demo' },
+                },
+                required: ['date', 'time'],
             },
         },
     },
@@ -73,12 +116,20 @@ let HermesClientService = HermesClientService_1 = class HermesClientService {
     constructor(aiProvider) {
         this.aiProvider = aiProvider;
     }
-    async generateResponse(messages) {
+    async generateResponse(messages, enableTools = true, toolChoice = 'auto') {
         try {
-            const response = await this.aiProvider.chat(messages, {
-                tools: HERMES_TOOLS,
+            const options = {
                 temperature: 0.4,
-            });
+            };
+            if (enableTools) {
+                options.tools = HERMES_TOOLS;
+                options.toolChoice = toolChoice;
+            }
+            else {
+                options.tools = HERMES_TOOLS;
+                options.toolChoice = 'none';
+            }
+            const response = await this.aiProvider.chat(messages, options);
             this.logger.log(`Response received from ${response.provider} | model: ${response.model}`);
             return {
                 content: response.content,

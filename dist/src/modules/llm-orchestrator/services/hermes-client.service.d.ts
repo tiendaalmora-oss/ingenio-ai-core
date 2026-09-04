@@ -12,5 +12,5 @@ export declare class HermesClientService {
     private readonly aiProvider;
     private readonly logger;
     constructor(aiProvider: IAiProvider);
-    generateResponse(messages: AiMessage[]): Promise<LLMResponse>;
+    generateResponse(messages: AiMessage[], enableTools?: boolean, toolChoice?: 'auto' | 'none'): Promise<LLMResponse>;
 }

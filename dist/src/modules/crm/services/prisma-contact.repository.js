@@ -24,12 +24,16 @@ let PrismaContactRepository = class PrismaContactRepository {
             update: {
                 name: contact.name,
                 phone: contact.phone,
+                phoneNormalized: contact.phoneNormalized,
+                externalId: contact.externalId,
             },
             create: {
                 id: contact.id,
                 tenantId: contact.tenantId,
                 name: contact.name,
                 phone: contact.phone,
+                phoneNormalized: contact.phoneNormalized,
+                externalId: contact.externalId,
             },
         });
     }
@@ -37,11 +41,11 @@ let PrismaContactRepository = class PrismaContactRepository {
         const raw = await this.prisma.contact.findUnique({ where: { id } });
         if (!raw)
             return null;
-        return new contact_entity_1.Contact(raw.id, raw.tenantId, raw.name, raw.phone);
+        return new contact_entity_1.Contact(raw.id, raw.tenantId, raw.name, raw.phone, raw.phoneNormalized, raw.externalId);
     }
     async findByTenant(tenantId) {
         const rawList = await this.prisma.contact.findMany({ where: { tenantId } });
-        return rawList.map(raw => new contact_entity_1.Contact(raw.id, raw.tenantId, raw.name, raw.phone));
+        return rawList.map(raw => new contact_entity_1.Contact(raw.id, raw.tenantId, raw.name, raw.phone, raw.phoneNormalized, raw.externalId));
     }
 };
 exports.PrismaContactRepository = PrismaContactRepository;

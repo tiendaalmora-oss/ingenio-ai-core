@@ -21,7 +21,7 @@ let CrmEventListenerService = CrmEventListenerService_1 = class CrmEventListener
         this.prisma = prisma;
     }
     async handleMemoryUpdated(payload) {
-        console.log('[7] CrmEventListener ejecutado');
+        this.logger.debug(`handleMemoryUpdated: contactId=${payload.contactId}`);
         this.logger.log(`[CRM] Actualizando Business Memory para Contacto: ${payload.contactId}`);
         try {
             const updates = payload.updates;
@@ -48,8 +48,7 @@ let CrmEventListenerService = CrmEventListenerService_1 = class CrmEventListener
                     tags: updates.tags || [],
                 },
             });
-            console.log('[5] BusinessMemory creada o actualizada');
-            console.log('[8] Lead creado');
+            this.logger.debug(`BusinessMemory upserted for contactId=${payload.contactId}`);
             if (updates.name) {
                 await this.prisma.contact.update({
                     where: { id: payload.contactId },

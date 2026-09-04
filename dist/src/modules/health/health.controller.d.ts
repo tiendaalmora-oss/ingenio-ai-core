@@ -8,15 +8,21 @@ export declare class HealthController {
         tenants: {
             id: string;
             name: string;
+            updatedAt: Date;
+            status: string;
+            plan: string;
             wahaSession: string | null;
             currentBundleVersion: string | null;
             createdAt: Date;
+            agencyId: string | null;
         }[];
         contacts: {
             id: string;
             name: string;
             tenantId: string;
+            externalId: string | null;
             phone: string | null;
+            phoneNormalized: string | null;
         }[];
         conversations: {
             id: string;

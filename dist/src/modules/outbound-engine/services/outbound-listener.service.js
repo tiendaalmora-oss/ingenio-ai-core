@@ -33,13 +33,46 @@ let OutboundListenerService = OutboundListenerService_1 = class OutboundListener
         try {
             const conversation = await this.prisma.conversation.findUnique({
                 where: { id: payload.conversationId },
-                select: { contactId: true, contact: { select: { tenantId: true } } },
+                select: {
+                    contactId: true,
+                    contact: { select: { tenantId: true, phone: true, externalId: true } },
+                },
             });
             if (!conversation) {
-                throw new Error(`Conversacin ${payload.conversationId} no encontrada.`);
+                throw new Error(`Conversación ${payload.conversationId} no encontrada.`);
             }
             const channel = 'WAHA';
-            const messageId = await this.wahaAdapter.sendMessage(conversation.contact.tenantId, conversation.contactId, payload.generatedContent);
+            const targetChatId = conversation.contact.externalId ||
+                conversation.contact.phone ||
+                conversation.contactId;
+            const bundle = await this.prisma.knowledgeBundle.findUnique({
+                where: { tenantId: conversation.contact.tenantId }
+            });
+            const rawPrompt = bundle?.systemPrompt || {};
+            const rawData = rawPrompt['_raw'] || rawPrompt;
+            const reglasBot = rawData.reglasBot || rawPrompt.botRules || rawPrompt.reglasBot || {};
+            const enableDelay = reglasBot.enableResponseDelay !== false;
+            const minSec = Math.max(1, Number(reglasBot.minDelaySeconds) || 4);
+            const maxSec = Math.max(minSec, Number(reglasBot.maxDelaySeconds) || 10);
+            const simulateTyping = reglasBot.simulateTyping !== false;
+            if (enableDelay || simulateTyping) {
+                const delaySec = enableDelay
+                    ? Math.floor(Math.random() * (maxSec - minSec + 1)) + minSec
+                    : 3;
+                const delayMs = delaySec * 1000;
+                if (simulateTyping) {
+                    this.logger.log(`[Typing Indicator] Activando estado "Escribiendo..." (${delaySec}s) para ${targetChatId}...`);
+                    await this.wahaAdapter.startTyping(conversation.contact.tenantId, targetChatId);
+                }
+                else {
+                    this.logger.log(`[Human Delay] Esperando intervalo de respuesta humano (${delaySec}s) para ${targetChatId}...`);
+                }
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+                if (simulateTyping) {
+                    await this.wahaAdapter.stopTyping(conversation.contact.tenantId, targetChatId);
+                }
+            }
+            const messageId = await this.wahaAdapter.sendMessage(conversation.contact.tenantId, targetChatId, payload.generatedContent);
             this.eventEmitter.emit('message.sent', new message_sent_event_1.MessageSentEvent(payload.tenantId, payload.conversationId, messageId, channel));
         }
         catch (error) {
