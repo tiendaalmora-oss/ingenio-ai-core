@@ -156,12 +156,32 @@ export class WahaAdapterService {
       const headers: any = { 'Content-Type': 'application/json' };
       if (apiKey) headers['X-Api-Key'] = apiKey;
 
-      await fetch(`${wahaUrl}/api/startTyping`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ chatId, session })
-      }).catch(() => {});
-    } catch {}
+      // Intentar endpoint v2 primero (/api/{session}/chats/{chatId}/typing)
+      // Si falla, usar el endpoint legacy /api/startTyping
+      const v2Url = `${wahaUrl}/api/${session}/chats/${encodeURIComponent(chatId)}/typing`;
+      const legacyUrl = `${wahaUrl}/api/startTyping`;
+
+      let ok = false;
+
+      try {
+        const res = await fetch(v2Url, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ typing: true }),
+          signal: AbortSignal.timeout(3000)
+        });
+        ok = res.ok;
+      } catch { /* fallback a legacy */ }
+
+      if (!ok) {
+        await fetch(legacyUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ chatId, session }),
+          signal: AbortSignal.timeout(3000)
+        }).catch(() => {});
+      }
+    } catch { /* silencioso — no es crítico */ }
   }
 
   async stopTyping(tenantId: string, contactIdOrPhone: string): Promise<void> {
@@ -175,12 +195,31 @@ export class WahaAdapterService {
       const headers: any = { 'Content-Type': 'application/json' };
       if (apiKey) headers['X-Api-Key'] = apiKey;
 
-      await fetch(`${wahaUrl}/api/stopTyping`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ chatId, session })
-      }).catch(() => {});
-    } catch {}
+      // Intentar endpoint v2 primero
+      const v2Url = `${wahaUrl}/api/${session}/chats/${encodeURIComponent(chatId)}/typing`;
+      const legacyUrl = `${wahaUrl}/api/stopTyping`;
+
+      let ok = false;
+
+      try {
+        const res = await fetch(v2Url, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ typing: false }),
+          signal: AbortSignal.timeout(3000)
+        });
+        ok = res.ok;
+      } catch { /* fallback a legacy */ }
+
+      if (!ok) {
+        await fetch(legacyUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ chatId, session }),
+          signal: AbortSignal.timeout(3000)
+        }).catch(() => {});
+      }
+    } catch { /* silencioso — no es crítico */ }
   }
 
   /**
