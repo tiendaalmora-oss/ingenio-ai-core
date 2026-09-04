@@ -23,6 +23,21 @@ export class OutboundDispatcherService {
 
   @Cron('*/30 * * * * *')
   async processPendingMessages() {
+    // 0. Guardia de horario: no despachar seguimientos fuera de ventana de atención (7 AM - 10 PM Venezuela)
+    const nowVET = new Date();
+    const hourStr = (() => {
+      try {
+        return new Intl.DateTimeFormat('en-US', {
+          hour: 'numeric', hour12: false, timeZone: 'America/Caracas'
+        }).format(nowVET);
+      } catch { return String(nowVET.getHours()); }
+    })();
+    const localHour = parseInt(hourStr, 10);
+    if (!isNaN(localHour) && (localHour < 7 || localHour >= 22)) {
+      this.logger.debug(`[OutboundDispatcher] Fuera de horario de atención (${localHour}:xx VET). Mensajes pendientes en cola hasta las 7 AM.`);
+      return;
+    }
+
     // 1. Tomar lotes pequeños (máx 5) para dosificar y escalonar envíos de forma natural
     const pendingIds = await this.prisma.pendingOutboundMessage.findMany({
       where: { status: 'PENDING' },

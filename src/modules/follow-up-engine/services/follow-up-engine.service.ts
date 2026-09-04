@@ -7,9 +7,12 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 export class FollowUpEngineService {
   private readonly logger = new Logger(FollowUpEngineService.name);
 
-  // Ventana horaria de atención respetuosa (7:00 AM a 11:59 PM)
+  // Ventana horaria de atención respetuosa (7:00 AM a 10:59 PM Venezuela / Caracas)
+  // IMPORTANTE: En JavaScript, getHours() va de 0 a 23. Nunca usar 24 como límite.
+  // DEFAULT_END_HOUR = 23 → permite hasta 11:59 PM
+  // DEFAULT_END_HOUR = 22 → permite hasta 10:59 PM (más conservador, recomendado)
   private readonly DEFAULT_START_HOUR = 7;
-  private readonly DEFAULT_END_HOUR = 24;
+  private readonly DEFAULT_END_HOUR = 22; // 10 PM — no molestar después de las 11 PM
 
   constructor(
     private prisma: PrismaService,
@@ -28,12 +31,12 @@ export class FollowUpEngineService {
       skipped: [],
     };
 
-    // 1. Validar ventana horaria de atención (7 AM a 12 AM medianoche)
+    // 1. Validar ventana horaria de atención (7 AM a 10 PM hora Venezuela)
     const allowed = this.isWithinAllowedWindow(now, this.DEFAULT_START_HOUR, this.DEFAULT_END_HOUR);
     report.isWindowAllowed = allowed;
 
     if (!allowed) {
-      this.logger.debug(`[FollowUpEngine] Fuera de ventana horaria (${this.DEFAULT_START_HOUR}:00 - ${this.DEFAULT_END_HOUR}:00).`);
+      this.logger.debug(`[FollowUpEngine] Fuera de ventana horaria (${this.DEFAULT_START_HOUR}:00 - ${this.DEFAULT_END_HOUR}:59 VET). Seguimientos suspendidos.`);
       return report;
     }
 
