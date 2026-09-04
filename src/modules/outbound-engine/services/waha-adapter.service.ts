@@ -156,32 +156,41 @@ export class WahaAdapterService {
       const headers: any = { 'Content-Type': 'application/json' };
       if (apiKey) headers['X-Api-Key'] = apiKey;
 
-      // Intentar endpoint v2 primero (/api/{session}/chats/{chatId}/typing)
-      // Si falla, usar el endpoint legacy /api/startTyping
-      const v2Url = `${wahaUrl}/api/${session}/chats/${encodeURIComponent(chatId)}/typing`;
-      const legacyUrl = `${wahaUrl}/api/startTyping`;
+      this.logger.log(`[WAHA] Solicitando estado "Escribiendo..." para ${chatId} (sesión: ${session})`);
 
-      let ok = false;
+      // 1. Intentar endpoint directo estándar de WAHA: POST /api/startTyping
+      let response = await fetch(`${wahaUrl}/api/startTyping`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ chatId, session }),
+        signal: AbortSignal.timeout(4000)
+      }).catch((e) => {
+        this.logger.warn(`[WAHA] Falló llamada a /api/startTyping: ${e.message}`);
+        return null;
+      });
 
-      try {
-        const res = await fetch(v2Url, {
-          method: 'PUT',
-          headers,
-          body: JSON.stringify({ typing: true }),
-          signal: AbortSignal.timeout(3000)
-        });
-        ok = res.ok;
-      } catch { /* fallback a legacy */ }
-
-      if (!ok) {
-        await fetch(legacyUrl, {
+      // 2. Si falló o dio error, intentar endpoint de presencia multi-sesión: POST /api/{session}/presence
+      if (!response || !response.ok) {
+        response = await fetch(`${wahaUrl}/api/${session}/presence`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ chatId, session }),
-          signal: AbortSignal.timeout(3000)
-        }).catch(() => {});
+          body: JSON.stringify({ chatId, presence: 'typing' }),
+          signal: AbortSignal.timeout(4000)
+        }).catch((e) => {
+          this.logger.warn(`[WAHA] Falló llamada a /api/${session}/presence: ${e.message}`);
+          return null;
+        });
       }
-    } catch { /* silencioso — no es crítico */ }
+
+      if (response && response.ok) {
+        this.logger.log(`[WAHA] Estado "Escribiendo..." activado exitosamente en WhatsApp para ${chatId}`);
+      } else if (response) {
+        const errText = await response.text().catch(() => '');
+        this.logger.warn(`[WAHA] WAHA respondió con status ${response.status} en startTyping: ${errText}`);
+      }
+    } catch (err: any) {
+      this.logger.warn(`[WAHA] Excepción no crítica en startTyping: ${err.message}`);
+    }
   }
 
   async stopTyping(tenantId: string, contactIdOrPhone: string): Promise<void> {
@@ -195,31 +204,24 @@ export class WahaAdapterService {
       const headers: any = { 'Content-Type': 'application/json' };
       if (apiKey) headers['X-Api-Key'] = apiKey;
 
-      // Intentar endpoint v2 primero
-      const v2Url = `${wahaUrl}/api/${session}/chats/${encodeURIComponent(chatId)}/typing`;
-      const legacyUrl = `${wahaUrl}/api/stopTyping`;
+      // 1. Intentar endpoint directo de WAHA: POST /api/stopTyping
+      let response = await fetch(`${wahaUrl}/api/stopTyping`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ chatId, session }),
+        signal: AbortSignal.timeout(4000)
+      }).catch(() => null);
 
-      let ok = false;
-
-      try {
-        const res = await fetch(v2Url, {
-          method: 'PUT',
-          headers,
-          body: JSON.stringify({ typing: false }),
-          signal: AbortSignal.timeout(3000)
-        });
-        ok = res.ok;
-      } catch { /* fallback a legacy */ }
-
-      if (!ok) {
-        await fetch(legacyUrl, {
+      // 2. Si falló, intentar endpoint de presencia: POST /api/{session}/presence
+      if (!response || !response.ok) {
+        await fetch(`${wahaUrl}/api/${session}/presence`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ chatId, session }),
-          signal: AbortSignal.timeout(3000)
-        }).catch(() => {});
+          body: JSON.stringify({ chatId, presence: 'paused' }),
+          signal: AbortSignal.timeout(4000)
+        }).catch(() => null);
       }
-    } catch { /* silencioso — no es crítico */ }
+    } catch { /* silencioso */ }
   }
 
   /**

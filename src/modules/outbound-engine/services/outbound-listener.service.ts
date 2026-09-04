@@ -50,20 +50,25 @@ export class OutboundListenerService {
       });
       const rawPrompt: any = bundle?.systemPrompt || {};
       const rawData = rawPrompt['_raw'] || rawPrompt;
-      const reglasBot = rawData.reglasBot || {};
+      const reglasBot = rawData.reglasBot || rawPrompt.botRules || rawPrompt.reglasBot || {};
 
       const enableDelay = reglasBot.enableResponseDelay !== false;
       const minSec = Math.max(1, Number(reglasBot.minDelaySeconds) || 4);
       const maxSec = Math.max(minSec, Number(reglasBot.maxDelaySeconds) || 10);
       const simulateTyping = reglasBot.simulateTyping !== false;
 
-      if (enableDelay) {
-        const delaySec = Math.floor(Math.random() * (maxSec - minSec + 1)) + minSec;
+      if (enableDelay || simulateTyping) {
+        // Si delay está activo, usar rango min-max. Si delay está inactivo pero simulateTyping activo, usar 3 segundos de tipeo
+        const delaySec = enableDelay
+          ? Math.floor(Math.random() * (maxSec - minSec + 1)) + minSec
+          : 3;
         const delayMs = delaySec * 1000;
-        this.logger.log(`[Human Typing Delay] Simulando tiempo de respuesta humano (${delaySec}s) para ${targetChatId}...`);
 
         if (simulateTyping) {
+          this.logger.log(`[Typing Indicator] Activando estado "Escribiendo..." (${delaySec}s) para ${targetChatId}...`);
           await this.wahaAdapter.startTyping(conversation.contact.tenantId, targetChatId);
+        } else {
+          this.logger.log(`[Human Delay] Esperando intervalo de respuesta humano (${delaySec}s) para ${targetChatId}...`);
         }
 
         await new Promise((resolve) => setTimeout(resolve, delayMs));

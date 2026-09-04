@@ -24,14 +24,23 @@ export class BusinessStudioService {
       identidad: rawData.identidad ?? prompt.identidad ?? {},
       empresa: rawData.empresa ?? prompt.empresa ?? {},
       enrutamiento: rawData.enrutamiento ?? prompt.enrutamiento ?? {},
-      reglasBot: rawData.reglasBot ?? prompt.reglasBot ?? {
+      reglasBot: rawData.reglasBot ?? prompt.reglasBot ?? prompt.botRules ?? {
         autoPauseOptOut: true,
         optOutMessage: 'Entendido perfectamente. Agradecemos mucho tu tiempo y honestidad. ¡Que tengas un excelente día!',
         autoPauseHandoff: true,
         handoffMessage: 'Con gusto. En breve un asesor humano de nuestro equipo continuará la conversación contigo por acá.',
+        autoPausePayment: true,
+        paymentReceivedMessage: '¡Muchas gracias! 🎉 Hemos recibido tu comprobante de pago. En breve un asesor de nuestro equipo verificará los datos de la transferencia y te entregará el acceso a tu material por este medio. ¡Quedamos a tu completa orden!',
         enableMessageLimit: true,
         maxBotMessages: 10,
-        limitReachedMessage: 'Para brindarte una atención personalizada y revisar los detalles de tu caso, te transferiré con un asesor de nuestro equipo que te atenderá en breve.'
+        respondLastMessageBeforePause: true,
+        autoResetAfterTime: false,
+        resetHours: 24,
+        limitReachedMessage: '',
+        enableResponseDelay: true,
+        minDelaySeconds: 4,
+        maxDelaySeconds: 10,
+        simulateTyping: true,
       },
       productos: rawData.productos || [],
       categorias: rawData.categorias || [],
@@ -255,7 +264,7 @@ export class BusinessStudioService {
   }
 
   private checkOptimisticLock(currentVersion: number, expectedVersion?: number) {
-    if (expectedVersion !== undefined && expectedVersion !== currentVersion) {
+    if (expectedVersion !== undefined && !isNaN(expectedVersion) && expectedVersion !== currentVersion) {
       throw new ConflictException(`La versión de la base de conocimiento ha cambiado. Actual: ${currentVersion}, Esperada: ${expectedVersion}`);
     }
   }

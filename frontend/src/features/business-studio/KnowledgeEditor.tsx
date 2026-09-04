@@ -150,9 +150,11 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
 
   const mutation = useMutation({
     mutationFn: async (newData: any) => {
-      const res = await api.put(`/business-studio/bundle/${sectionKey}`, newData, {
-        headers: { 'x-knowledge-version': currentVersion }
-      });
+      const headers: Record<string, any> = {};
+      if (currentVersion !== null && currentVersion !== undefined && !isNaN(Number(currentVersion))) {
+        headers['x-knowledge-version'] = String(currentVersion);
+      }
+      const res = await api.put(`/business-studio/bundle/${sectionKey}`, newData, { headers });
       return res.data;
     },
     onMutate: () => setSaveStatus('saving'),
@@ -506,7 +508,13 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
 
           {/* Card 4: Tiempo de Respuesta & Simulación Humana ("Escribiendo...") */}
           <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
+            <div 
+              className="flex items-center justify-between cursor-pointer select-none"
+              onClick={() => {
+                setReglasData({ ...reglasData, enableResponseDelay: !reglasData.enableResponseDelay });
+                setIsDirty(true);
+              }}
+            >
               <div>
                 <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                   ⏳ Tiempo de Respuesta y Simulación Humana ("Escribiendo...")
@@ -515,18 +523,26 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
                   Evita que el bot responda de forma instantánea o robótica, agregando un intervalo de espera natural y mostrando el estado "Escribiendo..." en WhatsApp.
                 </p>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={reglasData.enableResponseDelay}
-                  onChange={(e) => {
-                    setReglasData({ ...reglasData, enableResponseDelay: e.target.checked });
-                    setIsDirty(true);
-                  }}
-                  className="sr-only peer"
+              <button
+                type="button"
+                role="switch"
+                aria-checked={reglasData.enableResponseDelay}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setReglasData({ ...reglasData, enableResponseDelay: !reglasData.enableResponseDelay });
+                  setIsDirty(true);
+                }}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  reglasData.enableResponseDelay ? 'bg-blue-600' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    reglasData.enableResponseDelay ? 'translate-x-5' : 'translate-x-0'
+                  }`}
                 />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-              </label>
+              </button>
             </div>
 
             {reglasData.enableResponseDelay && (
@@ -573,27 +589,50 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl">
-                  <div>
-                    <span className="block text-xs font-bold text-emerald-900">
+                <div 
+                  className={`flex items-center justify-between p-3.5 border rounded-xl cursor-pointer transition-all ${
+                    reglasData.simulateTyping 
+                      ? 'bg-emerald-50 border-emerald-300 ring-1 ring-emerald-300/50' 
+                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100/60'
+                  }`}
+                  onClick={() => {
+                    setReglasData({ ...reglasData, simulateTyping: !reglasData.simulateTyping });
+                    setIsDirty(true);
+                  }}
+                >
+                  <div className="pr-3 select-none">
+                    <span className="block text-xs font-bold text-emerald-950 flex items-center gap-1.5">
                       💬 Mostrar estado "Escribiendo..." en WhatsApp
+                      {reglasData.simulateTyping && (
+                        <span className="text-[10px] bg-emerald-600 text-white font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                          Activo
+                        </span>
+                      )}
                     </span>
-                    <p className="text-[11px] text-emerald-700/80 mt-0.5">
+                    <p className="text-[11px] text-emerald-800/80 mt-0.5">
                       Activa la animación de escritura en la app del cliente mientras transcurre el tiempo de espera.
                     </p>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                    <input
-                      type="checkbox"
-                      checked={reglasData.simulateTyping}
-                      onChange={(e) => {
-                        setReglasData({ ...reglasData, simulateTyping: e.target.checked });
-                        setIsDirty(true);
-                      }}
-                      className="sr-only peer"
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={reglasData.simulateTyping}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setReglasData({ ...reglasData, simulateTyping: !reglasData.simulateTyping });
+                      setIsDirty(true);
+                    }}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      reglasData.simulateTyping ? 'bg-emerald-600' : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        reglasData.simulateTyping ? 'translate-x-5' : 'translate-x-0'
+                      }`}
                     />
-                    <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
-                  </label>
+                  </button>
                 </div>
               </div>
             )}
