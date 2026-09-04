@@ -556,6 +556,23 @@ export class LlmListenerService {
 
       if (finalContent) {
         finalContent = sanitizeUserFacingResponse(finalContent);
+
+        // Blindaje contra fugas de enlaces de descarga / Google Docs antes de validar el pago
+        const hasDownloadLink = /(?:https?:\/\/)?(?:docs\.google\.com|drive\.google\.com|mega\.nz|dropbox\.com)\/[^\s]+/i.test(finalContent);
+        if (hasDownloadLink) {
+          const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } });
+          const isPaid = memory?.leadStatus === 'CLOSED' || (Array.isArray(memory?.tags) && (memory.tags as string[]).includes('PAGO_CONFIRMADO'));
+          if (!isPaid) {
+            this.logger.warn(`[Shield] Bloqueada fuga de enlace de producto/descarga para contacto no verificado (${payload.contactId})`);
+            finalContent = finalContent
+              .replace(/(?:https?:\/\/)?(?:docs\.google\.com|drive\.google\.com|mega\.nz|dropbox\.com)\/[^\s]+/gi, '')
+              .replace(/docs\.google\.com/gi, '')
+              .trim();
+            if (!finalContent || finalContent.length < 10) {
+              finalContent = '¡Con gusto, profe! Todo el material viene en formato digital (Word y PDF). En cuanto nos compartas tu comprobante de pago o número de referencia, te entregamos de inmediato el enlace de acceso completo. 😊';
+            }
+          }
+        }
       }
 
       if (finalContent && finalContent.trim() !== '') {

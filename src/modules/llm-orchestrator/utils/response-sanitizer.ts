@@ -51,7 +51,10 @@ export function sanitizeUserFacingResponse(rawContent: string): string {
   // 8. Convertir negrita de Markdown estándar (**) al formato de negrita nativo de WhatsApp (*)
   text = text.replace(/\*\*([^*\n]+?)\*\*/g, '*$1*');
 
-  // 9. Limpiar saltos de línea excesivos
+  // 9. Eliminar placeholders alucinados de archivos o imágenes entre corchetes (ej: [IMAGEN DE...], [FOTO DE...])
+  text = text.replace(/\[(?:IMAGEN|FOTO|CAPTURE|CAPTURA|ADJUNTO|ARCHIVO|IMAGE|PHOTO|FILE)(?:\s+DE|\s*:)?\s*[^\]]+\]/gi, '');
+
+  // 10. Limpiar saltos de línea excesivos y espacios residuales
   text = text.replace(/\n{3,}/g, '\n\n').trim();
 
   return text;

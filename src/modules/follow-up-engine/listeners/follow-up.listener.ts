@@ -41,6 +41,8 @@ export class FollowUpListenerService {
         const response = await this.hermesClient.generateResponse(messages, false);
         if (response.content) {
           finalMessage = sanitizeUserFacingResponse(response.content);
+          // Blindaje: los seguimientos nunca deben contener enlaces a documentos o descargas
+          finalMessage = finalMessage.replace(/(?:https?:\/\/)?(?:docs\.google\.com|drive\.google\.com|mega\.nz|dropbox\.com)\/[^\s]+/gi, '').replace(/docs\.google\.com/gi, '').trim();
         }
       }
       
