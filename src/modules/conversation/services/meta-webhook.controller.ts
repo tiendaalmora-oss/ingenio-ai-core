@@ -53,16 +53,27 @@ export class MetaWebhookController {
       let contactId = '';
       let content = '';
 
+      let pushName: string | undefined = undefined;
+
       // CASO A: WAHA (WhatsApp Gateway)
       if (body.event === 'message' || body.event === 'message.any') {
-        if (body.payload?.fromMe) {
-          this.logger.debug('Ignoring outbound message (fromMe: true)');
-          return;
-        }
-        if (body.event === 'message.any') return;
+        const payload = body.payload || {};
+        const isFromMe = Boolean(payload.fromMe);
 
-        contactId = body.payload?.from;
-        
+        // 1. Extraer identificador real de WhatsApp (resolviendo @lid y sufijos de dispositivo :12)
+        let rawTarget = isFromMe ? (payload.to || payload.from) : (payload.from || payload.to);
+        if (rawTarget && rawTarget.includes('@lid')) {
+          const candidate = payload._data?.key?.remoteJid || 
+                            payload._data?.remoteJid || 
+                            payload._data?.author || 
+                            payload.author || 
+                            payload.to;
+          if (candidate && !candidate.includes('@lid') && (candidate.includes('@c.us') || candidate.includes('@s.whatsapp.net'))) {
+            rawTarget = candidate;
+          }
+        }
+        contactId = (rawTarget || '').replace(/:\d+@/, '@');
+
         if (contactId && contactId.endsWith('@g.us')) {
           this.logger.debug(`Ignoring group message: ${contactId}`);
           return;
@@ -70,7 +81,7 @@ export class MetaWebhookController {
 
         tenantId = await this.tenantResolver.resolveFromWahaSession(body.session || 'default');
 
-        // Sincronizar la sesión activa de WAHA en el tenant para garantizar que los envíos salientes usen la sesión correcta
+        // Sincronizar la sesión activa de WAHA en el tenant
         if (body.session && tenantId) {
           try {
             await this.prisma.tenant.update({
@@ -82,11 +93,69 @@ export class MetaWebhookController {
           }
         }
 
+        // Extraer nombre del perfil de WhatsApp del usuario
+        pushName = payload.notifyName || payload._data?.notifyName || payload.pushName || payload._data?.pushName;
+
+        // 2. Si el mensaje fue enviado manualmente desde el teléfono físico (fromMe: true)
+        if (isFromMe) {
+          const manualText = payload.body || payload.caption || '';
+          if (manualText && contactId && tenantId) {
+            this.logger.log(`[WhatsApp Mobile Sync] Mensaje saliente manual detectado desde el teléfono físico para ${contactId}: "${manualText.substring(0, 40)}..."`);
+            
+            const cleanDigits = contactId.replace(/@(c\.us|lid|s\.whatsapp\.net)$/, '').replace(/\D/g, '');
+            const existingContact = await this.prisma.contact.findFirst({
+              where: {
+                tenantId,
+                OR: [
+                  { externalId: contactId },
+                  { phone: cleanDigits },
+                  { phoneNormalized: cleanDigits }
+                ]
+              }
+            });
+
+            if (existingContact) {
+              const conv = await this.prisma.conversation.findFirst({
+                where: { contactId: existingContact.id }
+              });
+
+              if (conv) {
+                // Registrar la respuesta en el historial del CRM
+                await this.prisma.interaction.create({
+                  data: {
+                    conversationId: conv.id,
+                    direction: 'OUTBOUND',
+                    type: 'TEXT',
+                    content: manualText,
+                    role: 'assistant',
+                  }
+                });
+
+                // Pausar el bot para permitir que el operador continúe la conversación
+                await this.prisma.conversation.update({
+                  where: { id: conv.id },
+                  data: { status: 'HANDOFF' }
+                });
+
+                // Cancelar seguimientos automáticos pendientes
+                await this.prisma.pendingOutboundMessage.deleteMany({
+                  where: { conversationId: conv.id }
+                });
+
+                this.logger.log(`[WhatsApp Mobile Sync] Conversación ${conv.id} sincronizada y pausada en HANDOFF.`);
+              }
+            }
+          }
+          return;
+        }
+
+        if (body.event === 'message.any') return;
+
         // Procesamiento Multimedia vs Texto
-        const hasMedia = body.payload?.hasMedia || Boolean(body.payload?.media);
-        const media = body.payload?.media || {};
-        const mimetype = (media.mimetype || body.payload?._data?.mimetype || '').toLowerCase();
-        const messageType = (body.payload?.type || '').toLowerCase();
+        const hasMedia = payload.hasMedia || Boolean(payload.media);
+        const media = payload.media || {};
+        const mimetype = (media.mimetype || payload._data?.mimetype || '').toLowerCase();
+        const messageType = (payload.type || '').toLowerCase();
 
         // 1. Audio o Nota de Voz
         if (hasMedia && (mimetype.startsWith('audio/') || messageType === 'ptt' || messageType === 'audio')) {
@@ -96,12 +165,12 @@ export class MetaWebhookController {
         // 2. Imagen o Captura de Comprobante
         else if (hasMedia && (mimetype.startsWith('image/') || messageType === 'image')) {
           this.logger.log(`Procesando imagen entrante de ${contactId}...`);
-          const caption = body.payload?.body || body.payload?.caption || '';
+          const caption = payload.body || payload.caption || '';
           content = await this.mediaVisionService.analyzeImage(media, caption);
         }
         // 3. Mensaje de Texto Normal
         else {
-          content = body.payload?.body || '';
+          content = payload.body || '';
         }
       }
       // CASO B: Meta Cloud API Oficial (Instagram Direct / Facebook Messenger)
@@ -143,7 +212,7 @@ export class MetaWebhookController {
         return;
       }
 
-      await this.receiveMessageService.execute(tenantId, contactId, content);
+      await this.receiveMessageService.execute(tenantId, contactId, content, pushName);
     } catch (error: any) {
       this.logger.error('Error processing Meta Webhook in background:', error.message);
       

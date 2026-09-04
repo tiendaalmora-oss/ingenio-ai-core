@@ -8,5 +8,5 @@ export interface IConversationRepository {
   save(conversation: Conversation): Promise<void>;
   /** Ensures the Contact row exists for (tenantId, phoneNormalized).
    *  Returns the internal UUID of the Contact. */
-  ensureContactExists(tenantId: string, externalId: string): Promise<string>;
+  ensureContactExists(tenantId: string, externalId: string, pushName?: string): Promise<string>;
 }

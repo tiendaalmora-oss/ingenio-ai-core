@@ -23,7 +23,7 @@ export class ReceiveMessageService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async execute(tenantId: string, externalId: string, content: string): Promise<void> {
+  async execute(tenantId: string, externalId: string, content: string, pushName?: string): Promise<void> {
     const dedupeKey = `${tenantId}:${externalId}:${content.trim()}`;
     const now = Date.now();
     const lastSeen = this.recentMessages.get(dedupeKey);
@@ -44,7 +44,7 @@ export class ReceiveMessageService {
 
     this.logger.debug(`ReceiveMessageService executing for tenant=${tenantId} externalId=${externalId}`);
     // 0. Ensure Contact exists for (tenantId, phoneNormalized) → get internal UUID
-    const contactUuid = await this.conversationRepo.ensureContactExists(tenantId, externalId);
+    const contactUuid = await this.conversationRepo.ensureContactExists(tenantId, externalId, pushName);
     this.logger.debug(`Contact resolved: uuid=${contactUuid} externalId=${externalId}`);
 
     // 1. Find or create the Conversation using the internal UUID

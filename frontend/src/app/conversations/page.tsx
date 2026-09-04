@@ -63,6 +63,22 @@ function formatLastMessage(lastMsg: any) {
   return `${prefix}${content}`;
 }
 
+function formatPhoneFriendly(phone?: string | null) {
+  if (!phone) return 'Sin número';
+  const digits = phone.replace(/@(c\.us|lid|s\.whatsapp\.net)$/, '').replace(/\D/g, '');
+  if (digits.startsWith('58') && digits.length === 12) {
+    const d = digits.substring(2);
+    return `+58 ${d.substring(0, 3)} ${d.substring(3, 6)}-${d.substring(6)} (0${d.substring(0, 3)} ${d.substring(3)})`;
+  }
+  if (digits.length === 11 && digits.startsWith('0')) {
+    return `${digits.substring(0, 4)} ${digits.substring(4, 7)}-${digits.substring(7)}`;
+  }
+  if (digits.length >= 10) {
+    return `+${digits}`;
+  }
+  return phone;
+}
+
 function ConversationsView() {
   const searchParams = useSearchParams();
   const urlConvId = searchParams ? searchParams.get('id') : null;
@@ -245,6 +261,23 @@ function ConversationsView() {
     },
   });
 
+  // 8. Delete individual message mutation
+  const deleteMessageMutation = useMutation({
+    mutationFn: async (messageId: string) => {
+      if (!selectedConvId) return;
+      const res = await api.delete(`/conversations/${selectedConvId}/messages/${messageId}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      addToast('Mensaje eliminado del historial', 'success');
+      queryClient.invalidateQueries({ queryKey: ['conversation-messages', selectedConvId] });
+      queryClient.invalidateQueries({ queryKey: ['conversations-list'] });
+    },
+    onError: (err: any) => {
+      addToast(err?.response?.data?.message || 'Error al eliminar mensaje', 'error');
+    },
+  });
+
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!replyText.trim() || sendMutation.isPending) return;
@@ -382,7 +415,7 @@ function ConversationsView() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1 mb-0.5">
                       <p className="text-xs font-bold text-gray-900 truncate">
-                        {c.contactName || c.contactPhone || 'Prospecto'}
+                        {c.contactName && !/^\d+$/.test(c.contactName) ? c.contactName : formatPhoneFriendly(c.contactPhone)}
                       </p>
                       {formattedTime && (
                         <span className={`text-[10px] shrink-0 font-medium ${isHandoff ? 'text-amber-700 font-semibold' : 'text-gray-400'}`}>
@@ -463,7 +496,7 @@ function ConversationsView() {
                   </h3>
                   <p className="text-[11px] text-gray-400 flex items-center gap-1 truncate">
                     <Phone className="w-3 h-3 shrink-0" />
-                    <span className="truncate">{currentConv.contact.phone || 'Sin número'}</span>
+                    <span className="truncate">{formatPhoneFriendly(currentConv.contact.phone)}</span>
                   </p>
                 </div>
               </div>
@@ -553,12 +586,27 @@ function ConversationsView() {
                 return (
                   <div
                     key={msg.id}
-                    className={`flex gap-2.5 ${isUser ? 'justify-start' : 'justify-end'}`}
+                    className={`group flex gap-2.5 items-end ${isUser ? 'justify-start' : 'justify-end'}`}
                   >
                     {isUser && (
                       <div className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-[10px] shrink-0 font-bold">
                         <User className="w-3.5 h-3.5" />
                       </div>
+                    )}
+
+                    {/* Delete Message Button for Outbound/Mistaken Messages */}
+                    {!isUser && (
+                      <button
+                        onClick={() => {
+                          if (confirm('¿Eliminar este mensaje del historial del CRM?')) {
+                            deleteMessageMutation.mutate(msg.id);
+                          }
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 rounded-lg hover:bg-gray-100 transition shrink-0"
+                        title="Eliminar mensaje del CRM"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     )}
 
                     <div className="max-w-[70%] space-y-1">
@@ -588,6 +636,20 @@ function ConversationsView() {
                         {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
+
+                    {isUser && (
+                      <button
+                        onClick={() => {
+                          if (confirm('¿Eliminar este mensaje del historial del CRM?')) {
+                            deleteMessageMutation.mutate(msg.id);
+                          }
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 rounded-lg hover:bg-gray-100 transition shrink-0"
+                        title="Eliminar mensaje del CRM"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
 
                     {!isUser && (
                       <div

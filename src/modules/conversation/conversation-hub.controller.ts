@@ -326,6 +326,38 @@ export class ConversationHubController {
   }
 
   /**
+   * DELETE /conversations/:id/messages/:messageId
+   * Elimina un mensaje específico del historial de la conversación.
+   */
+  @Delete(':id/messages/:messageId')
+  async deleteMessage(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @TenantId() tenantId: string,
+  ) {
+    const conv = await this.prisma.conversation.findFirst({
+      where: { id, contact: { tenantId } },
+    });
+    if (!conv) throw new BadRequestException('Conversación no encontrada');
+
+    const interaction = await this.prisma.interaction.findFirst({
+      where: { id: messageId, conversationId: id },
+    });
+    if (!interaction) throw new BadRequestException('Mensaje no encontrado');
+
+    await this.prisma.interaction.delete({
+      where: { id: messageId },
+    });
+
+    this.logger.log(`[ConversationHub] Mensaje ${messageId} eliminado por el operador en conversación ${id}`);
+
+    return {
+      success: true,
+      message: 'Mensaje eliminado correctamente del historial',
+    };
+  }
+
+  /**
    * PATCH /conversations/:id/status
    * Actualiza el estado de la conversación (NEW, ACTIVE, HANDOFF, RESOLVED)
    */

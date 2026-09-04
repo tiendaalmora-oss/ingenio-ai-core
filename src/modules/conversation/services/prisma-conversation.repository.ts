@@ -23,24 +23,31 @@ export class PrismaConversationRepository implements IConversationRepository {
     return new Conversation(raw.id, raw.contactId, raw.status);
   }
 
-  async ensureContactExists(tenantId: string, externalId: string): Promise<string> {
-    // Normalize: strip WAHA suffixes (@c.us, @lid, @s.whatsapp.net)
-    const phoneNormalized = externalId.replace(/@(c\.us|lid|s\.whatsapp\.net)$/, '');
-    const phone = phoneNormalized; // same for now; can diverge if we add country-code logic
+  async ensureContactExists(tenantId: string, externalId: string, pushName?: string): Promise<string> {
+    // 1. Limpiar sufijos de dispositivo como ":12@c.us" o ":0@c.us"
+    const cleanExternalId = externalId.replace(/:\d+@/, '@');
+
+    // 2. Extraer dígitos reales normalizados
+    const phoneNormalized = cleanExternalId.replace(/@(c\.us|lid|s\.whatsapp\.net)$/, '').replace(/\D/g, '');
+    const phone = phoneNormalized;
+
+    // 3. Nombre del contacto: si viene pushName (nombre de perfil de WhatsApp), usarlo
+    const trimmedPushName = pushName && pushName.trim() ? pushName.trim() : undefined;
 
     const contact = await this.prisma.contact.upsert({
       where: {
         tenantId_phoneNormalized: { tenantId, phoneNormalized },
       },
       update: {
-        // Keep externalId up to date in case WAHA changes suffix format
-        externalId,
+        externalId: cleanExternalId,
+        phone,
+        ...(trimmedPushName ? { name: trimmedPushName } : {}),
       },
       create: {
-        externalId,
+        externalId: cleanExternalId,
         phone,
         phoneNormalized,
-        name: phoneNormalized,
+        name: trimmedPushName || phoneNormalized || 'Prospecto',
         tenant: {
           connectOrCreate: {
             where: { id: tenantId },
