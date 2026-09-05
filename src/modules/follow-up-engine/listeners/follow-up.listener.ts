@@ -38,23 +38,36 @@ export class FollowUpListenerService {
           payload.ruleApplied
         );
         
-        const response = await this.hermesClient.generateResponse(messages, false);
-        if (response.content) {
-          finalMessage = sanitizeUserFacingResponse(response.content);
-          // Blindaje: los seguimientos nunca deben contener enlaces a documentos o descargas
-          finalMessage = finalMessage.replace(/(?:https?:\/\/)?(?:docs\.google\.com|drive\.google\.com|mega\.nz|dropbox\.com)\/[^\s]+/gi, '').replace(/docs\.google\.com/gi, '').trim();
+        try {
+          const response = await this.hermesClient.generateResponse(messages, false);
+          if (response?.content) {
+            finalMessage = sanitizeUserFacingResponse(response.content);
+            // Blindaje: los seguimientos nunca deben contener enlaces a documentos o descargas
+            finalMessage = finalMessage.replace(/(?:https?:\/\/)?(?:docs\.google\.com|drive\.google\.com|mega\.nz|dropbox\.com)\/[^\s]+/gi, '').replace(/docs\.google\.com/gi, '').trim();
+          }
+        } catch (llmErr: any) {
+          this.logger.warn(`[FollowUp] Error en LLM para conv ${payload.conversationId}: ${llmErr.message}. Activando fallback seguro.`);
+        }
+      }
+
+      // Candado Anti-Fuga: Si el mensaje contiene nombres internos del sistema o trazas de error, anularlo
+      if (finalMessage) {
+        const lower = finalMessage.toLowerCase();
+        if (lower.includes('hermes') || lower.includes('error calling') || lower.includes('failed to process')) {
+          this.logger.warn(`[FollowUp Shield] Mensaje técnico descartado: "${finalMessage.substring(0, 50)}...". Aplicando fallback.`);
+          finalMessage = '';
         }
       }
       
-      // Fallback seguro: Si la IA no generó texto, usar la instrucción de la regla o mensaje por defecto
+      // Fallback seguro: Si la IA no generó texto o fue descartado, usar la instrucción de la regla o mensaje docente garantizado
       if (!finalMessage || finalMessage.trim() === '') {
         const ruleText = typeof rule === 'string' ? rule : (rule.mensaje || rule.instruccion || rule.condicion || '');
-        if (ruleText && !ruleText.toLowerCase().includes('rule-')) {
+        if (ruleText && !ruleText.toLowerCase().includes('rule-') && ruleText.length > 10 && !ruleText.toLowerCase().includes('minutos') && !ruleText.toLowerCase().includes('horas')) {
           finalMessage = ruleText.replace(/^\d+[\.\-\)]\s*/, '').trim();
         } else {
-          finalMessage = '¡Hola, profe! 👋 ¿Pudiste revisar la información del material? Cuéntame si tienes alguna duda para orientarte.';
+          finalMessage = '¡Hola, profe! 👋 ¿Pudiste revisar la información del material? Cuéntame si te quedó alguna duda o si deseas que te reserve la oferta con gusto 😊';
         }
-        this.logger.log(`Usando texto de seguimiento fallback: "${finalMessage.substring(0, 50)}..."`);
+        this.logger.log(`Usando texto de seguimiento fallback seguro: "${finalMessage.substring(0, 60)}..."`);
       }
       
       await this.prisma.pendingOutboundMessage.create({

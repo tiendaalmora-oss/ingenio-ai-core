@@ -416,8 +416,15 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
             else if (response.content) {
                 finalContent = response.content;
             }
+            if (finalContent) {
+                const lower = finalContent.toLowerCase();
+                if (lower.includes('hermes no pudo') || lower.includes('error calling') || lower.includes('failed to process')) {
+                    this.logger.warn(`[Executive Loop Shield] Detectado mensaje de error técnico. Reemplazando por saludo de contingencia.`);
+                    finalContent = '';
+                }
+            }
             if (!finalContent || finalContent.trim() === '') {
-                this.logger.warn(`[Executive Loop] LLM devolvió texto vacío tras herramienta. Generando saludo cordial de contingencia...`);
+                this.logger.warn(`[Executive Loop] LLM no generó texto válido. Generando saludo cordial de contingencia...`);
                 finalContent = '¡Hola! Qué gusto saludarte. 👋 ¿En qué podemos ayudarte el día de hoy?';
             }
             if (finalContent) {

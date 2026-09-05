@@ -40,21 +40,33 @@ let FollowUpListenerService = FollowUpListenerService_1 = class FollowUpListener
             }
             else {
                 const messages = await this.contextBuilder.buildFollowUpContext(payload.tenantId, payload.contactId, payload.conversationId, payload.ruleApplied);
-                const response = await this.hermesClient.generateResponse(messages, false);
-                if (response.content) {
-                    finalMessage = (0, response_sanitizer_1.sanitizeUserFacingResponse)(response.content);
-                    finalMessage = finalMessage.replace(/(?:https?:\/\/)?(?:docs\.google\.com|drive\.google\.com|mega\.nz|dropbox\.com)\/[^\s]+/gi, '').replace(/docs\.google\.com/gi, '').trim();
+                try {
+                    const response = await this.hermesClient.generateResponse(messages, false);
+                    if (response?.content) {
+                        finalMessage = (0, response_sanitizer_1.sanitizeUserFacingResponse)(response.content);
+                        finalMessage = finalMessage.replace(/(?:https?:\/\/)?(?:docs\.google\.com|drive\.google\.com|mega\.nz|dropbox\.com)\/[^\s]+/gi, '').replace(/docs\.google\.com/gi, '').trim();
+                    }
+                }
+                catch (llmErr) {
+                    this.logger.warn(`[FollowUp] Error en LLM para conv ${payload.conversationId}: ${llmErr.message}. Activando fallback seguro.`);
+                }
+            }
+            if (finalMessage) {
+                const lower = finalMessage.toLowerCase();
+                if (lower.includes('hermes') || lower.includes('error calling') || lower.includes('failed to process')) {
+                    this.logger.warn(`[FollowUp Shield] Mensaje técnico descartado: "${finalMessage.substring(0, 50)}...". Aplicando fallback.`);
+                    finalMessage = '';
                 }
             }
             if (!finalMessage || finalMessage.trim() === '') {
                 const ruleText = typeof rule === 'string' ? rule : (rule.mensaje || rule.instruccion || rule.condicion || '');
-                if (ruleText && !ruleText.toLowerCase().includes('rule-')) {
+                if (ruleText && !ruleText.toLowerCase().includes('rule-') && ruleText.length > 10 && !ruleText.toLowerCase().includes('minutos') && !ruleText.toLowerCase().includes('horas')) {
                     finalMessage = ruleText.replace(/^\d+[\.\-\)]\s*/, '').trim();
                 }
                 else {
-                    finalMessage = '¡Hola, profe! 👋 ¿Pudiste revisar la información del material? Cuéntame si tienes alguna duda para orientarte.';
+                    finalMessage = '¡Hola, profe! 👋 ¿Pudiste revisar la información del material? Cuéntame si te quedó alguna duda o si deseas que te reserve la oferta con gusto 😊';
                 }
-                this.logger.log(`Usando texto de seguimiento fallback: "${finalMessage.substring(0, 50)}..."`);
+                this.logger.log(`Usando texto de seguimiento fallback seguro: "${finalMessage.substring(0, 60)}..."`);
             }
             await this.prisma.pendingOutboundMessage.create({
                 data: {

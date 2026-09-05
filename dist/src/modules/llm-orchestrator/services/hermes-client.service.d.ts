@@ -7,6 +7,7 @@ export interface LLMResponse {
         name: string;
         arguments: any;
     }[];
+    error?: string;
 }
 export declare class HermesClientService {
     private readonly aiProvider;

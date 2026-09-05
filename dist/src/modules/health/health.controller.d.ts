@@ -8,12 +8,12 @@ export declare class HealthController {
         tenants: {
             id: string;
             name: string;
-            updatedAt: Date;
             status: string;
             plan: string;
             wahaSession: string | null;
             currentBundleVersion: string | null;
             createdAt: Date;
+            updatedAt: Date;
             agencyId: string | null;
         }[];
         contacts: {
@@ -26,8 +26,8 @@ export declare class HealthController {
         }[];
         conversations: {
             id: string;
-            contactId: string;
             status: string;
+            contactId: string;
         }[];
     }>;
     getSystemStatus(): Promise<{

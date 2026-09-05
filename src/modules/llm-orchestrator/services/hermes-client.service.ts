@@ -101,6 +101,7 @@ const HERMES_TOOLS = [
 export interface LLMResponse {
   content?: string;
   toolCalls?: { id: string; name: string; arguments: any }[];
+  error?: string;
 }
 
 @Injectable()
@@ -121,8 +122,7 @@ export class HermesClientService {
         options.tools = HERMES_TOOLS;
         options.toolChoice = toolChoice;
       } else {
-        // Al requerir solo texto habiendo tools en el historial, pasamos tools con toolChoice = 'none'
-        options.tools = HERMES_TOOLS;
+        // Al requerir solo texto puro (ej: seguimientos), no enviamos tools
         options.toolChoice = 'none';
       }
 
@@ -135,9 +135,10 @@ export class HermesClientService {
         toolCalls: response.toolCalls,
       };
     } catch (error: any) {
-      this.logger.error('Error calling AI provider', error.message);
+      this.logger.error(`Error en llamada a proveedor de IA: ${error.message}`);
       return {
-        content: `Hermes no pudo procesar tu consulta en este momento. Por favor intenta de nuevo.`,
+        content: undefined,
+        error: error.message || 'Error inesperado de comunicación con el LLM',
       };
     }
   }

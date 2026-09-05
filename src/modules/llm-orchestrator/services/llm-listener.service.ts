@@ -548,9 +548,17 @@ export class LlmListenerService {
         finalContent = response.content;
       }
 
-      // Fallback de seguridad: Si la IA no generó texto tras la herramienta, generar saludo cordial de contingencia
+      if (finalContent) {
+        const lower = finalContent.toLowerCase();
+        if (lower.includes('hermes no pudo') || lower.includes('error calling') || lower.includes('failed to process')) {
+          this.logger.warn(`[Executive Loop Shield] Detectado mensaje de error técnico. Reemplazando por saludo de contingencia.`);
+          finalContent = '';
+        }
+      }
+
+      // Fallback de seguridad: Si la IA no generó texto o hubo error, generar saludo cordial de contingencia
       if (!finalContent || finalContent.trim() === '') {
-        this.logger.warn(`[Executive Loop] LLM devolvió texto vacío tras herramienta. Generando saludo cordial de contingencia...`);
+        this.logger.warn(`[Executive Loop] LLM no generó texto válido. Generando saludo cordial de contingencia...`);
         finalContent = '¡Hola! Qué gusto saludarte. 👋 ¿En qué podemos ayudarte el día de hoy?';
       }
 

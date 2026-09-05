@@ -17,9 +17,9 @@ export declare class AgencyController {
     createAgency(body: CreateAgencyDto): Promise<{
         id: string;
         name: string;
-        updatedAt: Date;
         plan: string;
         createdAt: Date;
+        updatedAt: Date;
         ownerEmail: string;
         customDomain: string | null;
         logoUrl: string | null;
@@ -40,9 +40,9 @@ export declare class AgencyController {
         } & {
             id: string;
             name: string;
-            updatedAt: Date;
             plan: string;
             createdAt: Date;
+            updatedAt: Date;
             ownerEmail: string;
             customDomain: string | null;
             logoUrl: string | null;
@@ -63,9 +63,9 @@ export declare class AgencyController {
     } & {
         id: string;
         name: string;
-        updatedAt: Date;
         plan: string;
         createdAt: Date;
+        updatedAt: Date;
         ownerEmail: string;
         customDomain: string | null;
         logoUrl: string | null;
@@ -92,9 +92,9 @@ export declare class AgencyController {
     } & {
         id: string;
         name: string;
-        updatedAt: Date;
         plan: string;
         createdAt: Date;
+        updatedAt: Date;
         ownerEmail: string;
         customDomain: string | null;
         logoUrl: string | null;
@@ -108,53 +108,53 @@ export declare class AgencyController {
     createSubaccount(agencyId: string, body: CreateSubaccountDto): Promise<{
         id: string;
         name: string;
-        updatedAt: Date;
         status: string;
         plan: string;
         wahaSession: string | null;
         currentBundleVersion: string | null;
         createdAt: Date;
+        updatedAt: Date;
         agencyId: string | null;
     }>;
     findSubaccounts(agencyId: string): Promise<({
-        _count: {
-            contacts: number;
-        };
         knowledgeBundle: {
             updatedAt: Date;
             version: number;
         } | null;
+        _count: {
+            contacts: number;
+        };
     } & {
         id: string;
         name: string;
-        updatedAt: Date;
         status: string;
         plan: string;
         wahaSession: string | null;
         currentBundleVersion: string | null;
         createdAt: Date;
+        updatedAt: Date;
         agencyId: string | null;
     })[]>;
     updateStatus(tenantId: string, body: UpdateSubaccountStatusDto): Promise<{
         id: string;
         name: string;
-        updatedAt: Date;
         status: string;
         plan: string;
         wahaSession: string | null;
         currentBundleVersion: string | null;
         createdAt: Date;
+        updatedAt: Date;
         agencyId: string | null;
     }>;
     deleteSubaccount(tenantId: string): Promise<{
         id: string;
         name: string;
-        updatedAt: Date;
         status: string;
         plan: string;
         wahaSession: string | null;
         currentBundleVersion: string | null;
         createdAt: Date;
+        updatedAt: Date;
         agencyId: string | null;
     }>;
 }

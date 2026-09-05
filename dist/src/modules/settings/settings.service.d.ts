@@ -37,12 +37,12 @@ export declare class SettingsService {
     }): Promise<{
         id: string;
         name: string;
-        updatedAt: Date;
         status: string;
         plan: string;
         wahaSession: string | null;
         currentBundleVersion: string | null;
         createdAt: Date;
+        updatedAt: Date;
         agencyId: string | null;
     }>;
     cleanSlate(tenantId: string): Promise<{

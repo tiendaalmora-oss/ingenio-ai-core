@@ -126,7 +126,6 @@ let HermesClientService = HermesClientService_1 = class HermesClientService {
                 options.toolChoice = toolChoice;
             }
             else {
-                options.tools = HERMES_TOOLS;
                 options.toolChoice = 'none';
             }
             const response = await this.aiProvider.chat(messages, options);
@@ -137,9 +136,10 @@ let HermesClientService = HermesClientService_1 = class HermesClientService {
             };
         }
         catch (error) {
-            this.logger.error('Error calling AI provider', error.message);
+            this.logger.error(`Error en llamada a proveedor de IA: ${error.message}`);
             return {
-                content: `Hermes no pudo procesar tu consulta en este momento. Por favor intenta de nuevo.`,
+                content: undefined,
+                error: error.message || 'Error inesperado de comunicación con el LLM',
             };
         }
     }

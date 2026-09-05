@@ -102,9 +102,9 @@ export declare class CrmController {
         }[];
         tasks: {
             id: string;
-            contactId: string;
             status: string;
             createdAt: Date;
+            contactId: string;
             title: string;
             dueDate: Date | null;
         }[];
@@ -128,15 +128,15 @@ export declare class CrmController {
         id: string;
         memory: {
             id: string;
-            contactId: string;
             name: string | null;
+            updatedAt: Date;
+            contactId: string;
             company: string | null;
             interests: string[];
             lastInteraction: Date | null;
             objections: string[];
             leadStatus: string | null;
             tags: string[];
-            updatedAt: Date;
         };
     }>;
     getAlerts(tenantId: string): Promise<{
