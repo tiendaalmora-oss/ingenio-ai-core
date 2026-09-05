@@ -67,14 +67,25 @@ export class OutboundListenerService {
         if (simulateTyping) {
           this.logger.log(`[Typing Indicator] Activando estado "Escribiendo..." (${delaySec}s) para ${targetChatId}...`);
           await this.wahaAdapter.startTyping(conversation.contact.tenantId, targetChatId);
+
+          // WhatsApp en teléfonos móviles limpia el estado "Escribiendo..." tras ~5-7 segundos.
+          // Para retardos prolongados (> 4s), mantenemos un ciclo de refresco (heartbeat) cada 4 segundos.
+          let typingInterval: NodeJS.Timeout | null = null;
+          if (delaySec > 4) {
+            typingInterval = setInterval(() => {
+              this.wahaAdapter.startTyping(conversation.contact.tenantId, targetChatId).catch(() => {});
+            }, 4000);
+          }
+
+          try {
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          } finally {
+            if (typingInterval) clearInterval(typingInterval);
+            await this.wahaAdapter.stopTyping(conversation.contact.tenantId, targetChatId);
+          }
         } else {
           this.logger.log(`[Human Delay] Esperando intervalo de respuesta humano (${delaySec}s) para ${targetChatId}...`);
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-
-        if (simulateTyping) {
-          await this.wahaAdapter.stopTyping(conversation.contact.tenantId, targetChatId);
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
       }
 

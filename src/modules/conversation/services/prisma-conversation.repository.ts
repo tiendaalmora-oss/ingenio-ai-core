@@ -38,22 +38,18 @@ export class PrismaConversationRepository implements IConversationRepository {
     // 4. Nombre del contacto: si viene pushName (nombre de perfil de WhatsApp), usarlo
     const trimmedPushName = pushName && pushName.trim() ? pushName.trim() : undefined;
 
-    // 5. Para el externalId guardado, preferir siempre @c.us sobre @lid para que el
-    //    WAHA adapter pueda enrutar correctamente. Solo si el externalId es @lid y
-    //    ya tenemos los dígitos, convertir a @c.us.
-    let safeExternalId = cleanExternalId;
-    if (safeExternalId.includes('@lid') && phoneNormalized) {
-      safeExternalId = `${phoneNormalized}@c.us`;
-    }
+    // 5. Preservar el JID original nativo (@lid o @c.us).
+    // Si el cliente interactúa desde un WhatsApp Privacy LID (@lid), WAHA requiere @lid
+    // para resolver el chat y activar startTyping. No convertirlo arbitrariamente a @c.us.
+    const safeExternalId = cleanExternalId;
 
     const contact = await this.prisma.contact.upsert({
       where: {
         tenantId_phoneNormalized: { tenantId, phoneNormalized },
       },
       update: {
-        // Solo actualizar externalId si el nuevo es @c.us (más confiable para routing)
-        // No degradar de @c.us a @lid
-        ...(safeExternalId.includes('@c.us') ? { externalId: safeExternalId } : {}),
+        // Actualizar externalId con el JID activo por el que nos contacta el cliente
+        externalId: safeExternalId,
         phone,
         ...(trimmedPushName ? { name: trimmedPushName } : {}),
       },

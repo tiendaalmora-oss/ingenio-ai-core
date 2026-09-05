@@ -63,13 +63,24 @@ let OutboundListenerService = OutboundListenerService_1 = class OutboundListener
                 if (simulateTyping) {
                     this.logger.log(`[Typing Indicator] Activando estado "Escribiendo..." (${delaySec}s) para ${targetChatId}...`);
                     await this.wahaAdapter.startTyping(conversation.contact.tenantId, targetChatId);
+                    let typingInterval = null;
+                    if (delaySec > 4) {
+                        typingInterval = setInterval(() => {
+                            this.wahaAdapter.startTyping(conversation.contact.tenantId, targetChatId).catch(() => { });
+                        }, 4000);
+                    }
+                    try {
+                        await new Promise((resolve) => setTimeout(resolve, delayMs));
+                    }
+                    finally {
+                        if (typingInterval)
+                            clearInterval(typingInterval);
+                        await this.wahaAdapter.stopTyping(conversation.contact.tenantId, targetChatId);
+                    }
                 }
                 else {
                     this.logger.log(`[Human Delay] Esperando intervalo de respuesta humano (${delaySec}s) para ${targetChatId}...`);
-                }
-                await new Promise((resolve) => setTimeout(resolve, delayMs));
-                if (simulateTyping) {
-                    await this.wahaAdapter.stopTyping(conversation.contact.tenantId, targetChatId);
+                    await new Promise((resolve) => setTimeout(resolve, delayMs));
                 }
             }
             const messageId = await this.wahaAdapter.sendMessage(conversation.contact.tenantId, targetChatId, payload.generatedContent);

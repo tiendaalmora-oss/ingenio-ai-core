@@ -18,6 +18,7 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
     prisma;
     metaChannelAdapter;
     logger = new common_1.Logger(WahaAdapterService_1.name);
+    cachedActiveSession = null;
     constructor(prisma, metaChannelAdapter) {
         this.prisma = prisma;
         this.metaChannelAdapter = metaChannelAdapter;
@@ -25,18 +26,23 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
     normalizeJid(rawId) {
         if (!rawId)
             return rawId;
-        if (rawId.includes('@c.us') || rawId.includes('@g.us') || rawId.includes('@lid')) {
+        if (rawId.includes('@c.us') ||
+            rawId.includes('@g.us') ||
+            rawId.includes('@lid') ||
+            rawId.includes('@s.whatsapp.net')) {
             return rawId;
         }
         const cleaned = rawId.replace(/\D/g, '');
+        if (!cleaned)
+            return rawId;
+        if (cleaned.length === 14 || cleaned.length === 15) {
+            return `${cleaned}@lid`;
+        }
         return `${cleaned}@c.us`;
     }
-    async sendMessage(tenantId, contactIdOrPhone, content) {
-        let rawPhone = contactIdOrPhone;
-        if (rawPhone && (rawPhone.startsWith('ig_') || rawPhone.startsWith('instagram_') || rawPhone.startsWith('fb_') || rawPhone.startsWith('messenger_'))) {
-            this.logger.log(`Enrutando mensaje omnicanal hacia Meta (Instagram/FB): ${rawPhone}`);
-            return this.metaChannelAdapter.sendMessage(rawPhone, content);
-        }
+    async resolveTargetChatId(contactIdOrPhone) {
+        let rawTarget = contactIdOrPhone;
+        let foundContactId;
         if (contactIdOrPhone && !contactIdOrPhone.includes('@')) {
             const contact = await this.prisma.contact.findFirst({
                 where: {
@@ -44,26 +50,205 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
                         { id: contactIdOrPhone },
                         { externalId: contactIdOrPhone },
                         { phone: contactIdOrPhone },
-                        { phoneNormalized: contactIdOrPhone }
-                    ]
-                }
+                        { phoneNormalized: contactIdOrPhone },
+                    ],
+                },
+                select: { id: true, externalId: true, phone: true, phoneNormalized: true },
             });
             if (contact) {
-                rawPhone = contact.externalId || contact.phone || contact.phoneNormalized || contactIdOrPhone;
+                foundContactId = contact.id;
+                rawTarget = contact.externalId || contact.phone || contact.phoneNormalized || contactIdOrPhone;
             }
         }
-        let chatId = this.normalizeJid(rawPhone);
-        this.logger.log(`Enviando mensaje vía WAHA a ${chatId} (teléfono/ref: ${rawPhone}, id: ${contactIdOrPhone})...`);
+        const chatId = this.normalizeJid(rawTarget);
+        return { chatId, contactId: foundContactId };
+    }
+    async resolveSession(tenantId) {
+        if (process.env.WAHA_SESSION) {
+            return process.env.WAHA_SESSION;
+        }
+        if (tenantId) {
+            const tenant = await this.prisma.tenant.findUnique({
+                where: { id: tenantId },
+                select: { wahaSession: true },
+            });
+            if (tenant?.wahaSession) {
+                return tenant.wahaSession;
+            }
+        }
+        const tenantWithSession = await this.prisma.tenant.findFirst({
+            where: { wahaSession: { not: null } },
+            select: { wahaSession: true },
+        });
+        if (tenantWithSession?.wahaSession) {
+            return tenantWithSession.wahaSession;
+        }
+        if (this.cachedActiveSession) {
+            return this.cachedActiveSession;
+        }
+        try {
+            const sessions = await this.getWahaSessions();
+            if (Array.isArray(sessions) && sessions.length > 0) {
+                const working = sessions.find((s) => s.status === 'WORKING' || s.status === 'CONNECTED' || s.status === 'STARTING') ||
+                    sessions[0];
+                if (working?.name) {
+                    this.cachedActiveSession = working.name;
+                    this.logger.log(`[WAHA] Sesión descubierta dinámicamente: "${working.name}"`);
+                    return working.name;
+                }
+            }
+        }
+        catch {
+        }
+        return 'default';
+    }
+    async healContactExternalId(contactId, verifiedJid) {
+        if (!contactId || !verifiedJid)
+            return;
+        try {
+            await this.prisma.contact.update({
+                where: { id: contactId },
+                data: { externalId: verifiedJid },
+            });
+            this.logger.log(`[Auto-Heal] Contacto ${contactId} auto-reparado con JID verificado: ${verifiedJid}`);
+        }
+        catch (e) {
+            this.logger.debug(`[Auto-Heal] No se pudo actualizar contact ${contactId}: ${e.message}`);
+        }
+    }
+    async executeTypingWithRetry(wahaUrl, session, initialChatId, headers, isStart) {
+        let currentChatId = initialChatId;
+        const endpoint = isStart ? '/api/startTyping' : '/api/stopTyping';
+        const presence = isStart ? 'typing' : 'paused';
+        let response = await fetch(`${wahaUrl}${endpoint}`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ chatId: currentChatId, session }),
+            signal: AbortSignal.timeout(4000),
+        }).catch((e) => {
+            this.logger.warn(`[WAHA] Falló llamada a ${endpoint}: ${e.message}`);
+            return null;
+        });
+        let errText = '';
+        if (response && !response.ok) {
+            errText = await response.text().catch(() => '');
+        }
+        if ((!response || !response.ok) &&
+            (errText.includes('No LID for user') || !response?.ok) &&
+            currentChatId.endsWith('@c.us')) {
+            const lidChatId = currentChatId.replace('@c.us', '@lid');
+            this.logger.warn(`[WAHA ${endpoint}] Error con @c.us. Reintentando con ${lidChatId}...`);
+            const retryRes = await fetch(`${wahaUrl}${endpoint}`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ chatId: lidChatId, session }),
+                signal: AbortSignal.timeout(4000),
+            }).catch(() => null);
+            if (retryRes && retryRes.ok) {
+                if (isStart)
+                    this.logger.log(`[WAHA] Estado "Escribiendo..." activado exitosamente para ${lidChatId}`);
+                return { success: true, usedChatId: lidChatId };
+            }
+        }
+        if ((!response || !response.ok) && currentChatId.endsWith('@lid')) {
+            const cusChatId = currentChatId.replace('@lid', '@c.us');
+            const retryRes = await fetch(`${wahaUrl}${endpoint}`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ chatId: cusChatId, session }),
+                signal: AbortSignal.timeout(4000),
+            }).catch(() => null);
+            if (retryRes && retryRes.ok) {
+                if (isStart)
+                    this.logger.log(`[WAHA] Estado "Escribiendo..." activado exitosamente para ${cusChatId}`);
+                return { success: true, usedChatId: cusChatId };
+            }
+        }
+        if (!response || !response.ok) {
+            const presRes = await fetch(`${wahaUrl}/api/${session}/presence`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ chatId: currentChatId, presence }),
+                signal: AbortSignal.timeout(4000),
+            }).catch(() => null);
+            if (presRes && presRes.ok) {
+                return { success: true, usedChatId: currentChatId };
+            }
+        }
+        if (response && response.ok) {
+            if (isStart)
+                this.logger.log(`[WAHA] Estado "Escribiendo..." activado exitosamente para ${currentChatId}`);
+            return { success: true, usedChatId: currentChatId };
+        }
+        return { success: false, usedChatId: currentChatId };
+    }
+    async startTyping(tenantId, contactIdOrPhone) {
+        try {
+            const wahaUrl = process.env.WAHA_API_URL;
+            if (!wahaUrl)
+                return;
+            const session = await this.resolveSession(tenantId);
+            const apiKey = process.env.WAHA_API_KEY || '';
+            const headers = {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+            };
+            if (apiKey)
+                headers['X-Api-Key'] = apiKey;
+            const target = await this.resolveTargetChatId(contactIdOrPhone);
+            const chatId = target.chatId;
+            this.logger.log(`[WAHA] Solicitando estado "Escribiendo..." para ${chatId} (sesión: ${session})`);
+            const result = await this.executeTypingWithRetry(wahaUrl, session, chatId, headers, true);
+            if (result.success && result.usedChatId !== chatId && target.contactId) {
+                await this.healContactExternalId(target.contactId, result.usedChatId);
+            }
+        }
+        catch (err) {
+            this.logger.warn(`[WAHA] Excepción no crítica en startTyping: ${err.message}`);
+        }
+    }
+    async stopTyping(tenantId, contactIdOrPhone) {
+        try {
+            const wahaUrl = process.env.WAHA_API_URL;
+            if (!wahaUrl)
+                return;
+            const session = await this.resolveSession(tenantId);
+            const apiKey = process.env.WAHA_API_KEY || '';
+            const headers = {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+            };
+            if (apiKey)
+                headers['X-Api-Key'] = apiKey;
+            const target = await this.resolveTargetChatId(contactIdOrPhone);
+            const chatId = target.chatId;
+            await this.executeTypingWithRetry(wahaUrl, session, chatId, headers, false);
+        }
+        catch {
+        }
+    }
+    async sendMessage(tenantId, contactIdOrPhone, content) {
+        let rawPhone = contactIdOrPhone;
+        if (rawPhone &&
+            (rawPhone.startsWith('ig_') ||
+                rawPhone.startsWith('instagram_') ||
+                rawPhone.startsWith('fb_') ||
+                rawPhone.startsWith('messenger_'))) {
+            this.logger.log(`Enrutando mensaje omnicanal hacia Meta (Instagram/FB): ${rawPhone}`);
+            return this.metaChannelAdapter.sendMessage(rawPhone, content);
+        }
+        const target = await this.resolveTargetChatId(contactIdOrPhone);
+        let chatId = target.chatId;
+        this.logger.log(`Enviando mensaje vía WAHA a ${chatId} (ref: ${contactIdOrPhone})...`);
         const wahaUrl = process.env.WAHA_API_URL;
         if (!wahaUrl) {
             throw new Error('WAHA_API_URL is not configured');
         }
-        const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
-        const session = process.env.WAHA_SESSION || tenant?.wahaSession || 'default';
+        const session = await this.resolveSession(tenantId);
         const apiKey = process.env.WAHA_API_KEY || '';
         const headers = {
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            Accept: 'application/json',
         };
         if (apiKey) {
             headers['X-Api-Key'] = apiKey;
@@ -75,8 +260,8 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
                 body: JSON.stringify({
                     chatId: chatId,
                     text: content,
-                    session: session
-                })
+                    session: session,
+                }),
             });
             let errBody = '';
             if (!response.ok) {
@@ -92,9 +277,31 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
                     body: JSON.stringify({
                         chatId: lidChatId,
                         text: content,
-                        session: session
-                    })
+                        session: session,
+                    }),
                 });
+                if (response.ok && target.contactId) {
+                    await this.healContactExternalId(target.contactId, lidChatId);
+                }
+                if (!response.ok)
+                    errBody = await response.text().catch(() => '');
+            }
+            if (!response.ok && chatId.endsWith('@lid')) {
+                const cusChatId = chatId.replace('@lid', '@c.us');
+                this.logger.warn(`Envío falló con @lid. Reintentando con ${cusChatId}...`);
+                chatId = cusChatId;
+                response = await fetch(`${wahaUrl}/api/sendText`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({
+                        chatId: cusChatId,
+                        text: content,
+                        session: session,
+                    }),
+                });
+                if (response.ok && target.contactId) {
+                    await this.healContactExternalId(target.contactId, cusChatId);
+                }
                 if (!response.ok)
                     errBody = await response.text().catch(() => '');
             }
@@ -106,8 +313,8 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
                     body: JSON.stringify({
                         chatId: chatId,
                         text: content,
-                        session: 'default'
-                    })
+                        session: 'default',
+                    }),
                 });
                 if (!response.ok)
                     errBody = await response.text().catch(() => '');
@@ -124,86 +331,12 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
             throw err;
         }
     }
-    async startTyping(tenantId, contactIdOrPhone) {
-        try {
-            const wahaUrl = process.env.WAHA_API_URL;
-            if (!wahaUrl)
-                return;
-            const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
-            const session = process.env.WAHA_SESSION || tenant?.wahaSession || 'default';
-            const apiKey = process.env.WAHA_API_KEY || '';
-            const chatId = this.normalizeJid(contactIdOrPhone);
-            const headers = { 'Content-Type': 'application/json' };
-            if (apiKey)
-                headers['X-Api-Key'] = apiKey;
-            this.logger.log(`[WAHA] Solicitando estado "Escribiendo..." para ${chatId} (sesión: ${session})`);
-            let response = await fetch(`${wahaUrl}/api/startTyping`, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({ chatId, session }),
-                signal: AbortSignal.timeout(4000)
-            }).catch((e) => {
-                this.logger.warn(`[WAHA] Falló llamada a /api/startTyping: ${e.message}`);
-                return null;
-            });
-            if (!response || !response.ok) {
-                response = await fetch(`${wahaUrl}/api/${session}/presence`, {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify({ chatId, presence: 'typing' }),
-                    signal: AbortSignal.timeout(4000)
-                }).catch((e) => {
-                    this.logger.warn(`[WAHA] Falló llamada a /api/${session}/presence: ${e.message}`);
-                    return null;
-                });
-            }
-            if (response && response.ok) {
-                this.logger.log(`[WAHA] Estado "Escribiendo..." activado exitosamente en WhatsApp para ${chatId}`);
-            }
-            else if (response) {
-                const errText = await response.text().catch(() => '');
-                this.logger.warn(`[WAHA] WAHA respondió con status ${response.status} en startTyping: ${errText}`);
-            }
-        }
-        catch (err) {
-            this.logger.warn(`[WAHA] Excepción no crítica en startTyping: ${err.message}`);
-        }
-    }
-    async stopTyping(tenantId, contactIdOrPhone) {
-        try {
-            const wahaUrl = process.env.WAHA_API_URL;
-            if (!wahaUrl)
-                return;
-            const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
-            const session = process.env.WAHA_SESSION || tenant?.wahaSession || 'default';
-            const apiKey = process.env.WAHA_API_KEY || '';
-            const chatId = this.normalizeJid(contactIdOrPhone);
-            const headers = { 'Content-Type': 'application/json' };
-            if (apiKey)
-                headers['X-Api-Key'] = apiKey;
-            let response = await fetch(`${wahaUrl}/api/stopTyping`, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({ chatId, session }),
-                signal: AbortSignal.timeout(4000)
-            }).catch(() => null);
-            if (!response || !response.ok) {
-                await fetch(`${wahaUrl}/api/${session}/presence`, {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify({ chatId, presence: 'paused' }),
-                    signal: AbortSignal.timeout(4000)
-                }).catch(() => null);
-            }
-        }
-        catch { }
-    }
     async getWahaSessions() {
         const wahaUrl = process.env.WAHA_API_URL;
         if (!wahaUrl)
             return { error: 'WAHA_API_URL no configurado' };
         const apiKey = process.env.WAHA_API_KEY || '';
-        const headers = { 'Accept': 'application/json' };
+        const headers = { Accept: 'application/json' };
         if (apiKey)
             headers['X-Api-Key'] = apiKey;
         try {

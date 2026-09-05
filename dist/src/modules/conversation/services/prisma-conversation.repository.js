@@ -41,16 +41,13 @@ let PrismaConversationRepository = class PrismaConversationRepository {
             .replace(/\D/g, '');
         const phone = phoneNormalized;
         const trimmedPushName = pushName && pushName.trim() ? pushName.trim() : undefined;
-        let safeExternalId = cleanExternalId;
-        if (safeExternalId.includes('@lid') && phoneNormalized) {
-            safeExternalId = `${phoneNormalized}@c.us`;
-        }
+        const safeExternalId = cleanExternalId;
         const contact = await this.prisma.contact.upsert({
             where: {
                 tenantId_phoneNormalized: { tenantId, phoneNormalized },
             },
             update: {
-                ...(safeExternalId.includes('@c.us') ? { externalId: safeExternalId } : {}),
+                externalId: safeExternalId,
                 phone,
                 ...(trimmedPushName ? { name: trimmedPushName } : {}),
             },
