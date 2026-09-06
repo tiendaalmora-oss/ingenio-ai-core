@@ -108,7 +108,7 @@ export class PromptComposerService {
      * Si el cliente insiste en ver capturas antes de pagar: llama a pause_bot_and_handoff con reason: 'HUMAN_REQUESTED' y leadStatus: 'WARM' para que el equipo humano le envíe las capturas reales.\n${toolInstructions}`;
 
     if (mode === PromptMode.FOLLOW_UP) {
-      const followUpContext = `\n[MODO: SEGUIMIENTO AUTOMÁTICO ACTIVO (FOLLOW_UP)]\nEstás enviando un mensaje de seguimiento proactivo para reactivar la conversación.\nRegla de seguimiento aplicada: ${JSON.stringify(followUpRule)}\nEl usuario no ha respondido recientemente. Tú estás retomando el contacto amablemente según la regla. Menciona el producto que le interesaba si lo conoces, resuelve dudas y anímalo a continuar.\n⚠️ REGLA DE ORO DE SEGUIMIENTO: NUNCA ofrezcas enviar fotos, muestras, capturas ni archivos. No prometas nada que no puedas entregar por texto.\n`;
+      const followUpContext = `\n[MODO: SEGUIMIENTO AUTOMÁTICO ACTIVO (FOLLOW_UP)]\nEstás enviando un mensaje de reactivación proactivo porque el cliente no ha respondido recientemente.\nRegla de seguimiento aplicada: ${JSON.stringify(followUpRule)}\n\n🛑 PROHIBICIÓN ABSOLUTA DE OFRECER MATERIALES, MUESTRAS O ARCHIVOS:\n- NUNCA preguntes ni ofrezcas: "¿Quieres que te envíe el material?", "¿Te paso material?", "¿Quieres ver una muestra?", "¿Te gustaría que te comparta algo?".\n- El bot NO envía material antes de la compra ni ofrece descargas previas.\n- Si ofreces enviar material y el cliente responde "sí, envíamelo", se rompe el flujo comercial porque el material solo se entrega tras confirmar el pago.\n- El objetivo del seguimiento es reactivar el interés con preguntas sencillas de baja fricción (dudas pedagógicas, año o nivel que enseña, tiempo para revisar la propuesta o método de pago), SIN ofrecer enviar nada.\n`;
       finalSystemContent += followUpContext;
     }
 
@@ -142,22 +142,38 @@ export class PromptComposerService {
 
       messages.push({
         role: 'user',
-        content: `[MISIÓN: SEGUIMIENTO COMERCIAL CREATIVO Y PERSUASIVO - CERO REPETICIÓN]
-El cliente lleva un tiempo en silencio. Tu objetivo es reactivar la conversación con un mensaje de WhatsApp fresco, espontáneo, cálido y diseñado para que el cliente responda con ganas.
+        content: `[MISIÓN: SEGUIMIENTO COMERCIAL CREATIVO Y PERSUASIVO - CERO OFRECIMIENTO DE MATERIAL]
+El cliente lleva un tiempo en silencio. Tu objetivo es reactivar la conversación con un mensaje de WhatsApp fresco, espontáneo, cálido y persuasivo para que el cliente responda con ganas.
 
 🎯 PAUTA / ENFOQUE DEL SEGUIMIENTO: "${ruleText}"
 👤 ESTADO DEL PROSPECTO: ${leadState} | INTERÉS: ${interestedProduct}${pastContextNotice}
 
-REGLAS DE ORO DE COPYWRITING PARA REACTIVACIÓN:
-1. 🚫 CERO REPETICIÓN: Usa un ángulo totalmente distinto al de tus mensajes anteriores. NO repitas saludos idénticos ni la misma pregunta anterior.
-2. 💡 ÁNGULOS CREATIVOS RECOMENDADOS SEGÚN EL CASO:
-   - Si el cliente ya vio el precio: Pregúntale amablemente si tuvo algún problema con su banco/Pago Móvil o si prefiere pagar en otra moneda/método (ej: "Hola profe, ¿tuviste algún inconveniente con el Pago Móvil o prefieres datos de otra cuenta bancaria?").
-   - Si estaba viendo los contenidos: Resáltale un beneficio práctico de ahorro de tiempo (ej: "Hola profe, recuerda que el kit ya trae las evaluaciones y proyectos listos para usar en el nuevo año escolar, ahorrándote semanas de trabajo").
-   - Empatía docente: Conéctate con su realidad ("Hola profe, sé que el inicio de clases suele ser agotador... ¿pudiste revisar los contenidos del kit?").
-3. ⚡ ULTRA CONCISO: Máximo 2 a 3 líneas breves de WhatsApp. Directo al grano y agradable a la vista.
-4. ❓ PREGUNTA FINAL DE BAJA FRICCIÓN: Termina con UNA sola pregunta sencilla de responder sobre sus dudas, su grado de enseñanza o su forma de pago (ej: "¿Pudiste chequear los datos bancarios?", "¿Aún te gustaría que te aparte el kit con el precio de lanzamiento?", "¿Para qué año o nivel estás buscando el material?").
-5. 🚫 PROHIBIDO OFRECER MUESTRAS O FOTOS: NUNCA ofrezcas enviar fotos, muestras, capturas o archivos. NO prometas nada que no puedas entregar por texto.
-6. ✨ TONO: Espontáneo, humano, empático, sin sonar como un robot de cobranza.`
+🛑 REGLA INQUEBRANTABLE: CERO OFRECIMIENTO DE MATERIAL O MUESTRAS (NO ROMPER EL FLUJO):
+- ESTÁ ESTRICTAMENTE PROHIBIDO preguntar si quiere que le envíes "material", "muestras", "fotos", "archivos", "enlaces" o "documentos".
+- 🚫 NUNCA DIGAS:
+  * "¿Quieres que te envíe el material?"
+  * "¿Te paso el material?"
+  * "¿Quieres ver una muestra?"
+  * "¿Te gustaría que te comparta algo?"
+  * "¿Quieres que te mande los temas?"
+- Si preguntas esto y el cliente dice "sí, envíamelo", el flujo de ventas se rompe por completo porque el bot no puede enviar archivos por este canal antes de pagar.
+
+💡 CÓMO REACTIVAR DE FORMA PERSUASIVA SEGÚN LA ETAPA DEL CLIENTE:
+1. Si el cliente ya vio el precio o los datos de pago:
+   - Pregúntale amablemente por su método de pago o banco:
+     Ej: "¡Hola, profe! Espero estés muy bien. ¿Tuviste algún problema con el Pago Móvil o prefieres datos de transferencia bancaria? Quedo atenta por acá para cualquier duda 😊"
+2. Si el cliente vio la oferta y los contenidos:
+   - Resalta el beneficio de ahorro de tiempo y tranquilidad docente:
+     Ej: "¡Hola, profe! Sé que la planificación y las evaluaciones quitan muchísimo tiempo al inicio de año... ¿Pudiste chequear la propuesta del kit o te quedó alguna duda pedagógica?"
+3. Si el cliente está en las primeras preguntas:
+   - Haz una pregunta sencilla de baja fricción sobre su trabajo docente:
+     Ej: "¡Hola, profe! Qué gusto saludarte de nuevo. ¿Para qué año o nivel estás buscando principalmente los recursos? Así te oriento mejor ✨"
+
+⚡ REGLAS DE ORO DE REDACCIÓN:
+- Máximo 2 a 3 líneas breves de WhatsApp. Directo al grano y agradable de leer.
+- Termina con UNA sola pregunta cordial que sea muy fácil de responder con un sí/no o una frase corta.
+- 🚫 CERO REPETICIÓN: No repitas las mismas palabras o preguntas de tus mensajes anteriores.
+- ✨ TONO: Espontáneo, humano, empático, de colega a colega, sin sonar jamás como un robot de cobranza ni presionar.`
       });
     } else if (currentMessage) {
       // Only append if it's not the last message in history

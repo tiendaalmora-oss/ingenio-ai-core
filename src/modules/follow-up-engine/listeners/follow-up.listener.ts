@@ -58,6 +58,20 @@ export class FollowUpListenerService {
           finalMessage = '';
         }
       }
+
+      // Candado Anti-Oferta de Material: Si el mensaje ofrece enviar material o muestras, descartarlo para no romper el flujo
+      if (finalMessage) {
+        const forbiddenOffers = [
+          /(?:quieres|deseas|gustar[ií]a|gustas)(?:\s+que)?\s+te\s+(?:env[ií]e|mande|pase|comparta)\s+(?:el\s+)?(?:material|muestra|archivo|gu[ií]a|documento|informaci[oó]n|temas|contenido)/i,
+          /te\s+(?:env[ií]o|mando|paso|comparto)\s+(?:el\s+)?(?:material|muestra|archivo|gu[ií]a|documento)/i,
+          /(?:quieres|deseas|gustar[ií]a|gustas)\s+(?:ver|revisar)\s+(?:una\s+)?muestra/i,
+          /(?:puedo|podr[ií]a)\s+(?:enviar|mandar|pasar|compartir)te\s+(?:el\s+)?(?:material|muestra|archivo)/i
+        ];
+        if (forbiddenOffers.some(regex => regex.test(finalMessage))) {
+          this.logger.warn(`[FollowUp Shield] Mensaje descartado por ofrecer material/muestra prohibida: "${finalMessage.substring(0, 60)}...". Aplicando fallback.`);
+          finalMessage = '';
+        }
+      }
       
       // Fallback seguro: Si la IA no generó texto o fue descartado, usar la instrucción de la regla o mensaje docente garantizado
       if (!finalMessage || finalMessage.trim() === '') {
@@ -65,7 +79,7 @@ export class FollowUpListenerService {
         if (ruleText && !ruleText.toLowerCase().includes('rule-') && ruleText.length > 10 && !ruleText.toLowerCase().includes('minutos') && !ruleText.toLowerCase().includes('horas')) {
           finalMessage = ruleText.replace(/^\d+[\.\-\)]\s*/, '').trim();
         } else {
-          finalMessage = '¡Hola, profe! 👋 ¿Pudiste revisar la información del material? Cuéntame si te quedó alguna duda o si deseas que te reserve la oferta con gusto 😊';
+          finalMessage = '¡Hola, profe! 👋 ¿Pudiste chequear los detalles de la propuesta? Cuéntame si te quedó alguna duda o si deseas que te reserve la oferta con gusto 😊';
         }
         this.logger.log(`Usando texto de seguimiento fallback seguro: "${finalMessage.substring(0, 60)}..."`);
       }
