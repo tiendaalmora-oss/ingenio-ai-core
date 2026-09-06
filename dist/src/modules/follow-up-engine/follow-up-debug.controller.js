@@ -111,6 +111,22 @@ let FollowUpDebugController = FollowUpDebugController_1 = class FollowUpDebugCon
             })),
         };
     }
+    async purgeQueue() {
+        this.logger.warn('Purgando y cancelando todos los mensajes salientes en cola...');
+        const result = await this.prisma.pendingOutboundMessage.updateMany({
+            where: {
+                status: { in: ['PENDING', 'PROCESSING'] }
+            },
+            data: {
+                status: 'FAILED',
+                providerResponse: JSON.stringify({ reason: 'PURGED_BY_USER_CAMPAIGNS_OFF' })
+            }
+        });
+        return {
+            message: 'Cola de mensajes salientes cancelada exitosamente',
+            cancelledCount: result.count
+        };
+    }
     async triggerEvaluation() {
         this.logger.log('Disparando evaluación manual del Follow-Up Engine...');
         const result = await this.followUpEngine.evaluateFollowUps();
@@ -151,6 +167,12 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], FollowUpDebugController.prototype, "runAudit", null);
+__decorate([
+    (0, common_1.Post)('purge-queue'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], FollowUpDebugController.prototype, "purgeQueue", null);
 __decorate([
     (0, common_1.Post)('trigger'),
     __metadata("design:type", Function),

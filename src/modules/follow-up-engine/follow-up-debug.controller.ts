@@ -115,6 +115,28 @@ export class FollowUpDebugController {
   }
 
   /**
+   * POST /debug/follow-up/purge-queue
+   * Cancela inmediatamente todos los mensajes salientes pendientes o en proceso.
+   */
+  @Post('purge-queue')
+  async purgeQueue() {
+    this.logger.warn('Purgando y cancelando todos los mensajes salientes en cola...');
+    const result = await this.prisma.pendingOutboundMessage.updateMany({
+      where: {
+        status: { in: ['PENDING', 'PROCESSING'] }
+      },
+      data: {
+        status: 'FAILED',
+        providerResponse: JSON.stringify({ reason: 'PURGED_BY_USER_CAMPAIGNS_OFF' })
+      }
+    });
+    return {
+      message: 'Cola de mensajes salientes cancelada exitosamente',
+      cancelledCount: result.count
+    };
+  }
+
+  /**
    * POST /debug/follow-up/trigger
    * Fuerza la ejecución inmediata del motor de evaluación de seguimientos.
    */

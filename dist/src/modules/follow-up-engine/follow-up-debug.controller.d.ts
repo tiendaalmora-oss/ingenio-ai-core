@@ -44,6 +44,10 @@ export declare class FollowUpDebugController {
             providerResponse: string | null;
         }[];
     }>;
+    purgeQueue(): Promise<{
+        message: string;
+        cancelledCount: number;
+    }>;
     triggerEvaluation(): Promise<{
         message: string;
         report: any;
