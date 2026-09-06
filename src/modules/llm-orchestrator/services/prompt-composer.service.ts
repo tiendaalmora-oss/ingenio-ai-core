@@ -196,7 +196,8 @@ REGLAS DE ORO DE COPYWRITING PARA REACTIVACIÓN:
     // 3. Catálogo de Productos y sus Embudos de Venta Paso a Paso
     const productsData = kosBundle.products?.items || kosBundle.productos;
     if (productsData) {
-      result += `### 📦 CATÁLOGO DE PRODUCTOS Y SUS EMBUDOS DE VENTA PASO A PASO:\n`;
+      result += `### 📦 CATÁLOGO DE PRODUCTOS Y SUS EMBUDOS DE VENTA PASO A PASO (FUENTE ÚNICA DE VERDAD):\n`;
+      result += `REGLA ESTRICTA DE CATÁLOGO: Este catálogo es la Fuente Única de Verdad de los productos autorizados para la venta. El bot comercializa única y exclusivamente los productos aquí listados. Cualquier materia o producto no listado aquí se considera no disponible.\n`;
       const items = Array.isArray(productsData) ? productsData : [];
       if (items.length > 0) {
         items.forEach((p: any, i: number) => {
@@ -220,7 +221,7 @@ REGLAS DE ORO DE COPYWRITING PARA REACTIVACIÓN:
 
     // 4. Scripts Comerciales
     const salesScripts = kosBundle.sales?.scripts || kosBundle.scriptsComerciales;
-    if (salesScripts) {
+    if (salesScripts && (Array.isArray(salesScripts) ? salesScripts.length > 0 : String(salesScripts).trim().length > 0)) {
       result += `### 📜 SCRIPTS COMERCIALES ADICIONALES:\n${typeof salesScripts === 'string' ? salesScripts : JSON.stringify(salesScripts, null, 2)}\n\n`;
     }
 
@@ -228,11 +229,16 @@ REGLAS DE ORO DE COPYWRITING PARA REACTIVACIÓN:
     for (const [key, value] of Object.entries(kosBundle)) {
       if (!value) continue;
       const kLow = key.toLowerCase();
-      if (['identity', 'identidad', 'business', 'empresa', 'routing', 'enrutamiento', 'estrategia', 'sales', 'scriptscomerciales', 'products', 'productos', 'categorias', 'botrules', 'reglasbot'].includes(kLow)) {
+      if ([
+        'identity', 'identidad', 'business', 'empresa', 'routing', 'enrutamiento',
+        'estrategia', 'sales', 'scriptscomerciales', 'products', 'productos',
+        'categorias', 'botrules', 'reglasbot', 'followups', 'seguimientos',
+        'restrictions', '_raw'
+      ].includes(kLow)) {
         continue;
       }
 
-      if (typeof value === 'string') {
+      if (typeof value === 'string' && value.trim().length > 0) {
         result += `### ${key.toUpperCase()}:\n${value}\n\n`;
       } else if (Array.isArray(value) && value.length > 0) {
         result += `### ${key.toUpperCase()}:\n`;

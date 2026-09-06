@@ -2,10 +2,10 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/services/api';
 import { useBusinessStudioStore } from '@/store/business-studio.store';
-import { User, Building, Package, Tags, Briefcase, HelpCircle, Shield, FileText, Tag, Repeat, LifeBuoy, Book, Folder, Compass } from 'lucide-react';
+import { User, Building, Package, Tags, Briefcase, HelpCircle, Shield, FileText, Tag, Repeat, LifeBuoy, Book, Folder, Compass, ShieldAlert } from 'lucide-react';
 
 const iconMap: Record<string, any> = {
-  User, Building, Package, Tags, Briefcase, HelpCircle, Shield, FileText, Tag, Repeat, LifeBuoy, Book, Compass
+  User, Building, Package, Tags, Briefcase, HelpCircle, Shield, FileText, Tag, Repeat, LifeBuoy, Book, Compass, ShieldAlert
 };
 
 export default function KnowledgeSidebar() {

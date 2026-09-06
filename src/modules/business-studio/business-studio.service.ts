@@ -132,20 +132,12 @@ export class BusinessStudioService {
 
   getSchema() {
     return [
-      { key: 'identidad', title: 'Identidad del Bot', description: 'Personalidad y nombre', icon: 'User', editable: true, collection: false },
-      { key: 'empresa', title: 'Datos de la Empresa', description: 'Información general', icon: 'Building', editable: true, collection: false },
-      { key: 'enrutamiento', title: 'Estrategia y Enrutamiento', description: 'Triaje, venta cruzada y flujo', icon: 'Compass', editable: true, collection: false },
-      { key: 'reglasBot', title: 'Control y Pausa del Bot', description: 'Límites de mensajes y auto-pausa', icon: 'ShieldAlert', editable: true, collection: false },
-      { key: 'productos', title: 'Productos', description: 'Catálogo, Embudos de Venta y Fichas Técnicas', icon: 'Package', editable: true, collection: true },
-      { key: 'categorias', title: 'Categorías', description: 'Categorías de productos', icon: 'Tags', editable: true, collection: true },
-      { key: 'servicios', title: 'Servicios', description: 'Servicios ofrecidos', icon: 'Briefcase', editable: true, collection: true },
-      { key: 'faqs', title: 'Preguntas Frecuentes', description: 'Respuestas automáticas', icon: 'HelpCircle', editable: true, collection: true },
-      { key: 'objeciones', title: 'Objeciones', description: 'Manejo de objeciones', icon: 'Shield', editable: true, collection: true },
-      { key: 'scriptsComerciales', title: 'Scripts Comerciales', description: 'Guiones de venta', icon: 'FileText', editable: true, collection: true },
-      { key: 'promociones', title: 'Promociones', description: 'Ofertas activas', icon: 'Tag', editable: true, collection: true },
-      { key: 'seguimientos', title: 'Seguimientos', description: 'Reglas de follow-up', icon: 'Repeat', editable: true, collection: true },
-      { key: 'soporte', title: 'Soporte', description: 'Datos de contacto', icon: 'LifeBuoy', editable: true, collection: true },
-      { key: 'politicasAtencion', title: 'Políticas', description: 'Reglas de atención', icon: 'Book', editable: true, collection: true },
+      { key: 'identidad', title: 'Identidad del Bot', description: 'Personalidad, tono y nombre de la asesora', icon: 'User', editable: true, collection: false },
+      { key: 'empresa', title: 'Datos de la Empresa', description: 'Misión, propuesta de valor y canales oficiales', icon: 'Building', editable: true, collection: false },
+      { key: 'enrutamiento', title: 'Estrategia y Enrutamiento', description: 'Triaje de entrada, combos y venta cruzada', icon: 'Compass', editable: true, collection: false },
+      { key: 'productos', title: 'Catálogo y Embudos de Venta', description: 'Catálogo oficial, guion paso a paso y fichas técnicas', icon: 'Package', editable: true, collection: true },
+      { key: 'reglasBot', title: 'Control y Reglas del Bot', description: 'Límites de mensajes, auto-pausa y comprobantes', icon: 'ShieldAlert', editable: true, collection: false },
+      { key: 'seguimientos', title: 'Seguimientos Automáticos', description: 'Reglas de reactivación cronometrada con IA', icon: 'Repeat', editable: true, collection: true },
     ];
   }
 
