@@ -291,8 +291,8 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 textNorm.includes('puedo pagar') ||
                 textNorm.includes('cuanto tarda');
             const isPaymentMsg = hasImageVoucher || (isExplicitPaymentProof && !isQuestionOrInquiry);
-            const isHotMsg = textNorm.includes('precio') || textNorm.includes('costo') || textNorm.includes('cuanto vale') || textNorm.includes('como pago') || textNorm.includes('datos de pago') || textNorm.includes('pago movil') || textNorm.includes('transferencia') || textNorm.includes('quiero comprar') || textNorm.includes('comprar') || textNorm.includes('cuenta');
-            const isWarmMsg = textNorm.includes('me interesa') || textNorm.includes('informacion') || textNorm.includes('tienen de') || textNorm.includes('kit') || textNorm.includes('docente') || textNorm.includes('profesor') || textNorm.includes('para que ano') || textNorm.includes('bachillerato') || textNorm.includes('primaria');
+            const isHotMsg = textNorm.includes('precio') || textNorm.includes('costo') || textNorm.includes('cuanto vale') || textNorm.includes('como pago') || textNorm.includes('datos de pago') || textNorm.includes('metodo de pago') || textNorm.includes('transferencia') || textNorm.includes('tarjeta') || textNorm.includes('pago movil') || textNorm.includes('quiero comprar') || textNorm.includes('comprar') || textNorm.includes('cuenta') || textNorm.includes('link de pago');
+            const isWarmMsg = textNorm.includes('me interesa') || textNorm.includes('informacion') || textNorm.includes('tienen') || textNorm.includes('disponible') || textNorm.includes('catalogo') || textNorm.includes('opciones') || textNorm.includes('servicio') || textNorm.includes('producto');
             if (isPaymentMsg && reglasBot.autoPausePayment !== false) {
                 this.logger.log(`[Reglas Bot / Pagos] Detectado comprobante de pago ("${payload.content}"). Pausando bot permanentemente para atención humana y entrega.`);
                 await this.prisma.conversation.update({
@@ -440,7 +440,7 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                             .replace(/docs\.google\.com/gi, '')
                             .trim();
                         if (!finalContent || finalContent.length < 10) {
-                            finalContent = '¡Con gusto, profe! Todo el material viene en formato digital (Word y PDF). En cuanto nos compartas tu comprobante de pago o número de referencia, te entregamos de inmediato el enlace de acceso completo. 😊';
+                            finalContent = '¡Con gusto! En cuanto confirmemos tu comprobante de pago o número de referencia, te facilitaremos el acceso de inmediato. ¡Quedamos muy atentos! 😊';
                         }
                     }
                 }

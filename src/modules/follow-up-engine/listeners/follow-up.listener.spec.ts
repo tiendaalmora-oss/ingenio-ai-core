@@ -1,4 +1,4 @@
-﻿import { Test, TestingModule } from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
 import { FollowUpListenerService } from './follow-up.listener';
 import { ContextBuilderService } from '../../llm-orchestrator/services/context-builder.service';
 import { HermesClientService } from '../../llm-orchestrator/services/hermes-client.service';
@@ -65,7 +65,8 @@ describe('FollowUpListenerService (Candado Anti-Fuga y Fallbacks Seguros)', () =
     expect(messageEnqueued.toLowerCase()).not.toContain('hermes');
     expect(messageEnqueued.toLowerCase()).not.toContain('error');
     expect(messageEnqueued.toLowerCase()).not.toContain('unavailable');
-    expect(messageEnqueued).toContain('¡Hola, profe!');
+    expect(messageEnqueued).toContain('¡Hola!');
+    expect(messageEnqueued).toContain('revisar la propuesta');
   });
 
   it('Candado 2: Si el LLM alucina texto con "Hermes no pudo...", el escudo debe bloquearlo y activar fallback', async () => {
@@ -90,7 +91,8 @@ describe('FollowUpListenerService (Candado Anti-Fuga y Fallbacks Seguros)', () =
 
     // No debe contener "Hermes" ni texto técnico
     expect(messageEnqueued.toLowerCase()).not.toContain('hermes');
-    expect(messageEnqueued).toContain('¡Hola, profe!');
+    expect(messageEnqueued).toContain('¡Hola!');
+    expect(messageEnqueued).toContain('revisar la propuesta');
   });
 
   it('Candado 3: Si la regla indica usar mensaje estatico (usarIA: false), no debe invocar al LLM', async () => {

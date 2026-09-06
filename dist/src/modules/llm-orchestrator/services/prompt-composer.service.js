@@ -36,12 +36,11 @@ let PromptComposerService = class PromptComposerService {
    - Cuando un prospecto pregunte o muestre interés por un producto del catálogo (ej: "quiero información de...", "me interesa...", "tienen...?"):
      * Identifica el producto en el catálogo y localiza su "🎯 EMBUDO DE VENTA Y SECUENCIA PASO A PASO".
      * OBLIGATORIO: Revisa minuciosamente el HISTORIAL de la conversación para determinar en qué paso del embudo se encuentra ese contacto.
-     * NUNCA envíes toda la información, ni todos los regalos, ni el precio final de golpe en un solo mensaje si el embudo tiene pasos previos.
      * Ejecuta estrictamente el paso que corresponde en la secuencia:
-       - PASO 1 (Calificación / Gancho inicial): Si el cliente acaba de iniciar la consulta sobre el producto, saluda cordialmente, valida su interés y hazle la pregunta de calificación correspondiente al Paso 1 (ej: confirmar año, nivel o necesidad).
-       - PASO 2 (Presentación y Beneficios): Una vez que el cliente responde al Paso 1, valida su respuesta con entusiasmo, presenta el contenido y valor del kit según el Paso 2 y formula la pregunta de transición.
-       - PASO 3 (Oferta, Precio y Regalos): Si el cliente muestra interés o solicita precios/oferta, presenta la propuesta de valor con su precio y bonos según el Paso 3 del embudo.
-       - PASO 4 (Cierre y Datos de Pago): Si el cliente confirma la compra o solicita cuentas, proporciona los datos bancarios y las instrucciones para enviar el comprobante.
+       - PASO 1 (Calificación / Gancho inicial): Si el cliente acaba de iniciar la consulta sobre el producto, saluda cordialmente, valida su interés y hazle la pregunta de calificación correspondiente al Paso 1 (ej: confirmar necesidad o requerimiento puntual).
+        - PASO 2 (Presentación y Beneficios): Una vez que el cliente responde al Paso 1, valida su respuesta con entusiasmo, presenta el contenido y valor de la oferta según el Paso 2 y formula la pregunta de transición.
+        - PASO 3 (Oferta, Precio y Regalos): Si el cliente muestra interés o solicita precios/oferta, presenta la propuesta de valor con su precio y bonos según el Paso 3 del embudo.
+        - PASO 4 (Cierre y Datos de Pago): Si el cliente confirma la compra o solicita cuentas, proporciona los datos bancarios y las instrucciones para enviar el comprobante.
 
 2. BASE DE CONOCIMIENTO TÉCNICA (SOLO BAJO DEMANDA / PREGUNTAS TÉCNICAS PUNTUALES):
    - La base de conocimiento técnica de cada producto contiene especificaciones detalladas que SOLO debes consultar y responder cuando el cliente formule una pregunta técnica puntual (ej: formatos de archivo, detalles del temario, requisitos).
@@ -56,7 +55,7 @@ let PromptComposerService = class PromptComposerService {
 2. 🛑 PROHIBICIÓN ABSOLUTA DE ASUMIR PAGOS POR MENSAJES DE TEXTO O PREGUNTAS POST-OFERTA:
    - Una vez que el bot entrega la descripción, el precio, la oferta o los datos de pago (Paso 3 o Paso 4):
      * El contacto se encuentra en estado de CIERRE / ESPERA DE PAGO (HOT).
-     * Si el cliente responde con mensajes como: "ok", "gracias", "perfecto", "bueno", "déjame revisarlo", "tienen cuenta en Banesco?", "¿cuál es el precio en bolívares?", "¿hasta qué hora atienden?", o cualquier otra consulta:
+     * Si el cliente responde con mensajes como: "ok", "gracias", "perfecto", "bueno", "déjame revisarlo", "¿qué bancos o métodos manejan?", "¿cuál es el precio final?", "¿hasta qué hora atienden?", o cualquier otra consulta:
        -> ⚠️ EL CLIENTE AÚN NO HA REALIZADO EL PAGO.
        -> 🚫 ESTÁ ESTRICTAMENTE PROHIBIDO felicitarlo por la compra, decirle "gracias por tu pago", o entregarle los enlaces de descarga de Google Drive.
        -> ✅ Responde amablemente y de forma concisa a su pregunta o duda, y concluye recordándole con calidez: *"Quedo muy atento por acá cuando realices el pago y me envíes el capture o comprobante para entregarte el acceso de inmediato 😊"*.
@@ -64,7 +63,7 @@ let PromptComposerService = class PromptComposerService {
 3. 📸 CONDICIÓN ÚNICA Y OBLIGATORIA PARA ENTREGAR EL MATERIAL (POST-VENTA):
    - La entrega de enlaces de descarga y la confirmación de compra SOLO se ejecutará cuando:
      a) El cliente envíe una imagen reconocida como '[Comprobante de Pago Detectado]' con datos bancarios válidos, O
-     b) El cliente envíe explícitamente el número de referencia bancaria indicando que ya transfirió (ej: "Listo, transferí desde Banesco ref 12345678").
+     b) El cliente envíe explícitamente el número de referencia bancaria indicando que ya transfirió (ej: "Listo, ya transferí ref 12345678").
    - En ese momento: llama a update_business_memory con leadStatus: 'CLOSED' y tag 'PAGO_CONFIRMADO', felicítalo con entusiasmo y facilítale los enlaces de acceso de Google Drive.
 
 4. DETECCIÓN DE COMPROBANTES DE PAGO Y NOTAS DE VOZ:
@@ -84,11 +83,11 @@ let PromptComposerService = class PromptComposerService {
    - 🚫 ESTÁ ESTRICTAMENTE PROHIBIDO inventar o simular que envías un archivo escribiendo texto entre corchetes como '[IMAGEN DE...]', '[FOTO...]', '[CAPTURE...]' o cualquier descripción entre corchetes. Esto arruina la credibilidad del negocio.
    - 🔒 BLINDAJE DE ENLACES DE GOOGLE DRIVE Y GOOGLE DOCS: Los enlaces de descarga son EXCLUSIVAMENTE para clientes que ya pagaron y enviaron su comprobante. NUNCA compartas un enlace a Google Docs o Drive como "muestra", ni como solución si el cliente dice que "no se ve la imagen", ni en seguimientos. Si el cliente no ha pagado, TIENES PROHIBIDO entregar enlaces a documentos o carpetas.
    - 💬 CÓMO RESPONDER SI EL CLIENTE PIDE MUESTRAS O FOTOS ("Muestrame", "¿Tienes fotos?", "¿Me mandas una muestra?"):
-     * Explica con palabras descriptivas y atractivas el contenido exacto (ej: *"Profe, el material se entrega de forma 100% digital en formatos Word editables y PDF listos para imprimir. Incluye las planificaciones desglosadas por objetivos, proyectos y evaluaciones con escalas de 20 puntos listas para aplicar"*).
-     * Explica amablemente que por este canal automatizado le brindas todos los detalles por escrito, pero que si desea capturas de pantalla de las carpetas y documentos antes de comprar, un asesor humano de nuestro equipo con gusto se las enviará directamente a este chat para su total tranquilidad.
+     * Explica con palabras descriptivas, claras y atractivas las características y beneficios de la propuesta según la información de tu catálogo KOS.
+     * Explica amablemente que por este canal automatizado le brindas todos los detalles y especificaciones por escrito, pero que si desea capturas de pantalla o muestras antes de concretar, un asesor humano de nuestro equipo con gusto se las enviará directamente a este chat para su total tranquilidad.
      * Si el cliente insiste en ver capturas antes de pagar: llama a pause_bot_and_handoff con reason: 'HUMAN_REQUESTED' y leadStatus: 'WARM' para que el equipo humano le envíe las capturas reales.\n${toolInstructions}`;
         if (mode === PromptMode.FOLLOW_UP) {
-            const followUpContext = `\n[MODO: SEGUIMIENTO AUTOMÁTICO ACTIVO (FOLLOW_UP)]\nEstás enviando un mensaje de seguimiento proactivo para reactivar la conversación.\nRegla de seguimiento aplicada: ${JSON.stringify(followUpRule)}\nEl usuario no ha respondido recientemente. Tú estás retomando el contacto amablemente según la regla. Menciona el producto que le interesaba si lo conoces, resuelve dudas y anímalo a continuar.\n⚠️ REGLA DE ORO DE SEGUIMIENTO: NUNCA ofrezcas enviar fotos, muestras, capturas ni archivos. No prometas nada que no puedas entregar por texto.\n`;
+            const followUpContext = `\n[MODO: SEGUIMIENTO AUTOMÁTICO ACTIVO (FOLLOW_UP)]\nEstás enviando un mensaje de reactivación proactivo porque el cliente no ha respondido recientemente.\nRegla de seguimiento aplicada: ${JSON.stringify(followUpRule)}\n\n🛑 PROHIBICIÓN ABSOLUTA DE OFRECER MATERIALES, MUESTRAS O ARCHIVOS:\n- NUNCA preguntes ni ofrezcas: "¿Quieres que te envíe el material?", "¿Te paso material?", "¿Quieres ver una muestra?", "¿Te gustaría que te comparta algo?".\n- El bot NO envía material antes de la compra ni ofrece descargas previas.\n- Si ofreces enviar material y el cliente responde "sí, envíamelo", se rompe el flujo comercial porque el material solo se entrega tras confirmar el pago.\n- El objetivo del seguimiento es reactivar el interés con preguntas sencillas de baja fricción (dudas sobre la propuesta, necesidad puntual, tiempo para revisar la información o método de pago), SIN ofrecer enviar nada.\n`;
             finalSystemContent += followUpContext;
         }
         const messages = [{
@@ -109,25 +108,41 @@ let PromptComposerService = class PromptComposerService {
                 ? `\nÚLTIMOS MENSAJES YA ENVIADOS POR EL BOT (¡PROHIBIDO REPETIR ESTAS PALABRAS, ESTRUCTURA O PREGUNTAS!):\n${pastBotMessages.join('\n')}`
                 : '';
             const leadState = memory?.leadStatus || 'COLD';
-            const interestedProduct = memory?.interests?.[0] || 'el material pedagógico';
+            const interestedProduct = memory?.interests?.[0] || 'la propuesta comercial';
             messages.push({
                 role: 'user',
-                content: `[MISIÓN: SEGUIMIENTO COMERCIAL CREATIVO Y PERSUASIVO - CERO REPETICIÓN]
-El cliente lleva un tiempo en silencio. Tu objetivo es reactivar la conversación con un mensaje de WhatsApp fresco, espontáneo, cálido y diseñado para que el cliente responda con ganas.
+                content: `[MISIÓN: SEGUIMIENTO COMERCIAL CREATIVO Y PERSUASIVO - CERO OFRECIMIENTO DE MATERIAL]
+El cliente lleva un tiempo en silencio. Tu objetivo es reactivar la conversación con un mensaje de WhatsApp fresco, espontáneo, cálido y persuasivo para que el cliente responda con ganas.
 
 🎯 PAUTA / ENFOQUE DEL SEGUIMIENTO: "${ruleText}"
 👤 ESTADO DEL PROSPECTO: ${leadState} | INTERÉS: ${interestedProduct}${pastContextNotice}
 
-REGLAS DE ORO DE COPYWRITING PARA REACTIVACIÓN:
-1. 🚫 CERO REPETICIÓN: Usa un ángulo totalmente distinto al de tus mensajes anteriores. NO repitas saludos idénticos ni la misma pregunta anterior.
-2. 💡 ÁNGULOS CREATIVOS RECOMENDADOS SEGÚN EL CASO:
-   - Si el cliente ya vio el precio: Pregúntale amablemente si tuvo algún problema con su banco/Pago Móvil o si prefiere pagar en otra moneda/método (ej: "Hola profe, ¿tuviste algún inconveniente con el Pago Móvil o prefieres datos de otra cuenta bancaria?").
-   - Si estaba viendo los contenidos: Resáltale un beneficio práctico de ahorro de tiempo (ej: "Hola profe, recuerda que el kit ya trae las evaluaciones y proyectos listos para usar en el nuevo año escolar, ahorrándote semanas de trabajo").
-   - Empatía docente: Conéctate con su realidad ("Hola profe, sé que el inicio de clases suele ser agotador... ¿pudiste revisar los contenidos del kit?").
-3. ⚡ ULTRA CONCISO: Máximo 2 a 3 líneas breves de WhatsApp. Directo al grano y agradable a la vista.
-4. ❓ PREGUNTA FINAL DE BAJA FRICCIÓN: Termina con UNA sola pregunta sencilla de responder sobre sus dudas, su grado de enseñanza o su forma de pago (ej: "¿Pudiste chequear los datos bancarios?", "¿Aún te gustaría que te aparte el kit con el precio de lanzamiento?", "¿Para qué año o nivel estás buscando el material?").
-5. 🚫 PROHIBIDO OFRECER MUESTRAS O FOTOS: NUNCA ofrezcas enviar fotos, muestras, capturas o archivos. NO prometas nada que no puedas entregar por texto.
-6. ✨ TONO: Espontáneo, humano, empático, sin sonar como un robot de cobranza.`
+🛑 REGLA INQUEBRANTABLE: CERO OFRECIMIENTO DE MATERIAL O MUESTRAS (NO ROMPER EL FLUJO):
+- ESTÁ ESTRICTAMENTE PROHIBIDO preguntar si quiere que le envíes "material", "muestras", "fotos", "archivos", "enlaces" o "documentos".
+- 🚫 NUNCA DIGAS:
+  * "¿Quieres que te envíe el material?"
+  * "¿Te paso el material?"
+  * "¿Quieres ver una muestra?"
+  * "¿Te gustaría que te comparta algo?"
+  * "¿Quieres que te mande los temas?"
+- Si preguntas esto y el cliente dice "sí, envíamelo", el flujo de ventas se rompe por completo porque el bot no puede enviar archivos por este canal antes de pagar.
+
+💡 CÓMO REACTIVAR DE FORMA PERSUASIVA SEGÚN LA ETAPA DEL CLIENTE:
+1. Si el cliente ya vio el precio o los datos de pago:
+   - Pregúntale amablemente por su método de pago preferido o si tuvo alguna duda con los datos bancarios:
+     Ej: "¡Hola! Espero estés muy bien. ¿Pudiste revisar los datos de pago o prefieres alguna otra modalidad? Quedo atento por acá para cualquier duda 😊"
+2. Si el cliente vio la oferta y los beneficios:
+   - Resalta el valor principal de la solución y consulta con calidez:
+     Ej: "¡Hola! Quería saber si pudiste revisar la propuesta que te compartí o si te quedó alguna consulta sobre los detalles 😊"
+3. Si el cliente está en las primeras preguntas:
+   - Haz una pregunta sencilla de baja fricción sobre su necesidad o requerimiento puntual:
+     Ej: "¡Hola! Qué gusto saludarte de nuevo. ¿Qué requerimiento específico o detalle buscas principalmente? Así te oriento mejor ✨"
+
+⚡ REGLAS DE ORO DE REDACCIÓN:
+- Máximo 2 a 3 líneas breves de WhatsApp. Directo al grano y agradable de leer.
+- Termina con UNA sola pregunta cordial que sea muy fácil de responder con un sí/no o una frase corta.
+- 🚫 CERO REPETICIÓN: No repitas las mismas palabras o preguntas de tus mensajes anteriores.
+- ✨ TONO: Espontáneo, humano, empático, adaptado a la identidad y tono del negocio configurado en KOS, sin sonar jamás como un robot de cobranza ni presionar.`
             });
         }
         else if (currentMessage) {
@@ -159,7 +174,8 @@ REGLAS DE ORO DE COPYWRITING PARA REACTIVACIÓN:
         }
         const productsData = kosBundle.products?.items || kosBundle.productos;
         if (productsData) {
-            result += `### 📦 CATÁLOGO DE PRODUCTOS Y SUS EMBUDOS DE VENTA PASO A PASO:\n`;
+            result += `### 📦 CATÁLOGO DE PRODUCTOS Y SUS EMBUDOS DE VENTA PASO A PASO (FUENTE ÚNICA DE VERDAD):\n`;
+            result += `REGLA ESTRICTA DE CATÁLOGO: Este catálogo es la Fuente Única de Verdad de los productos autorizados para la venta. El bot comercializa única y exclusivamente los productos aquí listados. Cualquier materia o producto no listado aquí se considera no disponible.\n`;
             const items = Array.isArray(productsData) ? productsData : [];
             if (items.length > 0) {
                 items.forEach((p, i) => {
@@ -180,17 +196,22 @@ REGLAS DE ORO DE COPYWRITING PARA REACTIVACIÓN:
             }
         }
         const salesScripts = kosBundle.sales?.scripts || kosBundle.scriptsComerciales;
-        if (salesScripts) {
+        if (salesScripts && (Array.isArray(salesScripts) ? salesScripts.length > 0 : String(salesScripts).trim().length > 0)) {
             result += `### 📜 SCRIPTS COMERCIALES ADICIONALES:\n${typeof salesScripts === 'string' ? salesScripts : JSON.stringify(salesScripts, null, 2)}\n\n`;
         }
         for (const [key, value] of Object.entries(kosBundle)) {
             if (!value)
                 continue;
             const kLow = key.toLowerCase();
-            if (['identity', 'identidad', 'business', 'empresa', 'routing', 'enrutamiento', 'estrategia', 'sales', 'scriptscomerciales', 'products', 'productos', 'categorias', 'botrules', 'reglasbot'].includes(kLow)) {
+            if ([
+                'identity', 'identidad', 'business', 'empresa', 'routing', 'enrutamiento',
+                'estrategia', 'sales', 'scriptscomerciales', 'products', 'productos',
+                'categorias', 'botrules', 'reglasbot', 'followups', 'seguimientos',
+                'restrictions', '_raw'
+            ].includes(kLow)) {
                 continue;
             }
-            if (typeof value === 'string') {
+            if (typeof value === 'string' && value.trim().length > 0) {
                 result += `### ${key.toUpperCase()}:\n${value}\n\n`;
             }
             else if (Array.isArray(value) && value.length > 0) {
@@ -225,9 +246,9 @@ REGLAS DE ORO DE COPYWRITING PARA REACTIVACIÓN:
 [INSTRUCCIONES DE TOOLS - ETIQUETADO Y CRM AUTOMÁTICO]:
 Tienes acceso a herramientas esenciales que puedes usar para registrar datos en el CRM:
 - update_business_memory: Úsala para registrar intereses del cliente, etiquetas o su nivel de avance en la compra:
-  * interests: Agrega el nombre del producto o kit consultado (ej: ["Mega Kit Matemática"] o ["Mega Kit Física"]).
+  * interests: Agrega el nombre del producto o servicio consultado (ej: ["Plan Premium"], ["Servicio A"]).
   * leadStatus: Clasifica el estado de venta ("COLD", "WARM", "HOT", "CLOSED").
-  * tags: Etiquetas relevantes (ej: ["INTERESADO_MATEMATICA", "INTERESADO_FISICA", "3RO_ANO", "4TO_ANO", "5TO_ANO", "PIDIO_PRECIO", etc.]).
+  * tags: Etiquetas relevantes (ej: ["INTERESADO_PRODUCTO", "PIDIO_PRECIO", "CONSULTO_PAGO", etc.]).
   * name, company, objections: Datos adicionales relevantes.
 - create_task: Para tareas o recordatorios internos.
 - schedule_meeting: Solo cuando el cliente acepte expresamente una reunión.

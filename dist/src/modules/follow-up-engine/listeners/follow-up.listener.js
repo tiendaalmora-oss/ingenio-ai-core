@@ -64,7 +64,7 @@ let FollowUpListenerService = FollowUpListenerService_1 = class FollowUpListener
                     finalMessage = ruleText.replace(/^\d+[\.\-\)]\s*/, '').trim();
                 }
                 else {
-                    finalMessage = '¡Hola, profe! 👋 ¿Pudiste revisar la información del material? Cuéntame si te quedó alguna duda o si deseas que te reserve la oferta con gusto 😊';
+                    finalMessage = '¡Hola! 👋 Quería saber si pudiste revisar la propuesta que te compartimos. Cuéntame si te quedó alguna duda o si deseas que te apoyemos con el siguiente paso 😊';
                 }
                 this.logger.log(`Usando texto de seguimiento fallback seguro: "${finalMessage.substring(0, 60)}..."`);
             }
