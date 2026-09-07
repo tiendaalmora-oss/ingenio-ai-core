@@ -17,7 +17,7 @@ let PromptComposerService = class PromptComposerService {
     compose(input) {
         const { kosBundle, memory, history, conversationSummary, activeGoal, availableSkills, currentMessage, mode, followUpRule } = input;
         const systemInstructions = this.buildSystemKOS(kosBundle);
-        const memoryContext = this.buildMemoryContext(memory);
+        const memoryContext = this.buildMemoryContext(memory, history);
         const summaryContext = conversationSummary ? `\n[RESUMEN DE CONVERSACIÓN]\n${conversationSummary}\n` : '';
         const goalContext = activeGoal ? `\n[OBJETIVO ACTIVO]\n${activeGoal}\n` : '';
         const skillsContext = availableSkills && availableSkills.length > 0
@@ -232,10 +232,10 @@ El cliente lleva un tiempo en silencio. Tu objetivo es reactivar la conversació
         }
         return result;
     }
-    buildMemoryContext(memory) {
+    buildMemoryContext(memory, history) {
         if (!memory)
-            return '[BUSINESS MEMORY]: Ninguna memoria previa detectada.';
-        return `[BUSINESS MEMORY]:
+            return '[BUSINESS MEMORY]: Ninguna memoria previa detectada.\n[ESTADO DEL EMBUDO]: INICIO — El cliente está llegando por primera vez. Inicia con saludo y calificación.';
+        const baseMemory = `[BUSINESS MEMORY]:
 - Nombre: ${memory.name || 'Desconocido'}
 - Empresa: ${memory.company || 'Desconocida'}
 - Intereses: ${memory.interests?.join(', ') || 'Ninguno'}
@@ -243,6 +243,72 @@ El cliente lleva un tiempo en silencio. Tu objetivo es reactivar la conversació
 - Estado del Lead: ${memory.leadStatus || 'Desconocido'}
 - Objeciones: ${memory.objections?.join(', ') || 'Ninguna'}
 - Tags: ${memory.tags?.join(', ') || 'Ninguno'}`;
+        const funnelState = this.detectFunnelState(history || [], memory);
+        return `${baseMemory}\n\n${funnelState}`;
+    }
+    detectFunnelState(history, memory) {
+        const outbound = history.filter((h) => h.direction === 'OUTBOUND' || h.role === 'assistant');
+        if (outbound.length === 0) {
+            return `[ESTADO DEL EMBUDO]:
+⏳ Paso 1 PENDIENTE — Primera interacción. Saluda y califica al cliente.
+🛑 INSTRUCCIÓN: Inicia el embudo desde el Paso 1 (saludo y pregunta de calificación).`;
+        }
+        const allBotText = outbound.map((h) => (h.content || '').toLowerCase()).join(' ');
+        const paso1Done = outbound.some((h) => {
+            const c = (h.content || '').toLowerCase();
+            return c.includes('qué año') || c.includes('que año') || c.includes('qué años') ||
+                c.includes('que materia') || c.includes('qué materia') || c.includes('cuéntame') ||
+                c.includes('cuentame') || c.includes('atiende actualmente') || c.includes('bachillerato');
+        });
+        const paso2Done = outbound.some((h) => {
+            const c = (h.content || '').toLowerCase();
+            return c.includes('todo lo que recibes') || c.includes('evaluaciones') ||
+                c.includes('planificaciones') || c.includes('mega kit') ||
+                c.includes('kit docente') || c.includes('beneficios') ||
+                c.includes('regalos exclusivos') || c.includes('te gustaría ver');
+        });
+        const paso3Done = outbound.some((h) => {
+            const c = (h.content || '').toLowerCase();
+            return c.includes('precio') || c.includes('hoy:') || c.includes('pago único') ||
+                c.includes('bs.') || c.includes('usd') || c.includes('binance') ||
+                c.includes('zinli') || c.includes('garantía') || c.includes('garantia') ||
+                c.includes('lanzamiento');
+        });
+        const paso4Done = outbound.some((h) => {
+            const c = (h.content || '').toLowerCase();
+            return c.includes('datos de pago') || c.includes('banco') || c.includes('pago móvil') ||
+                c.includes('pago movil') || c.includes('transferencia') || c.includes('cédula') ||
+                c.includes('cedula') || c.includes('titular') || c.includes('cuenta') ||
+                c.includes('escribe quiero') || c.includes('escribe "quiero"');
+        });
+        const isPaid = memory?.leadStatus === 'CLOSED' ||
+            (Array.isArray(memory?.tags) && memory.tags.includes('PAGO_CONFIRMADO'));
+        let stateLines = ['[ESTADO DEL EMBUDO - LEE ESTO ANTES DE RESPONDER]:'];
+        stateLines.push(paso1Done ? '✅ Paso 1 COMPLETADO — Calificación inicial ya realizada.' : '⏳ Paso 1 PENDIENTE — Calificación inicial.');
+        stateLines.push(paso2Done ? '✅ Paso 2 COMPLETADO — Presentación del producto ya enviada.' : '⏳ Paso 2 PENDIENTE — Presentación del producto.');
+        stateLines.push(paso3Done ? '✅ Paso 3 COMPLETADO — Oferta y precio ya enviados.' : '⏳ Paso 3 PENDIENTE — Oferta y precio.');
+        stateLines.push(paso4Done ? '✅ Paso 4 COMPLETADO — Datos de pago ya entregados.' : '⏳ Paso 4 PENDIENTE — Datos de pago.');
+        let instruction = '';
+        if (isPaid) {
+            instruction = `\n🟢 CLIENTE CONFIRMADO COMO PAGADOR (leadStatus: CLOSED).\n🛑 INSTRUCCIÓN CRÍTICA: Este cliente ya pagó. Trátalo como VIP. Ayúdalo con sus accesos o consultas. NO le pidas que pague de nuevo.`;
+        }
+        else if (paso4Done) {
+            instruction = `\n⏳ CLIENTE EN ESPERA DE PAGO — Los datos de pago ya fueron entregados.\n🛑 INSTRUCCIONES CRÍTICAS:\n- Responde ÚNICAMENTE a lo que el cliente preguntó en este mensaje. No re-envíes el pitch ni los datos ya entregados.\n- Si el cliente dice "no me llegó nada": pregúntale qué parte específica no recibió. NO re-envíes todo el catálogo automáticamente.\n- Si el cliente tiene una duda técnica: respóndela directo con tu base de conocimiento.\n- Si el cliente dice "ok", "gracias" o "ahora pago": confirma brevemente con calidez que quedas atento.\n- 🚫 PROHIBIDO: Volver a presentar el producto completo, los beneficios detallados ni el precio si ya fueron enviados.`;
+        }
+        else if (paso3Done) {
+            instruction = `\n⏳ CLIENTE EN ETAPA DE CIERRE — La oferta y precio ya fueron presentados.\n🛑 INSTRUCCIÓN: Continúa hacia el Paso 4. Si el cliente acepta o pregunta cómo pagar, entrega los datos de pago del producto de su interés.`;
+        }
+        else if (paso2Done) {
+            instruction = `\n⏳ CLIENTE EN ETAPA DE PRESENTACIÓN — El producto ya fue presentado.\n🛑 INSTRUCCIÓN: Continúa hacia el Paso 3. Presenta la oferta con precio y bonos si el cliente muestra interés.`;
+        }
+        else if (paso1Done) {
+            instruction = `\n⏳ CLIENTE CALIFICADO — La pregunta de calificación ya fue realizada.\n🛑 INSTRUCCIÓN: Continúa hacia el Paso 2. Presenta el contenido y valor del kit según la respuesta del cliente.`;
+        }
+        else {
+            instruction = `\n🛑 INSTRUCCIÓN: Inicia el embudo desde el Paso 1. Saluda y realiza la pregunta de calificación.`;
+        }
+        stateLines.push(instruction);
+        return stateLines.join('\n');
     }
     buildToolInstructions() {
         return `

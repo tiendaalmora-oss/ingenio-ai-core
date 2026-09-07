@@ -227,13 +227,14 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
             }
         }
         if (reglasBot.enableMessageLimit !== false) {
-            const maxMessages = Number(reglasBot.maxBotMessages) || 10;
+            const maxMessages = Number(reglasBot.maxBotMessages) || 25;
             const botMessageCount = this.prisma?.interaction?.count
                 ? await this.prisma.interaction.count({
                     where: {
                         conversationId: payload.conversationId,
                         direction: 'OUTBOUND',
-                        role: 'assistant'
+                        role: 'assistant',
+                        type: 'TEXT'
                     }
                 })
                 : 0;
@@ -382,6 +383,7 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
             this.logger.log(`No hay automatización, ejecutando Agente Universal...`);
             const masterPrompt = await this.contextBuilder.buildContext(payload.tenantId, payload.contactId, payload.conversationId, payload.content, null);
             let finalContent = '';
+            let skipTextInteraction = false;
             const response = await this.hermesClient.generateResponse(masterPrompt, true);
             if (response.toolCalls && response.toolCalls.length > 0) {
                 await this.prisma.interaction.create({
@@ -399,9 +401,11 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 }
                 if (response.content && response.content.trim() !== '') {
                     finalContent = response.content;
+                    skipTextInteraction = true;
+                    this.logger.log(`[Executive Loop] Tool call + texto en mismo turno. Emitiendo texto sin duplicar registro en DB.`);
                 }
                 else {
-                    this.logger.log(`[Executive Loop] Herramienta ejecutada. Solicitando respuesta de texto conversacional para el usuario...`);
+                    this.logger.log(`[Executive Loop] Herramienta ejecutada sin texto. Solicitando respuesta de texto conversacional para el usuario...`);
                     const textPrompt = await this.contextBuilder.buildContext(payload.tenantId, payload.contactId, payload.conversationId, payload.content, null);
                     textPrompt.push({
                         role: 'user',
@@ -446,24 +450,27 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 }
             }
             if (finalContent && finalContent.trim() !== '') {
-                await this.prisma.interaction.create({
-                    data: {
-                        conversationId: payload.conversationId,
-                        direction: 'OUTBOUND',
-                        type: 'TEXT',
-                        content: finalContent,
-                        role: 'assistant'
-                    }
-                });
+                if (!skipTextInteraction) {
+                    await this.prisma.interaction.create({
+                        data: {
+                            conversationId: payload.conversationId,
+                            direction: 'OUTBOUND',
+                            type: 'TEXT',
+                            content: finalContent,
+                            role: 'assistant'
+                        }
+                    });
+                }
                 this.eventEmitter.emit('response.generated', new response_generated_event_1.ResponseGeneratedEvent(payload.tenantId, payload.conversationId, finalContent));
                 if (reglasBot.enableMessageLimit !== false) {
-                    const maxMessages = Number(reglasBot.maxBotMessages) || 10;
+                    const maxMessages = Number(reglasBot.maxBotMessages) || 25;
                     const currentCount = this.prisma?.interaction?.count
                         ? await this.prisma.interaction.count({
                             where: {
                                 conversationId: payload.conversationId,
                                 direction: 'OUTBOUND',
-                                role: 'assistant'
+                                role: 'assistant',
+                                type: 'TEXT'
                             }
                         })
                         : 0;

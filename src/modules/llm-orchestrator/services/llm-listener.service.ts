@@ -294,13 +294,15 @@ export class LlmListenerService {
 
     // 3. REGLA: Límite Máximo de Mensajes del Bot (Ahorro de Tokens y Guardrail)
     if (reglasBot.enableMessageLimit !== false) {
-      const maxMessages = Number(reglasBot.maxBotMessages) || 10;
+      const maxMessages = Number(reglasBot.maxBotMessages) || 25;
+      // FIX: Contar solo interacciones de tipo TEXT (no TOOL_CALL) para un conteo real de mensajes visibles
       const botMessageCount = this.prisma?.interaction?.count
         ? await this.prisma.interaction.count({
             where: {
               conversationId: payload.conversationId,
               direction: 'OUTBOUND',
-              role: 'assistant'
+              role: 'assistant',
+              type: 'TEXT'
             }
           })
         : 0;
@@ -494,6 +496,9 @@ export class LlmListenerService {
       );
 
       let finalContent = '';
+      // Flag: si el texto ya fue guardado dentro del registro TOOL_CALL, NO crear un segundo
+      // registro TEXT con el mismo contenido (evita duplicados en WhatsApp y en la DB).
+      let skipTextInteraction = false;
       const response = await this.hermesClient.generateResponse(masterPrompt, true);
 
       // Si el LLM ejecutó herramientas
@@ -521,10 +526,14 @@ export class LlmListenerService {
         }
 
         if (response.content && response.content.trim() !== '') {
+          // El texto ya está guardado en el TOOL_CALL record.
+          // Lo emitimos a WhatsApp pero NO lo guardamos de nuevo como TEXT para evitar duplicado.
           finalContent = response.content;
+          skipTextInteraction = true;
+          this.logger.log(`[Executive Loop] Tool call + texto en mismo turno. Emitiendo texto sin duplicar registro en DB.`);
         } else {
-          // Solicitamos la respuesta conversacional final forzando texto (enableTools = false con toolChoice = 'none')
-          this.logger.log(`[Executive Loop] Herramienta ejecutada. Solicitando respuesta de texto conversacional para el usuario...`);
+          // El LLM solo hizo el tool call sin texto → pedimos la respuesta conversacional por separado
+          this.logger.log(`[Executive Loop] Herramienta ejecutada sin texto. Solicitando respuesta de texto conversacional para el usuario...`);
           const textPrompt = await this.contextBuilder.buildContext(
             payload.tenantId,
             payload.contactId,
@@ -584,31 +593,39 @@ export class LlmListenerService {
       }
 
       if (finalContent && finalContent.trim() !== '') {
-        await this.prisma.interaction.create({
-          data: {
-            conversationId: payload.conversationId,
-            direction: 'OUTBOUND',
-            type: 'TEXT',
-            content: finalContent,
-            role: 'assistant'
-          }
-        });
+        // Solo crear registro TEXT en la DB si el texto NO viene ya guardado dentro de un TOOL_CALL.
+        // Cuando skipTextInteraction=true, el contenido ya está guardado en el TOOL_CALL record.
+        if (!skipTextInteraction) {
+          await this.prisma.interaction.create({
+            data: {
+              conversationId: payload.conversationId,
+              direction: 'OUTBOUND',
+              type: 'TEXT',
+              content: finalContent,
+              role: 'assistant'
+            }
+          });
+        }
 
+        // Siempre emitir el evento para que WhatsApp reciba el mensaje
         this.eventEmitter.emit('response.generated', new ResponseGeneratedEvent(
           payload.tenantId,
           payload.conversationId,
           finalContent
         ));
 
-        // Si se alcanzó el límite tras responder este mensaje de forma natural, pausamos silenciosamente para los siguientes
+        // Si se alcanzó el límite tras responder este mensaje de forma natural, pausamos silenciosamente para los siguientes.
+        // FIX: Contar solo interacciones de tipo TEXT (no TOOL_CALL) para evitar que las herramientas
+        //      agoten el límite prematuramente.
         if (reglasBot.enableMessageLimit !== false) {
-          const maxMessages = Number(reglasBot.maxBotMessages) || 10;
+          const maxMessages = Number(reglasBot.maxBotMessages) || 25;
           const currentCount = this.prisma?.interaction?.count
             ? await this.prisma.interaction.count({
                 where: {
                   conversationId: payload.conversationId,
                   direction: 'OUTBOUND',
-                  role: 'assistant'
+                  role: 'assistant',
+                  type: 'TEXT'
                 }
               })
             : 0;

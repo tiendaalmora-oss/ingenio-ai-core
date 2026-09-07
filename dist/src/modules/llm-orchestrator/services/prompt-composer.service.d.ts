@@ -18,6 +18,7 @@ export declare class PromptComposerService {
     compose(input: PromptComposerInput): any[];
     private buildSystemKOS;
     private buildMemoryContext;
+    private detectFunnelState;
     private buildToolInstructions;
     private buildHistory;
 }
