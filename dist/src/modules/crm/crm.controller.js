@@ -161,7 +161,9 @@ let CrmController = class CrmController {
                 name: body.name,
                 phone: body.phone,
                 phoneNormalized,
-                externalId: `${phoneNormalized}@c.us`,
+                externalId: phoneNormalized.length >= 14 && phoneNormalized.length <= 16
+                    ? `${phoneNormalized}@lid`
+                    : `${phoneNormalized}@c.us`,
             },
         });
         await this.prisma.businessMemory.upsert({

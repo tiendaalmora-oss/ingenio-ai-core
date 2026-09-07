@@ -82,20 +82,20 @@ describe('WahaAdapterService (WhatsApp LID y Presencia "Escribiendo...")', () =>
       );
     });
 
-    it('debe reintentar con @lid si WAHA responde 500 "No LID for user" con @c.us y auto-curar en BD', async () => {
+    it('debe reintentar con @lid si WAHA responde 500 con @c.us y auto-curar en BD', async () => {
       prisma.contact.findFirst.mockResolvedValueOnce({
         id: 'contact-uuid-1',
-        externalId: '163810052673674@c.us',
-        phone: '163810052673674',
+        externalId: '584121234567@c.us',
+        phone: '584121234567',
       });
 
       const mockFetch = jest
         .fn()
-        // Primer intento con @c.us falla con 500 "No LID for user"
+        // Primer intento con @c.us falla con 500
         .mockResolvedValueOnce({
           ok: false,
           status: 500,
-          text: async () => JSON.stringify({ exception: { message: 'No LID for user' } }),
+          text: async () => JSON.stringify({ exception: { message: 't' } }),
         })
         // Segundo intento con @lid tiene éxito (201 Created)
         .mockResolvedValueOnce({
@@ -112,26 +112,26 @@ describe('WahaAdapterService (WhatsApp LID y Presencia "Escribiendo...")', () =>
         1,
         'https://waha-mock.example.com/api/startTyping',
         expect.objectContaining({
-          body: JSON.stringify({ chatId: '163810052673674@c.us', session: 'ferreos' }),
+          body: JSON.stringify({ chatId: '584121234567@c.us', session: 'ferreos' }),
         })
       );
       expect(mockFetch).toHaveBeenNthCalledWith(
         2,
         'https://waha-mock.example.com/api/startTyping',
         expect.objectContaining({
-          body: JSON.stringify({ chatId: '163810052673674@lid', session: 'ferreos' }),
+          body: JSON.stringify({ chatId: '584121234567@lid', session: 'ferreos' }),
         })
       );
 
       // Candado de Auto-Curación: se actualizó externalId en la base de datos
       expect(prisma.contact.update).toHaveBeenCalledWith({
         where: { id: 'contact-uuid-1' },
-        data: { externalId: '163810052673674@lid' },
+        data: { externalId: '584121234567@lid' },
       });
     });
   });
 
-  describe('sendMessage con soporte LID', () => {
+  describe('sendMessage con soporte LID y reintento bidireccional', () => {
     it('debe entregar a @lid exitosamente', async () => {
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
@@ -153,6 +153,96 @@ describe('WahaAdapterService (WhatsApp LID y Presencia "Escribiendo...")', () =>
           }),
         })
       );
+    });
+
+    it('debe reintentar con @lid y auto-curar si falla con @c.us', async () => {
+      prisma.contact.findFirst.mockResolvedValueOnce({
+        id: 'contact-uuid-2',
+        externalId: '584121234567@c.us',
+        phone: '584121234567',
+      });
+
+      const mockFetch = jest
+        .fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: async () => JSON.stringify({ exception: { message: 't' } }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 201,
+          json: async () => ({ id: 'msg-lid-ok' }),
+        });
+      global.fetch = mockFetch as any;
+
+      const result = await service.sendMessage('tenant-1', 'contact-uuid-2', 'Mensaje reintento');
+
+      expect(result).toBe('msg-lid-ok');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://waha-mock.example.com/api/sendText',
+        expect.objectContaining({
+          body: JSON.stringify({ chatId: '584121234567@c.us', text: 'Mensaje reintento', session: 'ferreos' }),
+        })
+      );
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://waha-mock.example.com/api/sendText',
+        expect.objectContaining({
+          body: JSON.stringify({ chatId: '584121234567@lid', text: 'Mensaje reintento', session: 'ferreos' }),
+        })
+      );
+      expect(prisma.contact.update).toHaveBeenCalledWith({
+        where: { id: 'contact-uuid-2' },
+        data: { externalId: '584121234567@lid' },
+      });
+    });
+
+    it('debe reintentar con @c.us y auto-curar si falla con @lid', async () => {
+      prisma.contact.findFirst.mockResolvedValueOnce({
+        id: 'contact-uuid-3',
+        externalId: '163810052673674@lid',
+        phone: '163810052673674',
+      });
+
+      const mockFetch = jest
+        .fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          text: async () => 'Invalid LID recipient',
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 201,
+          json: async () => ({ id: 'msg-cus-ok' }),
+        });
+      global.fetch = mockFetch as any;
+
+      const result = await service.sendMessage('tenant-1', 'contact-uuid-3', 'Mensaje fallback');
+
+      expect(result).toBe('msg-cus-ok');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://waha-mock.example.com/api/sendText',
+        expect.objectContaining({
+          body: JSON.stringify({ chatId: '163810052673674@lid', text: 'Mensaje fallback', session: 'ferreos' }),
+        })
+      );
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://waha-mock.example.com/api/sendText',
+        expect.objectContaining({
+          body: JSON.stringify({ chatId: '163810052673674@c.us', text: 'Mensaje fallback', session: 'ferreos' }),
+        })
+      );
+      expect(prisma.contact.update).toHaveBeenCalledWith({
+        where: { id: 'contact-uuid-3' },
+        data: { externalId: '163810052673674@c.us' },
+      });
     });
   });
 });

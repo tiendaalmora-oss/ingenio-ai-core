@@ -24,13 +24,8 @@ export class WahaAdapterService {
   normalizeJid(rawId: string): string {
     if (!rawId) return rawId;
 
-    // Si ya contiene sufijo de dominio WhatsApp, respetar intacto
-    if (
-      rawId.includes('@c.us') ||
-      rawId.includes('@g.us') ||
-      rawId.includes('@lid') ||
-      rawId.includes('@s.whatsapp.net')
-    ) {
+    // Respetar intactos los grupos y LIDs explícitos
+    if (rawId.includes('@g.us') || rawId.includes('@lid')) {
       return rawId;
     }
 
@@ -38,10 +33,15 @@ export class WahaAdapterService {
     const cleaned = rawId.replace(/\D/g, '');
     if (!cleaned) return rawId;
 
-    // En WhatsApp Multi-Device, identificadores de 14 o 15 dígitos que no son teléfonos
-    // corresponden a LIDs de privacidad generados por Meta
-    if (cleaned.length === 14 || cleaned.length === 15) {
+    // En WhatsApp Multi-Device, identificadores de 14, 15 o 16 dígitos que no son teléfonos
+    // corresponden a LIDs de privacidad generados por Meta. Si venían con @c.us erróneo, se normalizan a @lid.
+    if (cleaned.length >= 14 && cleaned.length <= 16) {
       return `${cleaned}@lid`;
+    }
+
+    // Si ya contiene @c.us o @s.whatsapp.net legítimo
+    if (rawId.includes('@c.us') || rawId.includes('@s.whatsapp.net')) {
+      return rawId;
     }
 
     return `${cleaned}@c.us`;
@@ -73,6 +73,22 @@ export class WahaAdapterService {
         foundContactId = contact.id;
         // Priorizar externalId que contiene el JID exacto original (@lid o @c.us)
         rawTarget = contact.externalId || contact.phone || contact.phoneNormalized || contactIdOrPhone;
+      }
+    } else if (contactIdOrPhone) {
+      // Si ya contiene '@', intentar encontrar el contactId para posibilitar auto-healing
+      const cleanDigits = contactIdOrPhone.replace(/\D/g, '');
+      const contact = await this.prisma.contact.findFirst({
+        where: {
+          OR: [
+            { externalId: contactIdOrPhone },
+            { phone: cleanDigits },
+            { phoneNormalized: cleanDigits },
+          ],
+        },
+        select: { id: true },
+      });
+      if (contact) {
+        foundContactId = contact.id;
       }
     }
 
@@ -175,17 +191,8 @@ export class WahaAdapterService {
       return null;
     });
 
-    let errText = '';
-    if (response && !response.ok) {
-      errText = await response.text().catch(() => '');
-    }
-
-    // 2. Reintento a @lid si falló por "No LID for user" con @c.us
-    if (
-      (!response || !response.ok) &&
-      (errText.includes('No LID for user') || !response?.ok) &&
-      currentChatId.endsWith('@c.us')
-    ) {
+    // 2. Reintento a @lid si falló con @c.us
+    if ((!response || !response.ok) && currentChatId.endsWith('@c.us')) {
       const lidChatId = currentChatId.replace('@c.us', '@lid');
       this.logger.warn(`[WAHA ${endpoint}] Error con @c.us. Reintentando con ${lidChatId}...`);
 
@@ -340,10 +347,10 @@ export class WahaAdapterService {
         errBody = await response.text().catch(() => '');
       }
 
-      // Reintento 1: Si falló por "No LID for user" con @c.us, reintentar con @lid y auto-curar
-      if (!response.ok && errBody.includes('No LID for user') && chatId.endsWith('@c.us')) {
+      // Reintento 1: Si falló con @c.us, reintentar con @lid y auto-curar
+      if (!response.ok && chatId.endsWith('@c.us')) {
         const lidChatId = chatId.replace('@c.us', '@lid');
-        this.logger.warn(`Detectado error "No LID for user". Reintentando entrega a ${lidChatId}...`);
+        this.logger.warn(`[WAHA] Envío falló con @c.us (${response.status}). Reintentando con ${lidChatId}...`);
         chatId = lidChatId;
         response = await fetch(`${wahaUrl}/api/sendText`, {
           method: 'POST',
@@ -360,10 +367,10 @@ export class WahaAdapterService {
         if (!response.ok) errBody = await response.text().catch(() => '');
       }
 
-      // Reintento 2: Si falló con @lid, reintentar con @c.us
+      // Reintento 2: Si falló con @lid, reintentar con @c.us y auto-curar
       if (!response.ok && chatId.endsWith('@lid')) {
         const cusChatId = chatId.replace('@lid', '@c.us');
-        this.logger.warn(`Envío falló con @lid. Reintentando con ${cusChatId}...`);
+        this.logger.warn(`[WAHA] Envío falló con @lid (${response.status}). Reintentando con ${cusChatId}...`);
         chatId = cusChatId;
         response = await fetch(`${wahaUrl}/api/sendText`, {
           method: 'POST',
@@ -377,22 +384,6 @@ export class WahaAdapterService {
         if (response.ok && target.contactId) {
           await this.healContactExternalId(target.contactId, cusChatId);
         }
-        if (!response.ok) errBody = await response.text().catch(() => '');
-      }
-
-      // Reintento 3: Si falló por sesión no encontrada y no era 'default', reintentar con 'default'
-      if (!response.ok && session !== 'default') {
-        this.logger.warn(`Envío falló con sesión "${session}". Reintentando con sesión "default"...`);
-
-        response = await fetch(`${wahaUrl}/api/sendText`, {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify({
-            chatId: chatId,
-            text: content,
-            session: 'default',
-          }),
-        });
         if (!response.ok) errBody = await response.text().catch(() => '');
       }
 

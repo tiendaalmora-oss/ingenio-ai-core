@@ -26,17 +26,17 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
     normalizeJid(rawId) {
         if (!rawId)
             return rawId;
-        if (rawId.includes('@c.us') ||
-            rawId.includes('@g.us') ||
-            rawId.includes('@lid') ||
-            rawId.includes('@s.whatsapp.net')) {
+        if (rawId.includes('@g.us') || rawId.includes('@lid')) {
             return rawId;
         }
         const cleaned = rawId.replace(/\D/g, '');
         if (!cleaned)
             return rawId;
-        if (cleaned.length === 14 || cleaned.length === 15) {
+        if (cleaned.length >= 14 && cleaned.length <= 16) {
             return `${cleaned}@lid`;
+        }
+        if (rawId.includes('@c.us') || rawId.includes('@s.whatsapp.net')) {
+            return rawId;
         }
         return `${cleaned}@c.us`;
     }
@@ -58,6 +58,22 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
             if (contact) {
                 foundContactId = contact.id;
                 rawTarget = contact.externalId || contact.phone || contact.phoneNormalized || contactIdOrPhone;
+            }
+        }
+        else if (contactIdOrPhone) {
+            const cleanDigits = contactIdOrPhone.replace(/\D/g, '');
+            const contact = await this.prisma.contact.findFirst({
+                where: {
+                    OR: [
+                        { externalId: contactIdOrPhone },
+                        { phone: cleanDigits },
+                        { phoneNormalized: cleanDigits },
+                    ],
+                },
+                select: { id: true },
+            });
+            if (contact) {
+                foundContactId = contact.id;
             }
         }
         const chatId = this.normalizeJid(rawTarget);
@@ -129,13 +145,7 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
             this.logger.warn(`[WAHA] Falló llamada a ${endpoint}: ${e.message}`);
             return null;
         });
-        let errText = '';
-        if (response && !response.ok) {
-            errText = await response.text().catch(() => '');
-        }
-        if ((!response || !response.ok) &&
-            (errText.includes('No LID for user') || !response?.ok) &&
-            currentChatId.endsWith('@c.us')) {
+        if ((!response || !response.ok) && currentChatId.endsWith('@c.us')) {
             const lidChatId = currentChatId.replace('@c.us', '@lid');
             this.logger.warn(`[WAHA ${endpoint}] Error con @c.us. Reintentando con ${lidChatId}...`);
             const retryRes = await fetch(`${wahaUrl}${endpoint}`, {
@@ -267,9 +277,9 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
             if (!response.ok) {
                 errBody = await response.text().catch(() => '');
             }
-            if (!response.ok && errBody.includes('No LID for user') && chatId.endsWith('@c.us')) {
+            if (!response.ok && chatId.endsWith('@c.us')) {
                 const lidChatId = chatId.replace('@c.us', '@lid');
-                this.logger.warn(`Detectado error "No LID for user". Reintentando entrega a ${lidChatId}...`);
+                this.logger.warn(`[WAHA] Envío falló con @c.us (${response.status}). Reintentando con ${lidChatId}...`);
                 chatId = lidChatId;
                 response = await fetch(`${wahaUrl}/api/sendText`, {
                     method: 'POST',
@@ -288,7 +298,7 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
             }
             if (!response.ok && chatId.endsWith('@lid')) {
                 const cusChatId = chatId.replace('@lid', '@c.us');
-                this.logger.warn(`Envío falló con @lid. Reintentando con ${cusChatId}...`);
+                this.logger.warn(`[WAHA] Envío falló con @lid (${response.status}). Reintentando con ${cusChatId}...`);
                 chatId = cusChatId;
                 response = await fetch(`${wahaUrl}/api/sendText`, {
                     method: 'POST',
@@ -302,20 +312,6 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
                 if (response.ok && target.contactId) {
                     await this.healContactExternalId(target.contactId, cusChatId);
                 }
-                if (!response.ok)
-                    errBody = await response.text().catch(() => '');
-            }
-            if (!response.ok && session !== 'default') {
-                this.logger.warn(`Envío falló con sesión "${session}". Reintentando con sesión "default"...`);
-                response = await fetch(`${wahaUrl}/api/sendText`, {
-                    method: 'POST',
-                    headers: headers,
-                    body: JSON.stringify({
-                        chatId: chatId,
-                        text: content,
-                        session: 'default',
-                    }),
-                });
                 if (!response.ok)
                     errBody = await response.text().catch(() => '');
             }
