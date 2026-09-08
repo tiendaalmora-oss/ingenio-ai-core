@@ -16,6 +16,10 @@ import {
   BarChart2,
   Loader2,
   AlertCircle,
+  ShieldCheck,
+  Settings,
+  MessageSquare,
+  ExternalLink,
 } from 'lucide-react';
 
 // ── Tipos ─────────────────────────────────────────────────────
@@ -74,6 +78,7 @@ function PlanBadge({ plan }: { plan: string }) {
 
 export default function AgencyPage() {
   const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [unassigned, setUnassigned] = useState<any[]>([]);
   const [selected, setSelected] = useState<Agency | null>(null);
   const [subaccounts, setSubaccounts] = useState<Subaccount[]>([]);
   const [stats, setStats] = useState<any>(null);
@@ -89,7 +94,7 @@ export default function AgencyPage() {
   const [newSub, setNewSub] = useState({ name: '', plan: 'starter' });
   const [saving, setSaving] = useState(false);
 
-  // ── Cargar agencias ──────────────────────────────────────
+  // ── Cargar agencias y cuenta principal ────────────────────
 
   useEffect(() => {
     fetchAgencies();
@@ -98,10 +103,24 @@ export default function AgencyPage() {
   async function fetchAgencies() {
     setLoading(true);
     try {
-      const { data } = await api.get('/agency');
-      setAgencies(Array.isArray(data) ? data : []);
+      const { data } = await api.get('/agency/overview');
+      const loadedAgencies: Agency[] = Array.isArray(data?.agencies) ? data.agencies : [];
+      const loadedUnassigned = Array.isArray(data?.unassignedTenants) ? data.unassignedTenants : [];
+      
+      setAgencies(loadedAgencies);
+      setUnassigned(loadedUnassigned);
+
+      // Auto-seleccionar la primera agencia si no hay ninguna seleccionada
+      if (loadedAgencies.length > 0 && !selected) {
+        selectAgency(loadedAgencies[0]);
+      }
     } catch {
-      setAgencies([]);
+      try {
+        const { data } = await api.get('/agency');
+        setAgencies(Array.isArray(data) ? data : []);
+      } catch {
+        setAgencies([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -187,6 +206,54 @@ export default function AgencyPage() {
         }
       />
 
+      {/* ── Banner: Cuenta Principal de Producción (Blindada) ── */}
+      {unassigned.length > 0 && (
+        <div className="mb-6 bg-gradient-to-r from-emerald-50 via-teal-50/40 to-slate-50 border border-emerald-200 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm shrink-0">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base font-bold text-gray-900">
+                  {unassigned[0].name || 'Cuenta Principal de Producción (Docentes)'}
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  🟢 OPERATIVA EN VIVO
+                </span>
+                <span className="text-xs text-gray-500 font-mono bg-white px-2 py-0.5 rounded border">
+                  WAHA: ferreos
+                </span>
+              </div>
+              <p className="text-xs text-gray-600 mt-1 max-w-2xl">
+                Esta es tu cuenta principal en funcionamiento. Las subcuentas y clientes creados en las agencias inferiores están 100% aisladas y no alteran esta cuenta ni sus datos.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <button
+              onClick={() => {
+                localStorage.setItem('tenant_id', unassigned[0].id);
+                window.location.href = '/dashboard';
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 transition-colors shadow-xs"
+            >
+              <BarChart2 className="w-3.5 h-3.5" /> Ver CRM Producción
+            </button>
+            <button
+              onClick={() => {
+                localStorage.setItem('tenant_id', unassigned[0].id);
+                window.location.href = '/business-studio';
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white text-gray-700 border border-gray-300 text-xs font-semibold rounded-lg hover:bg-gray-50 transition-colors shadow-xs"
+            >
+              <Settings className="w-3.5 h-3.5 text-gray-500" /> Business Studio
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {/* ── Columna izquierda: Lista de Agencias ── */}
@@ -255,7 +322,7 @@ export default function AgencyPage() {
                   </div>
                   <button
                     onClick={() => setShowNewSub(true)}
-                    className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-xs"
                   >
                     <Plus className="w-4 h-4" /> Nueva Subcuenta
                   </button>
@@ -281,7 +348,7 @@ export default function AgencyPage() {
 
               {/* Lista de subcuentas */}
               <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide px-1">
-                Subcuentas ({subaccounts.length})
+                Subcuentas de {selected.name} ({subaccounts.length})
               </h3>
 
               {loadingSubs ? (
@@ -294,15 +361,15 @@ export default function AgencyPage() {
                   <p className="text-sm text-gray-500">Esta agencia no tiene subcuentas aún.</p>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {subaccounts.map((sub) => (
                     <div
                       key={sub.id}
-                      className="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between hover:shadow-sm transition-shadow"
+                      className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:shadow-xs transition-shadow"
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-gray-900 truncate">{sub.name}</span>
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="font-semibold text-gray-900 truncate">{sub.name}</span>
                           <StatusBadge status={sub.status} />
                           <PlanBadge plan={sub.plan} />
                         </div>
@@ -312,33 +379,60 @@ export default function AgencyPage() {
                         </p>
                       </div>
 
-                      {/* Acciones rápidas */}
-                      <div className="flex items-center gap-2 ml-4 flex-shrink-0">
-                        {sub.status !== 'active' && (
-                          <button
-                            onClick={() => handleStatusChange(sub.id, 'active')}
-                            className="text-xs px-2 py-1 rounded bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
-                          >
-                            Activar
-                          </button>
-                        )}
-                        {sub.status === 'active' && (
-                          <button
-                            onClick={() => handleStatusChange(sub.id, 'paused')}
-                            className="text-xs px-2 py-1 rounded bg-yellow-50 text-yellow-700 hover:bg-yellow-100 transition-colors"
-                          >
-                            Pausar
-                          </button>
-                        )}
+                      {/* Acciones rápidas enriquecidas */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Ir al Business Studio del cliente */}
+                        <button
+                          onClick={() => {
+                            localStorage.setItem('tenant_id', sub.id);
+                            window.location.href = '/business-studio';
+                          }}
+                          className="text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors flex items-center gap-1"
+                          title="Editar base de conocimiento y bot de este cliente"
+                        >
+                          <Settings className="w-3 h-3 text-gray-500" /> Bot
+                        </button>
+
+                        {/* Ir al WhatsApp Hub del cliente */}
+                        <button
+                          onClick={() => {
+                            localStorage.setItem('tenant_id', sub.id);
+                            window.location.href = '/conversations';
+                          }}
+                          className="text-xs px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium transition-colors flex items-center gap-1"
+                          title="Ver chats de WhatsApp de este cliente"
+                        >
+                          <MessageSquare className="w-3 h-3" /> Chats
+                        </button>
+
+                        {/* Ir al CRM / Dashboard del cliente */}
                         <button
                           onClick={() => {
                             localStorage.setItem('tenant_id', sub.id);
                             window.location.href = '/dashboard';
                           }}
-                          className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors flex items-center gap-1"
+                          className="text-xs px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium transition-colors flex items-center gap-1"
+                          title="Ver métricas de este cliente"
                         >
-                          <BarChart2 className="w-3 h-3" /> Ver CRM
+                          <BarChart2 className="w-3 h-3" /> CRM
                         </button>
+
+                        {/* Pausar / Activar */}
+                        {sub.status !== 'active' ? (
+                          <button
+                            onClick={() => handleStatusChange(sub.id, 'active')}
+                            className="text-xs px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-medium transition-colors"
+                          >
+                            Activar
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleStatusChange(sub.id, 'paused')}
+                            className="text-xs px-2.5 py-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 font-medium transition-colors"
+                          >
+                            Pausar
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -441,6 +535,14 @@ export default function AgencyPage() {
                   <option value="pro">Pro</option>
                   <option value="enterprise">Enterprise</option>
                 </select>
+              </div>
+
+              {/* Nota de Aislamiento */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800 flex items-start gap-2">
+                <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Aislamiento Garantizado:</strong> Esta subcuenta se creará con su propio catálogo, reglas de bot y base de datos de contactos 100% aislados.
+                </span>
               </div>
               <div className="flex gap-3 pt-2">
                 <button

@@ -39,7 +39,20 @@ let TenantGuard = TenantGuard_1 = class TenantGuard {
         let tenantId = request.headers?.['x-tenant-id'];
         if (!tenantId || typeof tenantId !== 'string' || tenantId.trim() === '' || tenantId === 'default') {
             if (typeof this.prisma?.tenant?.findFirst === 'function') {
-                const primaryTenant = await this.prisma.tenant.findFirst({ select: { id: true } });
+                const primaryTenant = await this.prisma.tenant.findFirst({
+                    where: {
+                        OR: [
+                            { id: 'dba1c54c-89c6-41e9-ae9d-03613377a5b3' },
+                            { wahaSession: 'ferreos' },
+                            { agencyId: null },
+                        ],
+                    },
+                    orderBy: { createdAt: 'asc' },
+                    select: { id: true },
+                }) || await this.prisma.tenant.findFirst({
+                    orderBy: { createdAt: 'asc' },
+                    select: { id: true },
+                });
                 if (primaryTenant) {
                     tenantId = primaryTenant.id;
                     request.tenantId = tenantId;

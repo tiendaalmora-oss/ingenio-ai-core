@@ -93,23 +93,47 @@ export default function SubaccountSwitcher() {
     window.location.reload();
   }
 
+  const PRIMARY_PROD_ID = 'dba1c54c-89c6-41e9-ae9d-03613377a5b3';
+  const isPrimary = !activeTenantId || activeTenantId === PRIMARY_PROD_ID || unassigned.some(u => u.id === activeTenantId);
+
   const totalSubs =
     unassigned.length + agencies.reduce((acc, ag) => acc + (ag.subaccounts?.length || 0), 0);
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative flex items-center gap-2">
+      {/* Botón rápido para volver a producción si se está dentro de una subcuenta */}
+      {!isPrimary && (
+        <button
+          onClick={() => handleSwitch({ id: PRIMARY_PROD_ID, name: 'Default Tenant' })}
+          className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full hover:bg-emerald-100 transition-colors shadow-xs"
+          title="Volver a la cuenta principal de producción (Docentes)"
+        >
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          Volver a Producción
+        </button>
+      )}
+
       <button
         onClick={() => {
           setOpen(!open);
           loadAgencies();
         }}
-        className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm font-medium text-gray-700 transition-colors max-w-[200px]"
-        title="Cambiar subcuenta"
+        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all max-w-[240px] border shadow-xs ${
+          isPrimary 
+            ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200' 
+            : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 ring-2 ring-amber-400/20'
+        }`}
+        title="Cambiar subcuenta o volver a cuenta principal"
       >
-        <Building2 className="w-4 h-4 text-blue-600 flex-shrink-0" />
-        <span className="truncate hidden sm:inline">
-          {activeName || 'Subcuentas'}
+        <Building2 className={`w-4 h-4 flex-shrink-0 ${isPrimary ? 'text-blue-600' : 'text-amber-600'}`} />
+        <span className="truncate hidden sm:inline font-semibold">
+          {isPrimary ? 'Producción (Docentes)' : activeName || 'Subcuenta'}
         </span>
+        {!isPrimary && (
+          <span className="hidden sm:inline-block text-[10px] bg-amber-200 text-amber-800 rounded px-1 font-bold">
+            CLIENTE
+          </span>
+        )}
         {totalSubs > 0 && (
           <span className="hidden sm:inline text-xs bg-blue-100 text-blue-700 rounded-full px-1.5 font-semibold">
             {totalSubs}
@@ -123,18 +147,23 @@ export default function SubaccountSwitcher() {
       </button>
 
       {open && (
-        <div className="absolute top-full mt-2 right-0 w-72 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
+        <div className="absolute top-full mt-2 right-0 w-80 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 overflow-hidden">
           {/* Header */}
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              Cambiar Subcuenta
-            </span>
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+            <div>
+              <span className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
+                Selector de Cuentas
+              </span>
+              <span className="text-[11px] text-gray-400 block">
+                {isPrimary ? 'Actualmente en Producción' : `En subcuenta: ${activeName}`}
+              </span>
+            </div>
             <Link
               href="/agency"
               onClick={() => setOpen(false)}
-              className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+              className="text-xs text-blue-600 font-semibold hover:underline flex items-center gap-1"
             >
-              <Plus className="w-3 h-3" /> Gestionar
+              <Plus className="w-3.5 h-3.5" /> Agencias
             </Link>
           </div>
 
@@ -160,25 +189,33 @@ export default function SubaccountSwitcher() {
                 {/* Cuentas Principales (Original operativa) */}
                 {unassigned.length > 0 && (
                   <div>
-                    <div className="px-4 py-1.5 text-xs font-bold text-blue-600 uppercase tracking-wide bg-blue-50/60 flex items-center justify-between">
-                      <span>Cuenta Principal (Operativa)</span>
+                    <div className="px-4 py-1.5 text-xs font-bold text-emerald-700 uppercase tracking-wide bg-emerald-50/80 flex items-center justify-between border-b border-emerald-100">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        Cuenta Principal de Producción
+                      </span>
                     </div>
                     {unassigned.map((sub) => (
                       <button
                         key={sub.id}
                         onClick={() => handleSwitch(sub)}
-                        className={`w-full text-left flex items-center justify-between px-4 py-2.5 hover:bg-blue-50 transition-colors ${
-                          activeTenantId === sub.id ? 'bg-blue-50' : ''
+                        className={`w-full text-left flex items-center justify-between px-4 py-2.5 hover:bg-emerald-50/50 transition-colors ${
+                          (activeTenantId === sub.id || (!activeTenantId && sub.id === PRIMARY_PROD_ID)) ? 'bg-emerald-50/60 font-semibold' : ''
                         }`}
                       >
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-gray-900 truncate">
-                            {sub.name || 'CRM Principal'}
-                          </p>
-                          <p className="text-xs text-gray-500">Cuenta Original con todos tus datos</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-bold text-gray-900 truncate">
+                              {sub.name || 'Default Tenant'}
+                            </p>
+                            <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded">
+                              EN VIVO
+                            </span>
+                          </div>
+                          <p className="text-xs text-emerald-700/80 font-medium">WhatsApp ferreos · Bot de Docentes</p>
                         </div>
-                        {activeTenantId === sub.id && (
-                          <Check className="w-4 h-4 text-blue-600 flex-shrink-0 ml-2" />
+                        {(activeTenantId === sub.id || (!activeTenantId && sub.id === PRIMARY_PROD_ID)) && (
+                          <Check className="w-4 h-4 text-emerald-600 flex-shrink-0 ml-2" />
                         )}
                       </button>
                     ))}
