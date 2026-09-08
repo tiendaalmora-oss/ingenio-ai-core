@@ -53,6 +53,47 @@ let AgencyService = class AgencyService {
             throw new common_1.NotFoundException('Agencia no encontrada.');
         return agency;
     }
+    async deleteAgency(id) {
+        const agency = await this.prisma.agency.findUnique({ where: { id } });
+        if (!agency)
+            throw new common_1.NotFoundException('Agencia no encontrada.');
+        await this.prisma.tenant.updateMany({
+            where: { agencyId: id },
+            data: { agencyId: null },
+        });
+        await this.prisma.agencyUser.deleteMany({
+            where: { agencyId: id },
+        });
+        return this.prisma.agency.delete({
+            where: { id },
+        });
+    }
+    async linkSubaccount(agencyId, tenantId, name) {
+        const agency = await this.prisma.agency.findUnique({ where: { id: agencyId } });
+        if (!agency)
+            throw new common_1.NotFoundException('Agencia no encontrada.');
+        const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+        if (!tenant)
+            throw new common_1.NotFoundException('Subcuenta/Tenant no encontrado.');
+        return this.prisma.tenant.update({
+            where: { id: tenantId },
+            data: {
+                agencyId,
+                ...(name ? { name } : {}),
+            },
+        });
+    }
+    async purgeSubaccount(tenantId) {
+        if (tenantId === 'dba1c54c-89c6-41e9-ae9d-03613377a5b3') {
+            throw new common_1.ConflictException('No se puede eliminar la cuenta principal de producción.');
+        }
+        const contacts = await this.prisma.contact.count({ where: { tenantId } });
+        if (contacts > 0) {
+            throw new common_1.ConflictException(`No se puede eliminar: tiene ${contacts} contactos registrados.`);
+        }
+        await this.prisma.knowledgeBundle.deleteMany({ where: { tenantId } });
+        return this.prisma.tenant.delete({ where: { id: tenantId } });
+    }
     async createSubaccount(agencyId, data) {
         const agency = await this.prisma.agency.findUnique({ where: { id: agencyId } });
         if (!agency)

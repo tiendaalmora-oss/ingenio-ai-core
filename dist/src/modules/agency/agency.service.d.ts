@@ -61,6 +61,39 @@ export declare class AgencyService {
         logoUrl: string | null;
         primaryColor: string | null;
     }>;
+    deleteAgency(id: string): Promise<{
+        id: string;
+        name: string;
+        plan: string;
+        createdAt: Date;
+        updatedAt: Date;
+        ownerEmail: string;
+        customDomain: string | null;
+        logoUrl: string | null;
+        primaryColor: string | null;
+    }>;
+    linkSubaccount(agencyId: string, tenantId: string, name?: string): Promise<{
+        id: string;
+        name: string;
+        status: string;
+        plan: string;
+        wahaSession: string | null;
+        currentBundleVersion: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+        agencyId: string | null;
+    }>;
+    purgeSubaccount(tenantId: string): Promise<{
+        id: string;
+        name: string;
+        status: string;
+        plan: string;
+        wahaSession: string | null;
+        currentBundleVersion: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+        agencyId: string | null;
+    }>;
     createSubaccount(agencyId: string, data: {
         name: string;
         plan?: string;

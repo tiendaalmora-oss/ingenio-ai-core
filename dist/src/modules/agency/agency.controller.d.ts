@@ -146,7 +146,32 @@ export declare class AgencyController {
         updatedAt: Date;
         agencyId: string | null;
     }>;
-    deleteSubaccount(tenantId: string): Promise<{
+    deleteAgency(id: string): Promise<{
+        id: string;
+        name: string;
+        plan: string;
+        createdAt: Date;
+        updatedAt: Date;
+        ownerEmail: string;
+        customDomain: string | null;
+        logoUrl: string | null;
+        primaryColor: string | null;
+    }>;
+    linkSubaccount(agencyId: string, body: {
+        tenantId: string;
+        name?: string;
+    }): Promise<{
+        id: string;
+        name: string;
+        status: string;
+        plan: string;
+        wahaSession: string | null;
+        currentBundleVersion: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+        agencyId: string | null;
+    }>;
+    purgeSubaccount(tenantId: string): Promise<{
         id: string;
         name: string;
         status: string;

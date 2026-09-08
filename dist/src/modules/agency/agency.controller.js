@@ -57,8 +57,14 @@ let AgencyController = class AgencyController {
     updateStatus(tenantId, body) {
         return this.agencyService.updateSubaccountStatus(tenantId, body.status);
     }
-    deleteSubaccount(tenantId) {
-        return this.agencyService.deleteSubaccount(tenantId);
+    deleteAgency(id) {
+        return this.agencyService.deleteAgency(id);
+    }
+    linkSubaccount(agencyId, body) {
+        return this.agencyService.linkSubaccount(agencyId, body.tenantId, body.name);
+    }
+    purgeSubaccount(tenantId) {
+        return this.agencyService.purgeSubaccount(tenantId);
     }
 };
 exports.AgencyController = AgencyController;
@@ -119,12 +125,27 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], AgencyController.prototype, "updateStatus", null);
 __decorate([
-    (0, common_1.Delete)('subaccounts/:tenantId'),
+    (0, common_1.Delete)(':id'),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], AgencyController.prototype, "deleteAgency", null);
+__decorate([
+    (0, common_1.Post)(':id/link-subaccount'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], AgencyController.prototype, "linkSubaccount", null);
+__decorate([
+    (0, common_1.Delete)('subaccounts/:tenantId/purge'),
     __param(0, (0, common_1.Param)('tenantId')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
-], AgencyController.prototype, "deleteSubaccount", null);
+], AgencyController.prototype, "purgeSubaccount", null);
 exports.AgencyController = AgencyController = __decorate([
     (0, common_1.Controller)('agency'),
     (0, common_1.UseGuards)(admin_api_key_guard_1.AdminApiKeyGuard),

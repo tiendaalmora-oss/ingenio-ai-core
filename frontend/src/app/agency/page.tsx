@@ -189,7 +189,10 @@ export default function AgencyPage() {
     if (selected) selectAgency(selected);
   }
 
-  // ── Render ────────────────────────────────────────────────
+  const PRIMARY_PROD_ID = 'dba1c54c-89c6-41e9-ae9d-03613377a5b3';
+  const prodAccount = unassigned.find(u => u.id === PRIMARY_PROD_ID) 
+    || agencies.flatMap(a => a.subaccounts || []).find(s => s.id === PRIMARY_PROD_ID)
+    || (unassigned.length > 0 ? unassigned[0] : null);
 
   return (
     <PageContainer maxWidth="max-w-[1600px]">
@@ -207,7 +210,7 @@ export default function AgencyPage() {
       />
 
       {/* ── Banner: Cuenta Principal de Producción (Blindada) ── */}
-      {unassigned.length > 0 && (
+      {prodAccount && (
         <div className="mb-6 bg-gradient-to-r from-emerald-50 via-teal-50/40 to-slate-50 border border-emerald-200 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-start gap-3.5">
             <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm shrink-0">
@@ -216,7 +219,7 @@ export default function AgencyPage() {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-base font-bold text-gray-900">
-                  {unassigned[0].name || 'Cuenta Principal de Producción (Docentes)'}
+                  {prodAccount.name || 'Kits Docentes Venezuela'}
                 </h3>
                 <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                   🟢 OPERATIVA EN VIVO
@@ -226,7 +229,7 @@ export default function AgencyPage() {
                 </span>
               </div>
               <p className="text-xs text-gray-600 mt-1 max-w-2xl">
-                Esta es tu cuenta principal en funcionamiento. Las subcuentas y clientes creados en las agencias inferiores están 100% aisladas y no alteran esta cuenta ni sus datos.
+                Esta es tu cuenta principal en funcionamiento. Las subcuentas y clientes creados en las agencias están 100% aisladas y no alteran esta cuenta ni sus datos.
               </p>
             </div>
           </div>
@@ -234,7 +237,7 @@ export default function AgencyPage() {
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
             <button
               onClick={() => {
-                localStorage.setItem('tenant_id', unassigned[0].id);
+                localStorage.setItem('tenant_id', prodAccount.id);
                 window.location.href = '/dashboard';
               }}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 transition-colors shadow-xs"
@@ -243,7 +246,7 @@ export default function AgencyPage() {
             </button>
             <button
               onClick={() => {
-                localStorage.setItem('tenant_id', unassigned[0].id);
+                localStorage.setItem('tenant_id', prodAccount.id);
                 window.location.href = '/business-studio';
               }}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white text-gray-700 border border-gray-300 text-xs font-semibold rounded-lg hover:bg-gray-50 transition-colors shadow-xs"

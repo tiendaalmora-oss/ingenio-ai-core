@@ -118,11 +118,32 @@ export class AgencyController {
   }
 
   /**
-   * DELETE /agency/subaccounts/:tenantId
-   * Suspender (soft delete) una subcuenta
+   * DELETE /agency/:id
+   * Eliminar una agencia
    */
-  @Delete('subaccounts/:tenantId')
-  deleteSubaccount(@Param('tenantId') tenantId: string) {
-    return this.agencyService.deleteSubaccount(tenantId);
+  @Delete(':id')
+  deleteAgency(@Param('id') id: string) {
+    return this.agencyService.deleteAgency(id);
+  }
+
+  /**
+   * POST /agency/:id/link-subaccount
+   * Vincular un tenant existente a una agencia
+   */
+  @Post(':id/link-subaccount')
+  linkSubaccount(
+    @Param('id') agencyId: string,
+    @Body() body: { tenantId: string; name?: string },
+  ) {
+    return this.agencyService.linkSubaccount(agencyId, body.tenantId, body.name);
+  }
+
+  /**
+   * DELETE /agency/subaccounts/:tenantId/purge
+   * Eliminar definitivamente una subcuenta vacía de prueba
+   */
+  @Delete('subaccounts/:tenantId/purge')
+  purgeSubaccount(@Param('tenantId') tenantId: string) {
+    return this.agencyService.purgeSubaccount(tenantId);
   }
 }
