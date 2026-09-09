@@ -101,10 +101,6 @@ export class WahaAdapterService {
    * Evita errores 422 si tenant.wahaSession es nulo o 'default' no existe en WAHA.
    */
   async resolveSession(tenantId?: string): Promise<string> {
-    if (process.env.WAHA_SESSION) {
-      return process.env.WAHA_SESSION;
-    }
-
     if (tenantId) {
       const tenant = await this.prisma.tenant.findUnique({
         where: { id: tenantId },
@@ -113,6 +109,10 @@ export class WahaAdapterService {
       if (tenant?.wahaSession) {
         return tenant.wahaSession;
       }
+    }
+
+    if (process.env.WAHA_SESSION) {
+      return process.env.WAHA_SESSION;
     }
 
     // Buscar si algún tenant tiene sesión configurada (ej: ferreos)

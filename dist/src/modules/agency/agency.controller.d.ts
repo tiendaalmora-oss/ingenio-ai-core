@@ -35,6 +35,7 @@ export declare class AgencyController {
                 name: string;
                 status: string;
                 plan: string;
+                wahaSession: string | null;
                 createdAt: Date;
             }[];
         } & {
@@ -53,6 +54,7 @@ export declare class AgencyController {
             name: string;
             status: string;
             plan: string;
+            wahaSession: string | null;
             createdAt: Date;
         }[];
     }>;
@@ -80,6 +82,7 @@ export declare class AgencyController {
             name: string;
             status: string;
             plan: string;
+            wahaSession: string | null;
             createdAt: Date;
         }[];
         users: {
@@ -181,6 +184,69 @@ export declare class AgencyController {
         createdAt: Date;
         updatedAt: Date;
         agencyId: string | null;
+    }>;
+    getWahaStatus(tenantId: string): Promise<{
+        session: string;
+        status: any;
+        phone: any;
+        pushName: any;
+        isProtected: boolean;
+        error?: undefined;
+    } | {
+        session: string;
+        status: string;
+        isProtected: boolean;
+        error: any;
+        phone?: undefined;
+        pushName?: undefined;
+    }>;
+    startWaha(tenantId: string): Promise<{
+        session: string;
+        status: any;
+        phone: any;
+        pushName: any;
+        isProtected: boolean;
+        error?: undefined;
+    } | {
+        session: string;
+        status: string;
+        isProtected: boolean;
+        error: any;
+        phone?: undefined;
+        pushName?: undefined;
+    }>;
+    getWahaQr(tenantId: string): Promise<{
+        session: string;
+        status: any;
+        qr: null;
+        isProtected: boolean;
+        message: string;
+        error?: undefined;
+    } | {
+        session: string;
+        status: string;
+        qr: string;
+        isProtected: boolean;
+        message?: undefined;
+        error?: undefined;
+    } | {
+        session: string;
+        status: string;
+        qr: null;
+        isProtected: boolean;
+        error: any;
+        message?: undefined;
+    }>;
+    logoutWaha(tenantId: string): Promise<{
+        success: boolean;
+        message: string;
+        session?: undefined;
+        status?: undefined;
+    } | {
+        success: boolean;
+        session: string;
+        status: string;
+        message?: undefined;
     }>;
 }
 export {};

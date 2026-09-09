@@ -146,4 +146,42 @@ export class AgencyController {
   purgeSubaccount(@Param('tenantId') tenantId: string) {
     return this.agencyService.purgeSubaccount(tenantId);
   }
+
+  // ── GESTIÓN WAHA POR SUBCUENTA ────────────────────────────
+
+  /**
+   * GET /agency/subaccounts/:id/waha/status
+   * Obtener estado de la sesión de WhatsApp de una subcuenta
+   */
+  @Get('subaccounts/:id/waha/status')
+  getWahaStatus(@Param('id') tenantId: string) {
+    return this.agencyService.getSubaccountWahaStatus(tenantId);
+  }
+
+  /**
+   * POST /agency/subaccounts/:id/waha/start
+   * Iniciar sesión en WAHA y configurar webhooks
+   */
+  @Post('subaccounts/:id/waha/start')
+  startWaha(@Param('id') tenantId: string) {
+    return this.agencyService.startSubaccountWaha(tenantId);
+  }
+
+  /**
+   * GET /agency/subaccounts/:id/waha/qr
+   * Obtener el código QR en base64 para escanear
+   */
+  @Get('subaccounts/:id/waha/qr')
+  getWahaQr(@Param('id') tenantId: string) {
+    return this.agencyService.getSubaccountWahaQr(tenantId);
+  }
+
+  /**
+   * POST /agency/subaccounts/:id/waha/logout
+   * Cerrar sesión de WhatsApp (bloqueado para producción)
+   */
+  @Post('subaccounts/:id/waha/logout')
+  logoutWaha(@Param('id') tenantId: string) {
+    return this.agencyService.logoutSubaccountWaha(tenantId);
+  }
 }

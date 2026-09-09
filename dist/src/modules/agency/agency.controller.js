@@ -66,6 +66,18 @@ let AgencyController = class AgencyController {
     purgeSubaccount(tenantId) {
         return this.agencyService.purgeSubaccount(tenantId);
     }
+    getWahaStatus(tenantId) {
+        return this.agencyService.getSubaccountWahaStatus(tenantId);
+    }
+    startWaha(tenantId) {
+        return this.agencyService.startSubaccountWaha(tenantId);
+    }
+    getWahaQr(tenantId) {
+        return this.agencyService.getSubaccountWahaQr(tenantId);
+    }
+    logoutWaha(tenantId) {
+        return this.agencyService.logoutSubaccountWaha(tenantId);
+    }
 };
 exports.AgencyController = AgencyController;
 __decorate([
@@ -146,6 +158,34 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], AgencyController.prototype, "purgeSubaccount", null);
+__decorate([
+    (0, common_1.Get)('subaccounts/:id/waha/status'),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], AgencyController.prototype, "getWahaStatus", null);
+__decorate([
+    (0, common_1.Post)('subaccounts/:id/waha/start'),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], AgencyController.prototype, "startWaha", null);
+__decorate([
+    (0, common_1.Get)('subaccounts/:id/waha/qr'),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], AgencyController.prototype, "getWahaQr", null);
+__decorate([
+    (0, common_1.Post)('subaccounts/:id/waha/logout'),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], AgencyController.prototype, "logoutWaha", null);
 exports.AgencyController = AgencyController = __decorate([
     (0, common_1.Controller)('agency'),
     (0, common_1.UseGuards)(admin_api_key_guard_1.AdminApiKeyGuard),

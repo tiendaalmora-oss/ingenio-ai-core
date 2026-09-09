@@ -80,9 +80,6 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
         return { chatId, contactId: foundContactId };
     }
     async resolveSession(tenantId) {
-        if (process.env.WAHA_SESSION) {
-            return process.env.WAHA_SESSION;
-        }
         if (tenantId) {
             const tenant = await this.prisma.tenant.findUnique({
                 where: { id: tenantId },
@@ -91,6 +88,9 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
             if (tenant?.wahaSession) {
                 return tenant.wahaSession;
             }
+        }
+        if (process.env.WAHA_SESSION) {
+            return process.env.WAHA_SESSION;
         }
         const tenantWithSession = await this.prisma.tenant.findFirst({
             where: { wahaSession: { not: null } },

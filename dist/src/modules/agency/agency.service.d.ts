@@ -1,6 +1,7 @@
 import { PrismaService } from '../../shared/database/prisma.service';
 export declare class AgencyService {
     private readonly prisma;
+    private readonly logger;
     constructor(prisma: PrismaService);
     createAgency(data: {
         name: string;
@@ -41,6 +42,7 @@ export declare class AgencyService {
             name: string;
             status: string;
             plan: string;
+            wahaSession: string | null;
             createdAt: Date;
         }[];
         users: {
@@ -164,6 +166,7 @@ export declare class AgencyService {
                 name: string;
                 status: string;
                 plan: string;
+                wahaSession: string | null;
                 createdAt: Date;
             }[];
         } & {
@@ -182,7 +185,74 @@ export declare class AgencyService {
             name: string;
             status: string;
             plan: string;
+            wahaSession: string | null;
             createdAt: Date;
         }[];
+    }>;
+    private getWahaConfig;
+    private isProtectedSession;
+    ensureTenantWahaSession(tenantId: string): Promise<string>;
+    getSubaccountWahaStatus(tenantId: string): Promise<{
+        session: string;
+        status: any;
+        phone: any;
+        pushName: any;
+        isProtected: boolean;
+        error?: undefined;
+    } | {
+        session: string;
+        status: string;
+        isProtected: boolean;
+        error: any;
+        phone?: undefined;
+        pushName?: undefined;
+    }>;
+    startSubaccountWaha(tenantId: string): Promise<{
+        session: string;
+        status: any;
+        phone: any;
+        pushName: any;
+        isProtected: boolean;
+        error?: undefined;
+    } | {
+        session: string;
+        status: string;
+        isProtected: boolean;
+        error: any;
+        phone?: undefined;
+        pushName?: undefined;
+    }>;
+    getSubaccountWahaQr(tenantId: string): Promise<{
+        session: string;
+        status: any;
+        qr: null;
+        isProtected: boolean;
+        message: string;
+        error?: undefined;
+    } | {
+        session: string;
+        status: string;
+        qr: string;
+        isProtected: boolean;
+        message?: undefined;
+        error?: undefined;
+    } | {
+        session: string;
+        status: string;
+        qr: null;
+        isProtected: boolean;
+        error: any;
+        message?: undefined;
+    }>;
+    logoutSubaccountWaha(tenantId: string): Promise<{
+        success: boolean;
+        message: string;
+        session?: undefined;
+        status?: undefined;
+    } | {
+        success: boolean;
+        session: string;
+        status: string;
+        message?: undefined;
     }>;
 }
