@@ -56,12 +56,28 @@ model Tenant {
   status               String           @default("active") // active, paused, suspended
   plan                 String           @default("starter") // starter, pro, enterprise
   wahaSession          String?          @unique
+  accessKey            String?          @unique
+  users                TenantUser[]
   contacts             Contact[]
   knowledgeBundle      KnowledgeBundle?
   currentBundleVersion String?
   funnels              Funnel[]
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @default(now()) @updatedAt
+}
+
+model TenantUser {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email     String
+  password  String   // Contraseña con hash seguro (SHA-256 + salt)
+  name      String?
+  role      String   @default("client") // client, admin
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([tenantId, email])
 }
 
 model Contact {

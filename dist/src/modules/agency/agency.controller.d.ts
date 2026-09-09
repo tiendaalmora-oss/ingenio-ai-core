@@ -74,6 +74,13 @@ export declare class AgencyController {
         primaryColor: string | null;
     })[]>;
     findAgency(id: string): Promise<{
+        users: {
+            id: string;
+            createdAt: Date;
+            agencyId: string;
+            email: string;
+            role: string;
+        }[];
         _count: {
             subaccounts: number;
         };
@@ -84,13 +91,6 @@ export declare class AgencyController {
             plan: string;
             wahaSession: string | null;
             createdAt: Date;
-        }[];
-        users: {
-            id: string;
-            createdAt: Date;
-            agencyId: string;
-            role: string;
-            email: string;
         }[];
     } & {
         id: string;
@@ -114,6 +114,7 @@ export declare class AgencyController {
         status: string;
         plan: string;
         wahaSession: string | null;
+        accessKey: string | null;
         currentBundleVersion: string | null;
         createdAt: Date;
         updatedAt: Date;
@@ -133,6 +134,7 @@ export declare class AgencyController {
         status: string;
         plan: string;
         wahaSession: string | null;
+        accessKey: string | null;
         currentBundleVersion: string | null;
         createdAt: Date;
         updatedAt: Date;
@@ -144,6 +146,7 @@ export declare class AgencyController {
         status: string;
         plan: string;
         wahaSession: string | null;
+        accessKey: string | null;
         currentBundleVersion: string | null;
         createdAt: Date;
         updatedAt: Date;
@@ -169,6 +172,7 @@ export declare class AgencyController {
         status: string;
         plan: string;
         wahaSession: string | null;
+        accessKey: string | null;
         currentBundleVersion: string | null;
         createdAt: Date;
         updatedAt: Date;
@@ -180,6 +184,7 @@ export declare class AgencyController {
         status: string;
         plan: string;
         wahaSession: string | null;
+        accessKey: string | null;
         currentBundleVersion: string | null;
         createdAt: Date;
         updatedAt: Date;
@@ -247,6 +252,44 @@ export declare class AgencyController {
         session: string;
         status: string;
         message?: undefined;
+    }>;
+    getAccess(tenantId: string): Promise<{
+        accessKey: string;
+        magicUrl: string;
+        tenantId: string;
+        tenantName: string;
+        users: {
+            id: string;
+            name: string | null;
+            createdAt: Date;
+            email: string;
+            role: string;
+        }[];
+    }>;
+    createUser(tenantId: string, body: {
+        email: string;
+        password: string;
+        name?: string;
+    }): Promise<{
+        id: string;
+        name: string | null;
+        createdAt: Date;
+        email: string;
+        role: string;
+    }>;
+    deleteUser(tenantId: string, userId: string): Promise<import("@prisma/client").Prisma.BatchPayload>;
+    regenerateAccessKey(tenantId: string): Promise<{
+        accessKey: string;
+        magicUrl: string;
+        tenantId: string;
+        tenantName: string;
+        users: {
+            id: string;
+            name: string | null;
+            createdAt: Date;
+            email: string;
+            role: string;
+        }[];
     }>;
 }
 export {};

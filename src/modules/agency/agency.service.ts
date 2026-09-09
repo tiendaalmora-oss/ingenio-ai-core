@@ -456,4 +456,108 @@ export class AgencyService {
 
     return { success: true, session: sessionName, status: 'STOPPED' };
   }
+
+  // ── GESTIÓN DE ACCESOS Y USUARIOS DE CLIENTE ───────────────
+
+  /**
+   * Obtiene la clave de enlace mágico y los usuarios de una subcuenta
+   */
+  async getSubaccountAccess(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: {
+        users: {
+          select: { id: true, email: true, name: true, role: true, createdAt: true },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    if (!tenant) throw new NotFoundException('Subcuenta no encontrada.');
+
+    // Si aún no tiene accessKey, generar una
+    let accessKey = tenant.accessKey;
+    if (!accessKey) {
+      accessKey = `acc_${crypto.randomBytes(12).toString('hex')}`;
+      await this.prisma.tenant.update({
+        where: { id: tenantId },
+        data: { accessKey },
+      });
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || 'https://crm.ingeniodigital.shop';
+    const magicUrl = `${frontendUrl}/portal?key=${accessKey}`;
+
+    return {
+      accessKey,
+      magicUrl,
+      tenantId: tenant.id,
+      tenantName: tenant.name,
+      users: tenant.users,
+    };
+  }
+
+  /**
+   * Crea un usuario (email y contraseña) para una subcuenta
+   */
+  async createSubaccountUser(
+    tenantId: string,
+    data: { email: string; password: string; name?: string },
+  ) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new NotFoundException('Subcuenta no encontrada.');
+
+    if (!data.email || !data.password) {
+      throw new ConflictException('Email y contraseña son obligatorios.');
+    }
+
+    const emailClean = data.email.trim().toLowerCase();
+    const existing = await this.prisma.tenantUser.findFirst({
+      where: { tenantId, email: emailClean },
+    });
+
+    if (existing) {
+      throw new ConflictException('Ya existe un usuario con este correo en esta subcuenta.');
+    }
+
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.pbkdf2Sync(data.password.trim(), salt, 1000, 64, 'sha512').toString('hex');
+    const hashedPassword = `${salt}:${hash}`;
+
+    return this.prisma.tenantUser.create({
+      data: {
+        tenantId,
+        email: emailClean,
+        password: hashedPassword,
+        name: data.name?.trim() || null,
+        role: 'client',
+      },
+      select: { id: true, email: true, name: true, role: true, createdAt: true },
+    });
+  }
+
+  /**
+   * Elimina un usuario de cliente
+   */
+  async deleteSubaccountUser(tenantId: string, userId: string) {
+    return this.prisma.tenantUser.deleteMany({
+      where: { id: userId, tenantId },
+    });
+  }
+
+  /**
+   * Regenera la clave de acceso mágico
+   */
+  async regenerateSubaccountAccessKey(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new NotFoundException('Subcuenta no encontrada.');
+
+    const newKey = `acc_${crypto.randomBytes(12).toString('hex')}`;
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { accessKey: newKey },
+    });
+
+    return this.getSubaccountAccess(tenantId);
+  }
 }

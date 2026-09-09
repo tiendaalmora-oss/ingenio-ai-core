@@ -34,6 +34,13 @@ export declare class AgencyService {
         primaryColor: string | null;
     })[]>;
     findAgencyById(id: string): Promise<{
+        users: {
+            id: string;
+            createdAt: Date;
+            agencyId: string;
+            email: string;
+            role: string;
+        }[];
         _count: {
             subaccounts: number;
         };
@@ -44,13 +51,6 @@ export declare class AgencyService {
             plan: string;
             wahaSession: string | null;
             createdAt: Date;
-        }[];
-        users: {
-            id: string;
-            createdAt: Date;
-            agencyId: string;
-            role: string;
-            email: string;
         }[];
     } & {
         id: string;
@@ -80,6 +80,7 @@ export declare class AgencyService {
         status: string;
         plan: string;
         wahaSession: string | null;
+        accessKey: string | null;
         currentBundleVersion: string | null;
         createdAt: Date;
         updatedAt: Date;
@@ -91,6 +92,7 @@ export declare class AgencyService {
         status: string;
         plan: string;
         wahaSession: string | null;
+        accessKey: string | null;
         currentBundleVersion: string | null;
         createdAt: Date;
         updatedAt: Date;
@@ -105,6 +107,7 @@ export declare class AgencyService {
         status: string;
         plan: string;
         wahaSession: string | null;
+        accessKey: string | null;
         currentBundleVersion: string | null;
         createdAt: Date;
         updatedAt: Date;
@@ -124,6 +127,7 @@ export declare class AgencyService {
         status: string;
         plan: string;
         wahaSession: string | null;
+        accessKey: string | null;
         currentBundleVersion: string | null;
         createdAt: Date;
         updatedAt: Date;
@@ -135,6 +139,7 @@ export declare class AgencyService {
         status: string;
         plan: string;
         wahaSession: string | null;
+        accessKey: string | null;
         currentBundleVersion: string | null;
         createdAt: Date;
         updatedAt: Date;
@@ -146,6 +151,7 @@ export declare class AgencyService {
         status: string;
         plan: string;
         wahaSession: string | null;
+        accessKey: string | null;
         currentBundleVersion: string | null;
         createdAt: Date;
         updatedAt: Date;
@@ -254,5 +260,43 @@ export declare class AgencyService {
         session: string;
         status: string;
         message?: undefined;
+    }>;
+    getSubaccountAccess(tenantId: string): Promise<{
+        accessKey: string;
+        magicUrl: string;
+        tenantId: string;
+        tenantName: string;
+        users: {
+            id: string;
+            name: string | null;
+            createdAt: Date;
+            email: string;
+            role: string;
+        }[];
+    }>;
+    createSubaccountUser(tenantId: string, data: {
+        email: string;
+        password: string;
+        name?: string;
+    }): Promise<{
+        id: string;
+        name: string | null;
+        createdAt: Date;
+        email: string;
+        role: string;
+    }>;
+    deleteSubaccountUser(tenantId: string, userId: string): Promise<import("@prisma/client").Prisma.BatchPayload>;
+    regenerateSubaccountAccessKey(tenantId: string): Promise<{
+        accessKey: string;
+        magicUrl: string;
+        tenantId: string;
+        tenantName: string;
+        users: {
+            id: string;
+            name: string | null;
+            createdAt: Date;
+            email: string;
+            role: string;
+        }[];
     }>;
 }

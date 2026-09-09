@@ -20,6 +20,7 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { MediaProcessingModule } from './modules/media-processing/media-processing.module';
 import { AgencyModule } from './modules/agency/agency.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { AgencyModule } from './modules/agency/agency.module';
     }),
     EventBusModule,
     DatabaseModule,
+    AuthModule,
     CrmModule,
     ConversationModule,
     MediaProcessingModule,

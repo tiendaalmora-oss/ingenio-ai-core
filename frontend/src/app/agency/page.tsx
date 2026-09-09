@@ -27,6 +27,12 @@ import {
   Lock,
   X,
   Check,
+  Key,
+  Link2,
+  Copy,
+  Trash2,
+  UserPlus,
+  Mail,
 } from 'lucide-react';
 
 // ── Tipos ─────────────────────────────────────────────────────
@@ -104,6 +110,9 @@ export default function AgencyPage() {
 
   // Modal WhatsApp
   const [wahaModalSub, setWahaModalSub] = useState<Subaccount | null>(null);
+
+  // Modal Accesos de Cliente
+  const [accessModalSub, setAccessModalSub] = useState<Subaccount | null>(null);
 
   // ── Cargar agencias y cuenta principal ────────────────────
 
@@ -409,6 +418,15 @@ export default function AgencyPage() {
                           {sub.id === 'dba1c54c-89c6-41e9-ae9d-03613377a5b3' || sub.wahaSession === 'ferreos' ? 'WA En Vivo' : 'WhatsApp'}
                         </button>
 
+                        {/* Gestionar Accesos del Cliente */}
+                        <button
+                          onClick={() => setAccessModalSub(sub)}
+                          className="text-xs px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium transition-colors flex items-center gap-1"
+                          title="Generar enlace mágico o credenciales para este cliente"
+                        >
+                          <Key className="w-3.5 h-3.5 text-blue-600" /> Accesos
+                        </button>
+
                         {/* Ir al Business Studio del cliente */}
                         <button
                           onClick={() => {
@@ -597,6 +615,11 @@ export default function AgencyPage() {
       {/* ── Modal: Conexión WhatsApp (WAHA) ── */}
       {wahaModalSub && (
         <WahaModal sub={wahaModalSub} onClose={() => setWahaModalSub(null)} />
+      )}
+
+      {/* ── Modal: Accesos de Cliente (Magic Link y Usuarios) ── */}
+      {accessModalSub && (
+        <AccessModal sub={accessModalSub} onClose={() => setAccessModalSub(null)} />
       )}
     </PageContainer>
   );
@@ -910,6 +933,389 @@ function WahaModal({
             Cerrar
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Componente: Modal de Accesos de Cliente (Magic Link y Usuarios) ──
+
+interface TenantUserInfo {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  createdAt: string;
+}
+
+interface AccessData {
+  tenantId: string;
+  tenantName: string;
+  accessKey: string;
+  magicUrl: string;
+  users: TenantUserInfo[];
+}
+
+function AccessModal({
+  sub,
+  onClose,
+}: {
+  sub: Subaccount;
+  onClose: () => void;
+}) {
+  const [activeTab, setActiveTab] = useState<'magic' | 'users'>('magic');
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [accessData, setAccessData] = useState<AccessData | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Form para nuevo usuario
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+
+  const fetchAccess = async () => {
+    try {
+      setErrorMsg(null);
+      const res = await api.get(`/agency/subaccounts/${sub.id}/access`);
+      setAccessData(res.data);
+    } catch (err: any) {
+      setErrorMsg(err?.response?.data?.message || 'Error al obtener accesos de la subcuenta');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAccess();
+  }, [sub.id]);
+
+  const handleCopy = (url: string) => {
+    let finalUrl = url;
+    if (typeof window !== 'undefined' && accessData?.accessKey) {
+      finalUrl = `${window.location.origin}/portal?key=${accessData.accessKey}`;
+    }
+    navigator.clipboard.writeText(finalUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleRegenerateKey = async () => {
+    if (!confirm('¿Regenerar el enlace mágico? El enlace anterior dejará de funcionar de inmediato.')) {
+      return;
+    }
+    setActionLoading(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const res = await api.post(`/agency/subaccounts/${sub.id}/regenerate-key`);
+      setAccessData(prev => prev ? {
+        ...prev,
+        accessKey: res.data.accessKey,
+        magicUrl: res.data.magicUrl,
+      } : null);
+      setSuccessMsg('Enlace mágico regenerado exitosamente.');
+    } catch (err: any) {
+      setErrorMsg(err?.response?.data?.message || 'Error al regenerar enlace');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmail.trim() || !newPassword.trim()) {
+      setErrorMsg('Email y contraseña son obligatorios.');
+      return;
+    }
+    setActionLoading(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const res = await api.post(`/agency/subaccounts/${sub.id}/users`, {
+        name: newName.trim() || undefined,
+        email: newEmail.trim(),
+        password: newPassword,
+      });
+      setAccessData(prev => prev ? {
+        ...prev,
+        users: [res.data, ...prev.users],
+      } : null);
+      setNewName('');
+      setNewEmail('');
+      setNewPassword('');
+      setSuccessMsg(`Usuario ${res.data.email} creado correctamente.`);
+    } catch (err: any) {
+      setErrorMsg(err?.response?.data?.message || 'Error al crear usuario');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, email: string) => {
+    if (!confirm(`¿Estás seguro de revocar el acceso a ${email}?`)) {
+      return;
+    }
+    setActionLoading(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      await api.delete(`/agency/subaccounts/${sub.id}/users/${userId}`);
+      setAccessData(prev => prev ? {
+        ...prev,
+        users: prev.users.filter(u => u.id !== userId),
+      } : null);
+      setSuccessMsg(`Usuario ${email} eliminado.`);
+    } catch (err: any) {
+      setErrorMsg(err?.response?.data?.message || 'Error al eliminar usuario');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const displayMagicUrl = typeof window !== 'undefined' && accessData?.accessKey
+    ? `${window.location.origin}/portal?key=${accessData.accessKey}`
+    : accessData?.magicUrl || '';
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
+        
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-200">
+              <Key className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900 text-base flex items-center gap-2">
+                Accesos de Subcuenta
+              </h3>
+              <p className="text-xs text-gray-500 font-medium">{sub.name}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-white/60 transition"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-gray-100 bg-gray-50/50 px-6 pt-3 gap-2">
+          <button
+            onClick={() => { setActiveTab('magic'); setErrorMsg(null); setSuccessMsg(null); }}
+            className={`pb-3 px-3 text-xs font-semibold flex items-center gap-1.5 border-b-2 transition ${
+              activeTab === 'magic'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Link2 className="w-4 h-4" />
+            Enlace Mágico (1-Clic)
+          </button>
+          <button
+            onClick={() => { setActiveTab('users'); setErrorMsg(null); setSuccessMsg(null); }}
+            className={`pb-3 px-3 text-xs font-semibold flex items-center gap-1.5 border-b-2 transition ${
+              activeTab === 'users'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            Usuarios y Contraseñas
+            {accessData?.users && accessData.users.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-blue-100 text-blue-700">
+                {accessData.users.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-6">
+          {errorMsg && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2 text-xs text-red-700">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+          {successMsg && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl flex items-start gap-2 text-xs text-green-700">
+              <Check className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="py-12 flex flex-col items-center justify-center gap-2">
+              <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+              <p className="text-xs text-gray-500">Cargando datos de acceso...</p>
+            </div>
+          ) : activeTab === 'magic' ? (
+            <div className="space-y-4">
+              <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-3.5 text-xs text-blue-900 leading-relaxed">
+                <span className="font-semibold">¿Cómo funciona el Enlace Mágico?</span>
+                <p className="mt-1 text-blue-700">
+                  Envía este enlace a tu cliente. Al hacer clic, entrará de inmediato a su CRM exclusivo,
+                  con sus conversaciones y contactos aislados. No verá el Panel de Agencia ni otras subcuentas.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                  URL de Acceso Directo
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={displayMagicUrl}
+                    className="flex-1 text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-gray-700 select-all font-mono focus:outline-none"
+                  />
+                  <button
+                    onClick={() => handleCopy(displayMagicUrl)}
+                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition shadow-xs shrink-0"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-4 h-4" />
+                        Copiado
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4" />
+                        Copiar
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-gray-700">Regenerar enlace</p>
+                  <p className="text-[11px] text-gray-400">Invalida el enlace actual si deseas revocar el acceso.</p>
+                </div>
+                <button
+                  onClick={handleRegenerateKey}
+                  disabled={actionLoading}
+                  className="px-3 py-1.5 text-xs font-medium border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 flex items-center gap-1.5 transition disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${actionLoading ? 'animate-spin' : ''}`} />
+                  Regenerar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {/* Formulario de creación */}
+              <form onSubmit={handleCreateUser} className="bg-gray-50/70 border border-gray-100 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-800">
+                  <UserPlus className="w-4 h-4 text-blue-600" />
+                  Crear Usuario para Cliente
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <input
+                    type="text"
+                    placeholder="Nombre (ej. Juan Pérez)"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    className="text-xs bg-white border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
+                  />
+                  <input
+                    type="email"
+                    required
+                    placeholder="Email (ej. cliente@empresa.com)"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    className="text-xs bg-white border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    placeholder="Contraseña (mínimo 6 caracteres)"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="flex-1 text-xs bg-white border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={actionLoading}
+                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition shadow-xs shrink-0 disabled:opacity-50"
+                  >
+                    {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                    Guardar
+                  </button>
+                </div>
+                <p className="text-[11px] text-gray-400">
+                  El cliente podrá ingresar desde la pantalla de Login seleccionando la pestaña &ldquo;Cliente Subcuenta&rdquo;.
+                </p>
+              </form>
+
+              {/* Lista de usuarios existentes */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-2">
+                  Usuarios con Acceso ({accessData?.users?.length || 0})
+                </label>
+                {(!accessData?.users || accessData.users.length === 0) ? (
+                  <div className="p-4 border border-dashed border-gray-200 rounded-xl text-center text-xs text-gray-400">
+                    No hay usuarios individuales registrados. Puedes crear uno arriba o compartir el Enlace Mágico.
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {accessData.users.map((u) => (
+                      <div
+                        key={u.id}
+                        className="flex items-center justify-between p-2.5 bg-white border border-gray-100 rounded-xl hover:border-gray-200 transition"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                            <Mail className="w-3.5 h-3.5" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-medium text-gray-800 truncate">{u.email}</p>
+                              <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-gray-100 text-gray-600">
+                                {u.role}
+                              </span>
+                            </div>
+                            {u.name && <p className="text-[11px] text-gray-400 truncate">{u.name}</p>}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteUser(u.id, u.email)}
+                          disabled={actionLoading}
+                          title="Revocar acceso"
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-100 transition shadow-xs"
+          >
+            Cerrar
+          </button>
+        </div>
+
       </div>
     </div>
   );

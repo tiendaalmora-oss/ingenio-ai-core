@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { SKIP_TENANT_GUARD_KEY } from './skip-tenant-guard.decorator';
@@ -93,6 +94,20 @@ export class TenantGuard implements CanActivate {
     // 2. Extract header — compatible with both Fastify and Express request shapes.
     const request = context.switchToHttp().getRequest<Record<string, any>>();
     let tenantId: string | undefined = request.headers?.['x-tenant-id'];
+
+    // 2.1 Si el usuario autenticado es un cliente de subcuenta, forzar su tenantId
+    if (request.user?.role === 'client') {
+      const allowedTenantId = request.user.tenantId;
+      if (tenantId && tenantId !== 'default' && tenantId !== allowedTenantId) {
+        this.logger.warn(
+          `[TenantGuard] Cliente intentó acceder a subcuenta ajena: tokenTenant=${allowedTenantId}, reqTenant=${tenantId}`,
+        );
+        throw new ForbiddenException('No tienes permisos para acceder a esta subcuenta');
+      }
+      tenantId = allowedTenantId;
+      request.tenantId = tenantId;
+      return true;
+    }
 
     if (!tenantId || typeof tenantId !== 'string' || tenantId.trim() === '' || tenantId === 'default') {
       // In single-tenant mode / default header: Fallback to the primary production tenant in DB

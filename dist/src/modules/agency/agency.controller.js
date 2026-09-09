@@ -78,6 +78,18 @@ let AgencyController = class AgencyController {
     logoutWaha(tenantId) {
         return this.agencyService.logoutSubaccountWaha(tenantId);
     }
+    getAccess(tenantId) {
+        return this.agencyService.getSubaccountAccess(tenantId);
+    }
+    createUser(tenantId, body) {
+        return this.agencyService.createSubaccountUser(tenantId, body);
+    }
+    deleteUser(tenantId, userId) {
+        return this.agencyService.deleteSubaccountUser(tenantId, userId);
+    }
+    regenerateAccessKey(tenantId) {
+        return this.agencyService.regenerateSubaccountAccessKey(tenantId);
+    }
 };
 exports.AgencyController = AgencyController;
 __decorate([
@@ -186,6 +198,36 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], AgencyController.prototype, "logoutWaha", null);
+__decorate([
+    (0, common_1.Get)('subaccounts/:id/access'),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], AgencyController.prototype, "getAccess", null);
+__decorate([
+    (0, common_1.Post)('subaccounts/:id/users'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], AgencyController.prototype, "createUser", null);
+__decorate([
+    (0, common_1.Delete)('subaccounts/:id/users/:userId'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Param)('userId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", void 0)
+], AgencyController.prototype, "deleteUser", null);
+__decorate([
+    (0, common_1.Post)('subaccounts/:id/regenerate-key'),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], AgencyController.prototype, "regenerateAccessKey", null);
 exports.AgencyController = AgencyController = __decorate([
     (0, common_1.Controller)('agency'),
     (0, common_1.UseGuards)(admin_api_key_guard_1.AdminApiKeyGuard),

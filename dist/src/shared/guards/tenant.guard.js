@@ -37,6 +37,16 @@ let TenantGuard = TenantGuard_1 = class TenantGuard {
         }
         const request = context.switchToHttp().getRequest();
         let tenantId = request.headers?.['x-tenant-id'];
+        if (request.user?.role === 'client') {
+            const allowedTenantId = request.user.tenantId;
+            if (tenantId && tenantId !== 'default' && tenantId !== allowedTenantId) {
+                this.logger.warn(`[TenantGuard] Cliente intentó acceder a subcuenta ajena: tokenTenant=${allowedTenantId}, reqTenant=${tenantId}`);
+                throw new common_1.ForbiddenException('No tienes permisos para acceder a esta subcuenta');
+            }
+            tenantId = allowedTenantId;
+            request.tenantId = tenantId;
+            return true;
+        }
         if (!tenantId || typeof tenantId !== 'string' || tenantId.trim() === '' || tenantId === 'default') {
             if (typeof this.prisma?.tenant?.findFirst === 'function') {
                 const primaryTenant = await this.prisma.tenant.findFirst({

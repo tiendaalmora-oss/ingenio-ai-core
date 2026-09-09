@@ -184,4 +184,48 @@ export class AgencyController {
   logoutWaha(@Param('id') tenantId: string) {
     return this.agencyService.logoutSubaccountWaha(tenantId);
   }
+
+  // ── GESTIÓN DE ACCESOS Y USUARIOS DE CLIENTE ───────────────
+
+  /**
+   * GET /agency/subaccounts/:id/access
+   * Obtener enlace mágico y lista de usuarios de una subcuenta
+   */
+  @Get('subaccounts/:id/access')
+  getAccess(@Param('id') tenantId: string) {
+    return this.agencyService.getSubaccountAccess(tenantId);
+  }
+
+  /**
+   * POST /agency/subaccounts/:id/users
+   * Crear un nuevo usuario (email y contraseña) para una subcuenta
+   */
+  @Post('subaccounts/:id/users')
+  createUser(
+    @Param('id') tenantId: string,
+    @Body() body: { email: string; password: string; name?: string },
+  ) {
+    return this.agencyService.createSubaccountUser(tenantId, body);
+  }
+
+  /**
+   * DELETE /agency/subaccounts/:id/users/:userId
+   * Eliminar un usuario de una subcuenta
+   */
+  @Delete('subaccounts/:id/users/:userId')
+  deleteUser(
+    @Param('id') tenantId: string,
+    @Param('userId') userId: string,
+  ) {
+    return this.agencyService.deleteSubaccountUser(tenantId, userId);
+  }
+
+  /**
+   * POST /agency/subaccounts/:id/regenerate-key
+   * Regenerar la clave de enlace mágico de una subcuenta
+   */
+  @Post('subaccounts/:id/regenerate-key')
+  regenerateAccessKey(@Param('id') tenantId: string) {
+    return this.agencyService.regenerateSubaccountAccessKey(tenantId);
+  }
 }

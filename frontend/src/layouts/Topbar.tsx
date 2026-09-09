@@ -2,8 +2,9 @@
 
 import React from 'react';
 import { usePathname } from 'next/navigation';
-import { Activity, Clock, Database, Menu } from 'lucide-react';
+import { Activity, Clock, Database, Menu, Building2 } from 'lucide-react';
 import { useUiStore } from '../store/ui.store';
+import { useAuthStore } from '../store/auth.store';
 
 import NotificationCenter from '../components/NotificationCenter';
 import SubaccountSwitcher from '../components/SubaccountSwitcher';
@@ -24,6 +25,8 @@ interface TopbarProps {
 export default function Topbar({ tenant, tenantName, version, timestamp, health }: TopbarProps) {
   const pathname = usePathname();
   const { toggleMobileMenu } = useUiStore();
+  const { role, logout } = useAuthStore();
+  const isClient = role === 'client' || (typeof window !== 'undefined' && localStorage.getItem('user_role') === 'client');
 
   const hasDown = Array.isArray(health) && health.some((h) => h.status === 'DOWN');
   const hasWarning = Array.isArray(health) && health.some((h) => h.status === 'WARNING');
@@ -90,15 +93,21 @@ export default function Topbar({ tenant, tenantName, version, timestamp, health 
         </div>
 
         {/* Human Operator Live Notification & Alert Center */}
-        <SubaccountSwitcher />
+        {!isClient ? (
+          <SubaccountSwitcher />
+        ) : (
+          <span className="text-xs px-2.5 py-1 bg-blue-50 text-blue-700 font-medium rounded-lg border border-blue-200 flex items-center gap-1">
+            <Building2 className="w-3 h-3 text-blue-600" /> Espacio Cliente
+          </span>
+        )}
         <NotificationCenter />
 
         <button
           onClick={() => {
-            localStorage.removeItem('crm_authenticated');
-            window.location.reload();
+            logout();
+            window.location.href = '/';
           }}
-          title="Cerrar sesión / Bloquear CRM"
+          title="Cerrar sesión / Salir del CRM"
           className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

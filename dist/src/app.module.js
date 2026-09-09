@@ -29,6 +29,7 @@ const settings_module_1 = require("./modules/settings/settings.module");
 const analytics_module_1 = require("./modules/analytics/analytics.module");
 const media_processing_module_1 = require("./modules/media-processing/media-processing.module");
 const agency_module_1 = require("./modules/agency/agency.module");
+const auth_module_1 = require("./modules/auth/auth.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -41,6 +42,7 @@ exports.AppModule = AppModule = __decorate([
             }),
             event_bus_1.EventBusModule,
             database_module_1.DatabaseModule,
+            auth_module_1.AuthModule,
             crm_module_1.CrmModule,
             conversation_module_1.ConversationModule,
             media_processing_module_1.MediaProcessingModule,

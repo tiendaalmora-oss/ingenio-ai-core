@@ -15,7 +15,9 @@ import {
   Menu,
   X,
   Building2,
+  LogOut,
 } from 'lucide-react';
+import { useAuthStore } from '../store/auth.store';
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard,
@@ -40,6 +42,8 @@ interface MenuItem {
 export default function Sidebar({ menu }: { menu: MenuItem[] }) {
   const pathname = usePathname();
   const { sidebarOpen, toggleSidebar, mobileMenuOpen, setMobileMenuOpen } = useUiStore();
+  const { role, logout } = useAuthStore();
+  const isClient = role === 'client' || (typeof window !== 'undefined' && localStorage.getItem('user_role') === 'client');
 
   const sortedMenu = [...menu].sort((a, b) => a.order - b.order);
   const sidebarWidth = sidebarOpen ? 'w-64' : 'w-20';
@@ -96,29 +100,46 @@ export default function Sidebar({ menu }: { menu: MenuItem[] }) {
               );
             })}
 
-            {/* ── Ítem fijo: Panel de Agencia ── */}
-            <li className="pt-2 mt-2 border-t border-gray-100">
-              <Link
-                href="/agency"
-                className={`flex items-center p-2 rounded-lg group transition-colors ${
-                  pathname === '/agency' || pathname.startsWith('/agency/')
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
-                }`}
-                title={!sidebarOpen ? 'Panel de Agencia' : undefined}
-              >
-                <Building2
-                  className={`w-5 h-5 flex-shrink-0 ${
-                    pathname.startsWith('/agency') ? 'text-blue-700' : 'text-gray-500 group-hover:text-gray-900'
+            {/* ── Ítem fijo: Panel de Agencia (solo para administradores) ── */}
+            {!isClient && (
+              <li className="pt-2 mt-2 border-t border-gray-100">
+                <Link
+                  href="/agency"
+                  className={`flex items-center p-2 rounded-lg group transition-colors ${
+                    pathname === '/agency' || pathname.startsWith('/agency/')
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                   }`}
-                />
-                {sidebarOpen && (
-                  <span className="ms-3 truncate text-sm font-medium">Panel de Agencia</span>
-                )}
-              </Link>
-            </li>
+                  title={!sidebarOpen ? 'Panel de Agencia' : undefined}
+                >
+                  <Building2
+                    className={`w-5 h-5 flex-shrink-0 ${
+                      pathname.startsWith('/agency') ? 'text-blue-700' : 'text-gray-500 group-hover:text-gray-900'
+                    }`}
+                  />
+                  {sidebarOpen && (
+                    <span className="ms-3 truncate text-sm font-medium">Panel de Agencia</span>
+                  )}
+                </Link>
+              </li>
+            )}
           </ul>
         </nav>
+
+        {/* ── Footer / Logout ── */}
+        <div className="p-3 border-t border-gray-200">
+          <button
+            onClick={() => {
+              logout();
+              window.location.href = '/';
+            }}
+            className="w-full flex items-center p-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors text-xs font-medium"
+            title={!sidebarOpen ? 'Cerrar Sesión' : undefined}
+          >
+            <LogOut className="w-4 h-4 flex-shrink-0" />
+            {sidebarOpen && <span className="ms-3 truncate">Cerrar Sesión</span>}
+          </button>
+        </div>
       </aside>
 
       {/* ── Mobile drawer ── */}

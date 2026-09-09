@@ -40,6 +40,7 @@ export declare class SettingsService {
         status: string;
         plan: string;
         wahaSession: string | null;
+        accessKey: string | null;
         currentBundleVersion: string | null;
         createdAt: Date;
         updatedAt: Date;
