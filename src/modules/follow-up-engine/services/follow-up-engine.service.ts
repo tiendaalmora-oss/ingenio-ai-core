@@ -51,7 +51,7 @@ export class FollowUpEngineService {
         },
         interactions: {
           orderBy: { timestamp: 'desc' },
-          take: 1
+          take: 20
         }
       }
     });
@@ -109,27 +109,53 @@ export class FollowUpEngineService {
           continue;
         }
 
-        const timeSinceLastInteraction = Date.now() - lastInteraction.timestamp.getTime();
-        const elapsedMinutes = Math.round(timeSinceLastInteraction / 60000);
+        // CONDICIÓN ESENCIAL: Solo enviar seguimiento si el último mensaje fue OUTBOUND (el bot habló y espera respuesta)
+        // Si el cliente acaba de escribir (INBOUND), no corresponde seguimiento proactivo.
+        if (lastInteraction.direction !== 'OUTBOUND') {
+          report.skipped.push({
+            conversationId: convo.id,
+            contact: convo.contact.phone,
+            reason: `Last interaction was ${lastInteraction.direction}, waiting for bot response, not follow-up`
+          });
+          continue;
+        }
+
+        // Buscar el último mensaje del cliente (INBOUND) para saber cuándo inició el ciclo de silencio
+        const lastInbound = convo.interactions.find(i => i.direction === 'INBOUND');
+        
+        // El tiempo de inactividad se calcula desde que el cliente habló por última vez (o inicio del chat si solo hubo outbound)
+        const silenceStart = lastInbound
+          ? lastInbound.timestamp
+          : (convo.interactions[convo.interactions.length - 1]?.timestamp || lastInteraction.timestamp);
+
+        const timeSinceSilence = Date.now() - silenceStart.getTime();
+        const elapsedMinutes = Math.round(timeSinceSilence / 60000);
+        const elapsedDays = Math.floor(timeSinceSilence / (24 * 60 * 60 * 1000));
 
         for (const rule of sortedRules) {
           const delayMs = this.parseDelayMs(rule);
 
-          if (timeSinceLastInteraction >= delayMs) {
+          if (timeSinceSilence >= delayMs) {
             const ruleIdentifier = rule.id || `rule-${(rule.tiempo || 'default').replace(/\s+/g, '')}-${delayMs}`;
 
-            // Evitar duplicar el mismo seguimiento en las últimas 24 horas si ya está encolado, procesando o enviado
+            // CANDADO ANTI-BUCLE: Comprobar si esta regla ya fue despachada durante el ciclo de silencio actual
+            // Una vez enviada en este período de silencio, NUNCA se vuelve a repetir a menos que el cliente responda.
             const alreadyDispatched = await this.prisma.pendingOutboundMessage.findFirst({
               where: {
                 conversationId: convo.id,
                 followUpId: ruleIdentifier,
                 status: { in: ['PENDING', 'PROCESSING', 'SENT'] },
-                createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+                ...(lastInbound ? { createdAt: { gte: lastInbound.timestamp } } : {})
               }
             });
 
             if (alreadyDispatched) {
-              report.skipped.push({ conversationId: convo.id, contact: convo.contact.phone, rule: ruleIdentifier, reason: `Already dispatched with status ${alreadyDispatched.status}` });
+              report.skipped.push({
+                conversationId: convo.id,
+                contact: convo.contact.phone,
+                rule: ruleIdentifier,
+                reason: `Already dispatched in current silence cycle (Status: ${alreadyDispatched.status})`
+              });
               continue;
             }
 
@@ -139,10 +165,12 @@ export class FollowUpEngineService {
               contactId: convo.contactId,
               followUpId: ruleIdentifier,
               ruleApplied: rule,
+              elapsedDays,
+              elapsedMinutes,
               timestamp: new Date()
             };
             
-            this.logger.log(`[FollowUpEngine] 🚀 Disparando seguimiento para ${convo.contact.name || convo.contact.phone || convo.contactId} (inactivo hace ${elapsedMinutes} min), regla: "${rule.tiempo || ruleIdentifier}"`);
+            this.logger.log(`[FollowUpEngine] 🚀 Disparando seguimiento para ${convo.contact.name || convo.contact.phone || convo.contactId} (silencio de ${elapsedDays} días / ${elapsedMinutes} min), regla: "${rule.tiempo || ruleIdentifier}"`);
             
             this.eventEmitter.emit('FOLLOW_UP_PENDING', payload);
             
@@ -150,6 +178,7 @@ export class FollowUpEngineService {
               conversationId: convo.id,
               contact: convo.contact.phone || convo.contactId,
               rule: rule.tiempo || ruleIdentifier,
+              elapsedDays,
               elapsedMinutes
             });
 

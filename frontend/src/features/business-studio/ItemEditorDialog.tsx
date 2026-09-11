@@ -135,6 +135,9 @@ export default function ItemEditorDialog({
         if (sectionKey === 'productos') {
           itemCopy.embudoVenta = itemCopy.embudoVenta || itemCopy.secuenciaVenta || itemCopy.descripcion || '';
         }
+        if (sectionKey === 'seguimientos') {
+          itemCopy.pautaCreativa = itemCopy.pautaCreativa || itemCopy.mensaje || '';
+        }
         setFormData(itemCopy);
         setJsonText(JSON.stringify(itemCopy, null, 2));
       } else {
@@ -179,6 +182,10 @@ export default function ItemEditorDialog({
         payload.id = item.id;
       } else if (!payload.id) {
         payload.id = Date.now().toString();
+      }
+
+      if (sectionKey === 'seguimientos') {
+        payload.mensaje = payload.pautaCreativa || payload.mensaje || '';
       }
 
       setError(null);

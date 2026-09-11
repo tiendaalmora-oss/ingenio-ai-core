@@ -51,7 +51,7 @@ let FollowUpEngineService = FollowUpEngineService_1 = class FollowUpEngineServic
                 },
                 interactions: {
                     orderBy: { timestamp: 'desc' },
-                    take: 1
+                    take: 20
                 }
             }
         });
@@ -94,22 +94,40 @@ let FollowUpEngineService = FollowUpEngineService_1 = class FollowUpEngineServic
                     report.skipped.push({ conversationId: convo.id, contact: convo.contact.phone, reason: 'No interactions found' });
                     continue;
                 }
-                const timeSinceLastInteraction = Date.now() - lastInteraction.timestamp.getTime();
-                const elapsedMinutes = Math.round(timeSinceLastInteraction / 60000);
+                if (lastInteraction.direction !== 'OUTBOUND') {
+                    report.skipped.push({
+                        conversationId: convo.id,
+                        contact: convo.contact.phone,
+                        reason: `Last interaction was ${lastInteraction.direction}, waiting for bot response, not follow-up`
+                    });
+                    continue;
+                }
+                const lastInbound = convo.interactions.find(i => i.direction === 'INBOUND');
+                const silenceStart = lastInbound
+                    ? lastInbound.timestamp
+                    : (convo.interactions[convo.interactions.length - 1]?.timestamp || lastInteraction.timestamp);
+                const timeSinceSilence = Date.now() - silenceStart.getTime();
+                const elapsedMinutes = Math.round(timeSinceSilence / 60000);
+                const elapsedDays = Math.floor(timeSinceSilence / (24 * 60 * 60 * 1000));
                 for (const rule of sortedRules) {
                     const delayMs = this.parseDelayMs(rule);
-                    if (timeSinceLastInteraction >= delayMs) {
+                    if (timeSinceSilence >= delayMs) {
                         const ruleIdentifier = rule.id || `rule-${(rule.tiempo || 'default').replace(/\s+/g, '')}-${delayMs}`;
                         const alreadyDispatched = await this.prisma.pendingOutboundMessage.findFirst({
                             where: {
                                 conversationId: convo.id,
                                 followUpId: ruleIdentifier,
                                 status: { in: ['PENDING', 'PROCESSING', 'SENT'] },
-                                createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+                                ...(lastInbound ? { createdAt: { gte: lastInbound.timestamp } } : {})
                             }
                         });
                         if (alreadyDispatched) {
-                            report.skipped.push({ conversationId: convo.id, contact: convo.contact.phone, rule: ruleIdentifier, reason: `Already dispatched with status ${alreadyDispatched.status}` });
+                            report.skipped.push({
+                                conversationId: convo.id,
+                                contact: convo.contact.phone,
+                                rule: ruleIdentifier,
+                                reason: `Already dispatched in current silence cycle (Status: ${alreadyDispatched.status})`
+                            });
                             continue;
                         }
                         const payload = {
@@ -118,14 +136,17 @@ let FollowUpEngineService = FollowUpEngineService_1 = class FollowUpEngineServic
                             contactId: convo.contactId,
                             followUpId: ruleIdentifier,
                             ruleApplied: rule,
+                            elapsedDays,
+                            elapsedMinutes,
                             timestamp: new Date()
                         };
-                        this.logger.log(`[FollowUpEngine] 🚀 Disparando seguimiento para ${convo.contact.name || convo.contact.phone || convo.contactId} (inactivo hace ${elapsedMinutes} min), regla: "${rule.tiempo || ruleIdentifier}"`);
+                        this.logger.log(`[FollowUpEngine] 🚀 Disparando seguimiento para ${convo.contact.name || convo.contact.phone || convo.contactId} (silencio de ${elapsedDays} días / ${elapsedMinutes} min), regla: "${rule.tiempo || ruleIdentifier}"`);
                         this.eventEmitter.emit('FOLLOW_UP_PENDING', payload);
                         report.dispatched.push({
                             conversationId: convo.id,
                             contact: convo.contact.phone || convo.contactId,
                             rule: rule.tiempo || ruleIdentifier,
+                            elapsedDays,
                             elapsedMinutes
                         });
                         break;

@@ -100,9 +100,20 @@ let PromptComposerService = class PromptComposerService {
         messages.push(...this.buildHistory(history));
         if (mode === PromptMode.FOLLOW_UP) {
             const ruleObj = typeof followUpRule === 'object' ? followUpRule : {};
+            const parts = [];
+            if (ruleObj.tiempo)
+                parts.push(`- Momento de activación: ${ruleObj.tiempo} de inactividad del cliente`);
+            if (ruleObj.enfoque)
+                parts.push(`- 🎯 Ángulo / Enfoque Comercial: ${ruleObj.enfoque}`);
+            if (ruleObj.pautaCreativa)
+                parts.push(`- 💡 Pauta Creativa: ${ruleObj.pautaCreativa}`);
+            if (ruleObj.instruccion)
+                parts.push(`- 📋 Instrucción Adicional: ${ruleObj.instruccion}`);
+            if (ruleObj.mensaje)
+                parts.push(`- 💬 Mensaje o Guion de Referencia: ${ruleObj.mensaje}`);
             const ruleText = typeof followUpRule === 'string'
                 ? followUpRule
-                : (ruleObj.pautaCreativa || ruleObj.enfoque || ruleObj.instruccion || ruleObj.mensaje || ruleObj.condicion || ruleObj.tiempo || 'Reactivar la conversación con una pregunta de interés');
+                : (parts.length > 0 ? parts.join('\n') : (ruleObj.condicion || '- Reactivar la conversación cordialmente con empatía'));
             const pastBotMessages = history
                 .filter((h) => h.role === 'assistant' || h.direction === 'OUTBOUND')
                 .slice(-4)
@@ -117,7 +128,8 @@ let PromptComposerService = class PromptComposerService {
                 content: `[MISIÓN: SEGUIMIENTO COMERCIAL CREATIVO Y PERSUASIVO - CERO OFRECIMIENTO DE MATERIAL]
 El cliente lleva un tiempo en silencio. Tu objetivo es reactivar la conversación con un mensaje de WhatsApp fresco, espontáneo, cálido y persuasivo para que el cliente responda con ganas.
 
-🎯 PAUTA / ENFOQUE DEL SEGUIMIENTO: "${ruleText}"
+🎯 CONFIGURACIÓN Y PAUTA DEL SEGUIMIENTO:
+${ruleText}
 👤 ESTADO DEL PROSPECTO: ${leadState} | INTERÉS: ${interestedProduct}${pastContextNotice}
 
 🛑 REGLA INQUEBRANTABLE: CERO OFRECIMIENTO DE MATERIAL O MUESTRAS (NO ROMPER EL FLUJO):
@@ -130,16 +142,15 @@ El cliente lleva un tiempo en silencio. Tu objetivo es reactivar la conversació
   * "¿Quieres que te mande los temas?"
 - Si preguntas esto y el cliente dice "sí, envíamelo", el flujo de ventas se rompe por completo porque el bot no puede enviar archivos por este canal antes de pagar.
 
-💡 CÓMO REACTIVAR DE FORMA PERSUASIVA SEGÚN LA ETAPA DEL CLIENTE:
-1. Si el cliente ya vio el precio o los datos de pago:
-   - Pregúntale amablemente por su método de pago preferido o si tuvo alguna duda con los datos bancarios:
-     Ej: "¡Hola! Espero estés muy bien. ¿Pudiste revisar los datos de pago o prefieres alguna otra modalidad? Quedo atento por acá para cualquier duda 😊"
-2. Si el cliente vio la oferta y los beneficios:
-   - Resalta el valor principal de la solución y consulta con calidez:
-     Ej: "¡Hola! Quería saber si pudiste revisar la propuesta que te compartí o si te quedó alguna consulta sobre los detalles 😊"
-3. Si el cliente está en las primeras preguntas:
-   - Haz una pregunta sencilla de baja fricción sobre su necesidad o requerimiento puntual:
-     Ej: "¡Hola! Qué gusto saludarte de nuevo. ¿Qué requerimiento específico o detalle buscas principalmente? Así te oriento mejor ✨"
+💡 CÓMO REACTIVAR DE FORMA PERSUASIVA Y NATURAL:
+1. Si han transcurrido varios días o semanas (ej. 15 días):
+   - Saluda con calidez reconociendo con simpatía el tiempo pasado (el ajetreo diario, inicio de año escolar o compromisos).
+   - Recuerda con sutileza y entusiasmo el kit o área que estaban conversando, invitándolo a retomar con tranquilidad.
+2. Si el cliente ya había visto los datos de pago:
+   - Pregúntale amablemente si tuvo alguna duda con el método de pago o si prefiere otra alternativa para apoyarlo.
+3. 🚫 PROHIBIDO CLONAR PLANTILLAS:
+   - NUNCA repitas frases mecánicas como "¿Pudiste revisar la información que te compartí o te quedó alguna consulta sobre los detalles?".
+   - Redacta de forma única, fluida y humana inspirada en la pauta comercial.
 
 ⚡ REGLAS DE ORO DE REDACCIÓN:
 - Máximo 2 a 3 líneas breves de WhatsApp. Directo al grano y agradable de leer.
