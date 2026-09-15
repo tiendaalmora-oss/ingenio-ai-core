@@ -57,42 +57,58 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
             : null;
         const rawPrompt = bundle?.systemPrompt || {};
         const rawData = rawPrompt['_raw'] || rawPrompt;
-        const reglasBot = rawData.reglasBot || {
-            autoPauseOptOut: true,
-            optOutMessage: 'Entendido perfectamente. Agradecemos mucho tu tiempo y honestidad. ¡Que tengas un excelente día!',
-            autoPauseHandoff: true,
-            handoffMessage: 'Con gusto. En breve un asesor humano de nuestro equipo continuará la conversación contigo por acá.',
-            enableMessageLimit: true,
-            maxBotMessages: 10,
-            respondLastMessageBeforePause: true,
-            autoResetAfterTime: false,
-            resetHours: 24,
-            limitReachedMessage: ''
-        };
+        const rawReglas = rawData.reglasBot || {};
+        const reglasBot = (rawReglas.data && typeof rawReglas.data === 'object')
+            ? { ...rawReglas.data, ...rawReglas }
+            : {
+                autoPauseOptOut: true,
+                optOutMessage: 'Entendido perfectamente. Agradecemos mucho tu tiempo y honestidad. ¡Que tengas un excelente día!',
+                autoPauseHandoff: true,
+                handoffMessage: 'Con gusto. En breve un asesor humano de nuestro equipo continuará la conversación contigo por acá.',
+                enableMessageLimit: true,
+                maxBotMessages: 10,
+                respondLastMessageBeforePause: true,
+                autoResetAfterTime: false,
+                resetHours: 24,
+                limitReachedMessage: '',
+                ...rawReglas,
+            };
+        const textNorm = (payload.content || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
         const conversation = await this.prisma.conversation.findUnique({
             where: { id: payload.conversationId },
         });
         if (conversation && (conversation.status === 'HANDOFF' || conversation.status === 'PAUSED' || conversation.status === 'LOST' || conversation.status === 'RESOLVED')) {
-            if (reglasBot.autoResetAfterTime && (conversation.status === 'HANDOFF' || conversation.status === 'PAUSED')) {
+            const isAutoResetEnabled = Boolean(reglasBot.autoResetAfterTime);
+            const isCampaignTrigger = textNorm.startsWith('hola') && (textNorm.includes('quiero mas informacion') ||
+                textNorm.includes('quiero informacion') ||
+                textNorm.includes('kit de') ||
+                textNorm.includes('mega kit') ||
+                textNorm.includes('mas informacion'));
+            if (isAutoResetEnabled) {
                 const resetHours = Number(reglasBot.resetHours) || 24;
                 const resetMs = resetHours * 3600 * 1000;
-                const lastInteraction = this.prisma?.interaction?.findFirst
+                const previousInteraction = this.prisma?.interaction?.findFirst
                     ? await this.prisma.interaction.findFirst({
-                        where: { conversationId: payload.conversationId },
+                        where: {
+                            conversationId: payload.conversationId,
+                            id: { not: payload.interactionId }
+                        },
                         orderBy: { timestamp: 'desc' }
                     })
                     : null;
-                const lastUpdated = lastInteraction?.timestamp ? new Date(lastInteraction.timestamp).getTime() : 0;
-                const elapsed = Date.now() - lastUpdated;
-                if (elapsed >= resetMs) {
-                    this.logger.log(`[Reglas Bot] Han transcurrido ${(elapsed / 3600000).toFixed(1)}h (límite: ${resetHours}h). Reactivando bot automáticamente para conversación ${payload.conversationId}.`);
+                const previousTime = previousInteraction?.timestamp ? new Date(previousInteraction.timestamp).getTime() : 0;
+                const elapsed = previousTime > 0 ? (Date.now() - previousTime) : Infinity;
+                const elapsedHours = elapsed / 3600000;
+                if (elapsed >= resetMs || (isCampaignTrigger && elapsedHours >= 2)) {
+                    this.logger.log(`[Reglas Bot] Reactivando bot automáticamente para conversación ${payload.conversationId}. Inactividad previa: ${elapsedHours.toFixed(1)}h (límite: ${resetHours}h, campaña: ${isCampaignTrigger}).`);
                     await this.prisma.conversation.update({
                         where: { id: payload.conversationId },
                         data: { status: 'ACTIVE' }
                     });
+                    conversation.status = 'ACTIVE';
                 }
                 else {
-                    this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}' (tiempo restante para reset: ${((resetMs - elapsed) / 3600000).toFixed(1)}h). Bot en pausa.`);
+                    this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}' (inactividad previa: ${elapsedHours.toFixed(1)}h < ${resetHours}h). Bot en pausa.`);
                     return;
                 }
             }
@@ -101,7 +117,6 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 return;
             }
         }
-        const textNorm = (payload.content || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
         if (reglasBot.autoPauseOptOut !== false) {
             const optOutPatterns = [
                 'no me interesa',

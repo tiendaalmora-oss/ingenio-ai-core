@@ -199,10 +199,14 @@ export class BusinessStudioService {
       
       // Fusión segura: Si es reglasBot, preservar cualquier campo existente previo
       if (section === 'reglasBot' && typeof data === 'object' && data !== null) {
+        const cleanData = (data.data && typeof data.data === 'object') ? { ...data.data, ...data } : { ...data };
         const previousRules = (typeof rawData.reglasBot === 'object' && rawData.reglasBot !== null) ? rawData.reglasBot : {};
+        const cleanPrev = (previousRules.data && typeof previousRules.data === 'object') ? { ...previousRules.data, ...previousRules } : { ...previousRules };
+        delete cleanData.data;
+        delete cleanPrev.data;
         rawData.reglasBot = {
-          ...previousRules,
-          ...data
+          ...cleanPrev,
+          ...cleanData
         };
       } else {
         rawData[section] = data;
