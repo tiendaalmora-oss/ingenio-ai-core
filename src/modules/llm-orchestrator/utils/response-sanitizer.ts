@@ -44,17 +44,24 @@ export function sanitizeUserFacingResponse(rawContent: string): string {
   text = text.replace(/\s*(?:I need to update the memory[\s\S]*$)/i, '');
   text = text.replace(/\s*(?:Note: I (?:should|will)[\s\S]*$)/i, '');
 
-  // 7. Eliminar prefijos comunes no deseados como 'Response: "' o 'Respuesta: "'
+  // 7. Eliminar llamadas a funciones o tools crudas filtradas como texto (ej: call:update_business_memory{...})
+  text = text.replace(/call:\w+\{[\s\S]*?(?:\}|$)/gi, '');
+  text = text.replace(/call:\w+[\s\S]*$/gi, '');
+  text = text.replace(/<ctrl\d+>/gi, '');
+  text = text.replace(/<0x[0-9a-fA-F]+>/gi, '');
+  text = text.replace(/(?:update_business_memory|create_task|pause_bot_and_handoff|handoff_to_human)\s*\{[\s\S]*?(?:\}|$)/gi, '');
+
+  // 8. Eliminar prefijos comunes no deseados como 'Response: "' o 'Respuesta: "'
   text = text.replace(/^(?:Response|Respuesta)\s*:\s*["']?/i, '');
   text = text.replace(/^["“']|["”']$/g, '').trim();
 
-  // 8. Convertir negrita de Markdown estándar (**) al formato de negrita nativo de WhatsApp (*)
+  // 9. Convertir negrita de Markdown estándar (**) al formato de negrita nativo de WhatsApp (*)
   text = text.replace(/\*\*([^*\n]+?)\*\*/g, '*$1*');
 
-  // 9. Eliminar placeholders alucinados de archivos o imágenes entre corchetes (ej: [IMAGEN DE...], [FOTO DE...])
+  // 10. Eliminar placeholders alucinados de archivos o imágenes entre corchetes (ej: [IMAGEN DE...], [FOTO DE...])
   text = text.replace(/\[(?:IMAGEN|FOTO|CAPTURE|CAPTURA|ADJUNTO|ARCHIVO|IMAGE|PHOTO|FILE)(?:\s+DE|\s*:)?\s*[^\]]+\]/gi, '');
 
-  // 10. Limpiar saltos de línea excesivos y espacios residuales
+  // 11. Limpiar saltos de línea excesivos y espacios residuales
   text = text.replace(/\n{3,}/g, '\n\n').trim();
 
   return text;

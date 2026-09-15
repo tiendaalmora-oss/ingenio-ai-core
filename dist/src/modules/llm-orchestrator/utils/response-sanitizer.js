@@ -26,6 +26,11 @@ function sanitizeUserFacingResponse(rawContent) {
     text = text.replace(/\s*(?:I will also update[\s\S]*$)/i, '');
     text = text.replace(/\s*(?:I need to update the memory[\s\S]*$)/i, '');
     text = text.replace(/\s*(?:Note: I (?:should|will)[\s\S]*$)/i, '');
+    text = text.replace(/call:\w+\{[\s\S]*?(?:\}|$)/gi, '');
+    text = text.replace(/call:\w+[\s\S]*$/gi, '');
+    text = text.replace(/<ctrl\d+>/gi, '');
+    text = text.replace(/<0x[0-9a-fA-F]+>/gi, '');
+    text = text.replace(/(?:update_business_memory|create_task|pause_bot_and_handoff|handoff_to_human)\s*\{[\s\S]*?(?:\}|$)/gi, '');
     text = text.replace(/^(?:Response|Respuesta)\s*:\s*["']?/i, '');
     text = text.replace(/^["“']|["”']$/g, '').trim();
     text = text.replace(/\*\*([^*\n]+?)\*\*/g, '*$1*');

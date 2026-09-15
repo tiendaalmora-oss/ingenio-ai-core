@@ -433,12 +433,54 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 }
             }
             else if (response.content) {
-                finalContent = response.content;
+                const pseudoToolMatch = response.content.match(/(?:^|\n)\s*call:(\w+)\{([\s\S]*)/i);
+                if (pseudoToolMatch) {
+                    const toolName = pseudoToolMatch[1];
+                    const rawArgs = pseudoToolMatch[2];
+                    this.logger.warn(`[Executive Loop] Detectada llamada de herramienta filtrada en texto: ${toolName}. Interceptando y procesando...`);
+                    let parsedArgs = {};
+                    try {
+                        let sanitizedArgsStr = rawArgs.replace(/<ctrl\d+>/g, '"').replace(/<0x[0-9a-fA-F]+>/g, '"').trim();
+                        if (!sanitizedArgsStr.endsWith('}')) {
+                            sanitizedArgsStr = sanitizedArgsStr.replace(/,\s*[a-zA-Z0-9_]+\s*:\s*$/, '') + '}';
+                        }
+                        parsedArgs = JSON.parse(sanitizedArgsStr);
+                    }
+                    catch (_) {
+                        const interestsMatch = rawArgs.match(/interests\s*:\s*\[([^\]]+)\]/i);
+                        if (interestsMatch) {
+                            parsedArgs.interests = interestsMatch[1]
+                                .replace(/<ctrl\d+>/g, '')
+                                .split(',')
+                                .map(s => s.trim().replace(/^["']|["']$/g, ''))
+                                .filter(Boolean);
+                        }
+                    }
+                    await this.eventEmitter.emitAsync('tool.called', new tool_called_event_1.ToolCalledEvent(payload.tenantId, payload.conversationId, payload.contactId, `rescued_${Date.now()}`, toolName, parsedArgs));
+                    this.logger.log(`[Executive Loop] Herramienta rescatada ejecutada en CRM. Solicitando respuesta de texto conversacional para el usuario...`);
+                    const textPrompt = await this.contextBuilder.buildContext(payload.tenantId, payload.contactId, payload.conversationId, payload.content, null);
+                    textPrompt.push({
+                        role: 'user',
+                        content: `[SISTEMA]: La memoria del CRM ya fue actualizada con éxito. Redacta ahora tu respuesta conversacional completa para el usuario respondiendo a su mensaje: "${payload.content}". Sé persuasivo, amable y continúa el embudo de ventas.`
+                    });
+                    const textResponse = await this.hermesClient.generateResponse(textPrompt, false);
+                    if (textResponse.content) {
+                        finalContent = textResponse.content;
+                    }
+                }
+                else {
+                    finalContent = response.content;
+                }
             }
             if (finalContent) {
+                finalContent = (0, response_sanitizer_1.sanitizeUserFacingResponse)(finalContent);
                 const lower = finalContent.toLowerCase();
-                if (lower.includes('hermes no pudo') || lower.includes('error calling') || lower.includes('failed to process')) {
-                    this.logger.warn(`[Executive Loop Shield] Detectado mensaje de error técnico. Reemplazando por saludo de contingencia.`);
+                if (lower.includes('hermes no pudo') ||
+                    lower.includes('error calling') ||
+                    lower.includes('failed to process') ||
+                    lower.startsWith('call:') ||
+                    /call:\w+\{/i.test(finalContent)) {
+                    this.logger.warn(`[Executive Loop Shield] Detectado mensaje técnico o tool leak residual. Reemplazando por respuesta segura.`);
                     finalContent = '';
                 }
             }

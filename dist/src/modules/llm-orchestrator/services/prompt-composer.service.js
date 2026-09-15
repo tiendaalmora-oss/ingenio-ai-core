@@ -30,6 +30,7 @@ let PromptComposerService = class PromptComposerService {
 - NUNCA uses Markdown con doble asterisco (**texto**) ni reduzcas la conversación a viñetas secas (•).
 - Respeta estrictamente los guiones, textos, ofertas y emojis configurados en tu base de conocimiento KOS.
 - 🛑 CERO MONÓLOGO O EXPLICACIONES EN INGLÉS: NUNCA escribas pensamientos internos, notas de planificación o frases en inglés como "Initialize a new conversation...", "The first message is...", "I should also update the business memory...". Tu respuesta debe contener ÚNICAMENTE el texto en español final que recibirá el cliente en WhatsApp, sin envolverlo en comillas dobles externas.
+- 🛑 PROHIBIDO ESCRIBIR LLAMADAS DE HERRAMIENTAS EN EL TEXTO: NUNCA escribas sintaxis interna de herramientas como "call:update_business_memory..." o bloques entre llaves en tu respuesta de texto. Las herramientas se ejecutan de forma invisible a través de la API, NUNCA redactándolas como texto para el cliente.
 
 [ARQUITECTURA DE PROGRESIÓN PASO A PASO DEL EMBUDO DE CADA PRODUCTO]:
 1. SEGUIMIENTO SECUENCIAL ESTRICTO (1 SOLO PASO POR MENSAJE):

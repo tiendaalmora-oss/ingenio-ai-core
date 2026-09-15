@@ -93,6 +93,7 @@ export class ConversationHubController {
             include: { memory: true },
           },
           interactions: {
+            where: { type: { notIn: ['TOOL_RESULT'] } },
             orderBy: { timestamp: 'desc' },
             take: 1,
           },

@@ -75,6 +75,7 @@ let ConversationHubController = ConversationHubController_1 = class Conversation
                         include: { memory: true },
                     },
                     interactions: {
+                        where: { type: { notIn: ['TOOL_RESULT'] } },
                         orderBy: { timestamp: 'desc' },
                         take: 1,
                     },
