@@ -5,6 +5,7 @@ import { TenantResolverService } from '../../tenant/services/tenant-resolver.ser
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { AudioTranscriptionService } from '../../media-processing/services/audio-transcription.service';
 import { MediaVisionService } from '../../media-processing/services/media-vision.service';
+import { WahaAdapterService } from '../../outbound-engine/services/waha-adapter.service';
 
 @Controller('webhooks/meta')
 export class MetaWebhookController {
@@ -15,7 +16,8 @@ export class MetaWebhookController {
     private readonly tenantResolver: TenantResolverService,
     private readonly prisma: PrismaService,
     private readonly audioTranscriptionService: AudioTranscriptionService,
-    private readonly mediaVisionService: MediaVisionService
+    private readonly mediaVisionService: MediaVisionService,
+    private readonly wahaAdapter: WahaAdapterService,
   ) {}
 
   /**
@@ -61,58 +63,145 @@ export class MetaWebhookController {
         const isFromMe = Boolean(payload.fromMe);
 
         // ── CASO A1: Mensaje SALIENTE desde el teléfono físico (fromMe = true) ──
-        // Sincronizar al CRM sin procesarlo con la IA
+        // Sincronizar al CRM sin procesarlo con la IA, y pausar el bot de inmediato
         if (isFromMe) {
-          // Ignorar event message.any para evitar duplicados
-          if (body.event === 'message.any') return;
+          // Extraer identificador de mensaje de WAHA
+          const wahaMsgId = payload.id?._serialized || payload.id || payload._data?.id?._serialized || payload.key?.id || '';
+
+          // 1. Si el mensaje fue enviado por nuestro propio sistema (bot o CRM dashboard), ignorar echo
+          if (wahaMsgId && this.wahaAdapter.isSentBySystem(wahaMsgId)) {
+            this.logger.debug(`[WAHA Echo] Mensaje saliente ${wahaMsgId} confirmado como enviado por el sistema. Ignorando.`);
+            return;
+          }
 
           tenantId = await this.tenantResolver.resolveFromWahaSession(body.session || 'default');
           if (!tenantId) return;
 
-          // El destinatario real es payload.to (a quien le escribiste)
+          // El destinatario real es payload.to (a quien le escribió el operador desde el teléfono)
           const toRaw = (payload.to || '').replace(/:\d+@/, '@');
           if (!toRaw || toRaw.endsWith('@g.us')) return; // ignorar grupos
 
           const toDigits = toRaw.replace(/@(c\.us|lid|s\.whatsapp\.net)$/, '').replace(/\D/g, '');
-          const manualText = payload.body || payload.caption || '';
+          let manualText = (payload.body || payload.caption || '').trim();
 
-          if (manualText && toDigits) {
-            this.logger.log(`[Mobile Sync] Msg saliente manual para ${toRaw}: "${manualText.substring(0, 40)}..."`);
+          // Detección multimedia para notas de voz o imágenes enviadas desde el teléfono
+          const hasMedia = payload.hasMedia || Boolean(payload.media);
+          const media = payload.media || {};
+          const mimetype = (media.mimetype || payload._data?.mimetype || '').toLowerCase();
+          const messageType = (payload.type || '').toLowerCase();
 
-            const existingContact = await this.prisma.contact.findFirst({
-              where: {
-                tenantId,
-                OR: [
-                  { externalId: toRaw },
-                  { phone: toDigits },
-                  { phoneNormalized: toDigits },
-                ]
-              }
+          if (!manualText && hasMedia) {
+            if (mimetype.startsWith('audio/') || messageType === 'ptt' || messageType === 'audio') {
+              manualText = '🎤 [Nota de voz enviada por el asesor]';
+            } else if (mimetype.startsWith('image/') || messageType === 'image') {
+              manualText = '📷 [Imagen enviada por el asesor]';
+            } else {
+              manualText = '📎 [Archivo enviado por el asesor]';
+            }
+          }
+
+          if (!manualText) return;
+
+          // 2. Doble chequeo anti-falso-positivo: ¿Existe una interacción saliente idéntica reciente (< 15s) en DB?
+          // (Si el bot acababa de registrar este mismo texto, es un echo del bot)
+          const toWithoutZero = toDigits.startsWith('0') ? toDigits.replace(/^0+/, '') : toDigits;
+          const toWith58 = toDigits.startsWith('58') ? toDigits : (toWithoutZero ? `58${toWithoutZero}` : '');
+
+          const existingContact = await this.prisma.contact.findFirst({
+            where: {
+              tenantId,
+              OR: [
+                { externalId: toRaw },
+                { externalId: toDigits },
+                { phone: toDigits },
+                { phoneNormalized: toDigits },
+                { phone: toWithoutZero },
+                { phoneNormalized: toWithoutZero },
+                { phone: toWith58 },
+                { phoneNormalized: toWith58 },
+              ]
+            }
+          });
+
+          if (existingContact) {
+            const conv = await this.prisma.conversation.findFirst({
+              where: { contactId: existingContact.id },
+              orderBy: { id: 'desc' }
             });
 
-            if (existingContact) {
-              const conv = await this.prisma.conversation.findFirst({
-                where: { contactId: existingContact.id }
-              });
-              if (conv) {
-                await this.prisma.interaction.create({
-                  data: {
-                    conversationId: conv.id,
-                    direction: 'OUTBOUND',
-                    type: 'TEXT',
-                    content: manualText,
-                    role: 'assistant',
-                  }
-                });
+            if (conv) {
+              const recentBotEcho = this.prisma.interaction?.findFirst
+                ? await this.prisma.interaction.findFirst({
+                    where: {
+                      conversationId: conv.id,
+                      direction: 'OUTBOUND',
+                      role: 'assistant',
+                      content: manualText,
+                      timestamp: { gte: new Date(Date.now() - 15_000) }
+                    }
+                  })
+                : null;
+              if (recentBotEcho) {
+                this.logger.debug(`[WAHA Echo] Mensaje saliente coincide con interacción reciente en DB (${conv.id}). Ignorando.`);
+                return;
+              }
+
+              // Soporte para comandos de reactivación desde WhatsApp (#bot, #activar, #reactivar)
+              const textNorm = manualText.trim().toLowerCase();
+              if (textNorm === '#bot' || textNorm === '#activar' || textNorm === '#reactivar' || textNorm === '#play') {
+                this.logger.log(`[Mobile Operator] Comando de reactivación recibido desde WhatsApp ("${textNorm}") para ${toRaw}. Reactivando bot en ACTIVE.`);
                 await this.prisma.conversation.update({
                   where: { id: conv.id },
-                  data: { status: 'HANDOFF' }
+                  data: { status: 'ACTIVE' }
                 });
-                await this.prisma.pendingOutboundMessage.deleteMany({
-                  where: { conversationId: conv.id }
-                });
-                this.logger.log(`[Mobile Sync] Conversación ${conv.id} sincronizada y pausada en HANDOFF.`);
+                return;
               }
+
+              this.logger.log(`[Mobile Operator Intercept] Operador intervino desde el teléfono para ${toRaw}: "${manualText.substring(0, 45)}...". Pausando bot en HANDOFF.`);
+
+              // 1. Guardar la interacción del operador en la conversación
+              await this.prisma.interaction.create({
+                data: {
+                  conversationId: conv.id,
+                  direction: 'OUTBOUND',
+                  type: 'TEXT',
+                  content: manualText,
+                  role: 'assistant',
+                }
+              });
+
+              // 2. Pausar la conversación inmediatamente en HANDOFF
+              await this.prisma.conversation.update({
+                where: { id: conv.id },
+                data: { status: 'HANDOFF' }
+              });
+
+              // 3. Cancelar de inmediato cualquier seguimiento pendiente para este contacto
+              const deletedFollowUps = await this.prisma.pendingOutboundMessage.deleteMany({
+                where: { conversationId: conv.id }
+              });
+              if (deletedFollowUps.count > 0) {
+                this.logger.log(`[Mobile Sync] Cancelados ${deletedFollowUps.count} seguimientos pendientes para conversación ${conv.id}`);
+              }
+
+              // 4. Actualizar Business Memory del lead con tag de intervención manual
+              try {
+                const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: existingContact.id } });
+                const currentTags = (memory?.tags as string[]) || [];
+                const updatedTags = Array.from(new Set([...currentTags, 'INTERVENCION_HUMANA', 'ATENCION_MANUAL']));
+                await this.prisma.businessMemory.upsert({
+                  where: { contactId: existingContact.id },
+                  create: {
+                    contactId: existingContact.id,
+                    leadStatus: 'HANDOFF',
+                    tags: updatedTags,
+                  },
+                  update: {
+                    leadStatus: 'HANDOFF',
+                    tags: updatedTags,
+                  }
+                });
+              } catch (_) {}
             }
           }
           return; // No procesar con la IA

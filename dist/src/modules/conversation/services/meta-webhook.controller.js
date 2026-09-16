@@ -20,19 +20,22 @@ const tenant_resolver_service_1 = require("../../tenant/services/tenant-resolver
 const prisma_service_1 = require("../../../shared/database/prisma.service");
 const audio_transcription_service_1 = require("../../media-processing/services/audio-transcription.service");
 const media_vision_service_1 = require("../../media-processing/services/media-vision.service");
+const waha_adapter_service_1 = require("../../outbound-engine/services/waha-adapter.service");
 let MetaWebhookController = MetaWebhookController_1 = class MetaWebhookController {
     receiveMessageService;
     tenantResolver;
     prisma;
     audioTranscriptionService;
     mediaVisionService;
+    wahaAdapter;
     logger = new common_1.Logger(MetaWebhookController_1.name);
-    constructor(receiveMessageService, tenantResolver, prisma, audioTranscriptionService, mediaVisionService) {
+    constructor(receiveMessageService, tenantResolver, prisma, audioTranscriptionService, mediaVisionService, wahaAdapter) {
         this.receiveMessageService = receiveMessageService;
         this.tenantResolver = tenantResolver;
         this.prisma = prisma;
         this.audioTranscriptionService = audioTranscriptionService;
         this.mediaVisionService = mediaVisionService;
+        this.wahaAdapter = wahaAdapter;
     }
     verifyToken(query, res) {
         const mode = query['hub.mode'];
@@ -57,8 +60,11 @@ let MetaWebhookController = MetaWebhookController_1 = class MetaWebhookControlle
                 const payload = body.payload || {};
                 const isFromMe = Boolean(payload.fromMe);
                 if (isFromMe) {
-                    if (body.event === 'message.any')
+                    const wahaMsgId = payload.id?._serialized || payload.id || payload._data?.id?._serialized || payload.key?.id || '';
+                    if (wahaMsgId && this.wahaAdapter.isSentBySystem(wahaMsgId)) {
+                        this.logger.debug(`[WAHA Echo] Mensaje saliente ${wahaMsgId} confirmado como enviado por el sistema. Ignorando.`);
                         return;
+                    }
                     tenantId = await this.tenantResolver.resolveFromWahaSession(body.session || 'default');
                     if (!tenantId)
                         return;
@@ -66,42 +72,109 @@ let MetaWebhookController = MetaWebhookController_1 = class MetaWebhookControlle
                     if (!toRaw || toRaw.endsWith('@g.us'))
                         return;
                     const toDigits = toRaw.replace(/@(c\.us|lid|s\.whatsapp\.net)$/, '').replace(/\D/g, '');
-                    const manualText = payload.body || payload.caption || '';
-                    if (manualText && toDigits) {
-                        this.logger.log(`[Mobile Sync] Msg saliente manual para ${toRaw}: "${manualText.substring(0, 40)}..."`);
-                        const existingContact = await this.prisma.contact.findFirst({
-                            where: {
-                                tenantId,
-                                OR: [
-                                    { externalId: toRaw },
-                                    { phone: toDigits },
-                                    { phoneNormalized: toDigits },
-                                ]
-                            }
+                    let manualText = (payload.body || payload.caption || '').trim();
+                    const hasMedia = payload.hasMedia || Boolean(payload.media);
+                    const media = payload.media || {};
+                    const mimetype = (media.mimetype || payload._data?.mimetype || '').toLowerCase();
+                    const messageType = (payload.type || '').toLowerCase();
+                    if (!manualText && hasMedia) {
+                        if (mimetype.startsWith('audio/') || messageType === 'ptt' || messageType === 'audio') {
+                            manualText = '🎤 [Nota de voz enviada por el asesor]';
+                        }
+                        else if (mimetype.startsWith('image/') || messageType === 'image') {
+                            manualText = '📷 [Imagen enviada por el asesor]';
+                        }
+                        else {
+                            manualText = '📎 [Archivo enviado por el asesor]';
+                        }
+                    }
+                    if (!manualText)
+                        return;
+                    const toWithoutZero = toDigits.startsWith('0') ? toDigits.replace(/^0+/, '') : toDigits;
+                    const toWith58 = toDigits.startsWith('58') ? toDigits : (toWithoutZero ? `58${toWithoutZero}` : '');
+                    const existingContact = await this.prisma.contact.findFirst({
+                        where: {
+                            tenantId,
+                            OR: [
+                                { externalId: toRaw },
+                                { externalId: toDigits },
+                                { phone: toDigits },
+                                { phoneNormalized: toDigits },
+                                { phone: toWithoutZero },
+                                { phoneNormalized: toWithoutZero },
+                                { phone: toWith58 },
+                                { phoneNormalized: toWith58 },
+                            ]
+                        }
+                    });
+                    if (existingContact) {
+                        const conv = await this.prisma.conversation.findFirst({
+                            where: { contactId: existingContact.id },
+                            orderBy: { id: 'desc' }
                         });
-                        if (existingContact) {
-                            const conv = await this.prisma.conversation.findFirst({
-                                where: { contactId: existingContact.id }
-                            });
-                            if (conv) {
-                                await this.prisma.interaction.create({
-                                    data: {
+                        if (conv) {
+                            const recentBotEcho = this.prisma.interaction?.findFirst
+                                ? await this.prisma.interaction.findFirst({
+                                    where: {
                                         conversationId: conv.id,
                                         direction: 'OUTBOUND',
-                                        type: 'TEXT',
-                                        content: manualText,
                                         role: 'assistant',
+                                        content: manualText,
+                                        timestamp: { gte: new Date(Date.now() - 15_000) }
                                     }
-                                });
+                                })
+                                : null;
+                            if (recentBotEcho) {
+                                this.logger.debug(`[WAHA Echo] Mensaje saliente coincide con interacción reciente en DB (${conv.id}). Ignorando.`);
+                                return;
+                            }
+                            const textNorm = manualText.trim().toLowerCase();
+                            if (textNorm === '#bot' || textNorm === '#activar' || textNorm === '#reactivar' || textNorm === '#play') {
+                                this.logger.log(`[Mobile Operator] Comando de reactivación recibido desde WhatsApp ("${textNorm}") para ${toRaw}. Reactivando bot en ACTIVE.`);
                                 await this.prisma.conversation.update({
                                     where: { id: conv.id },
-                                    data: { status: 'HANDOFF' }
+                                    data: { status: 'ACTIVE' }
                                 });
-                                await this.prisma.pendingOutboundMessage.deleteMany({
-                                    where: { conversationId: conv.id }
-                                });
-                                this.logger.log(`[Mobile Sync] Conversación ${conv.id} sincronizada y pausada en HANDOFF.`);
+                                return;
                             }
+                            this.logger.log(`[Mobile Operator Intercept] Operador intervino desde el teléfono para ${toRaw}: "${manualText.substring(0, 45)}...". Pausando bot en HANDOFF.`);
+                            await this.prisma.interaction.create({
+                                data: {
+                                    conversationId: conv.id,
+                                    direction: 'OUTBOUND',
+                                    type: 'TEXT',
+                                    content: manualText,
+                                    role: 'assistant',
+                                }
+                            });
+                            await this.prisma.conversation.update({
+                                where: { id: conv.id },
+                                data: { status: 'HANDOFF' }
+                            });
+                            const deletedFollowUps = await this.prisma.pendingOutboundMessage.deleteMany({
+                                where: { conversationId: conv.id }
+                            });
+                            if (deletedFollowUps.count > 0) {
+                                this.logger.log(`[Mobile Sync] Cancelados ${deletedFollowUps.count} seguimientos pendientes para conversación ${conv.id}`);
+                            }
+                            try {
+                                const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: existingContact.id } });
+                                const currentTags = memory?.tags || [];
+                                const updatedTags = Array.from(new Set([...currentTags, 'INTERVENCION_HUMANA', 'ATENCION_MANUAL']));
+                                await this.prisma.businessMemory.upsert({
+                                    where: { contactId: existingContact.id },
+                                    create: {
+                                        contactId: existingContact.id,
+                                        leadStatus: 'HANDOFF',
+                                        tags: updatedTags,
+                                    },
+                                    update: {
+                                        leadStatus: 'HANDOFF',
+                                        tags: updatedTags,
+                                    }
+                                });
+                            }
+                            catch (_) { }
                         }
                     }
                     return;
@@ -215,6 +288,7 @@ exports.MetaWebhookController = MetaWebhookController = MetaWebhookController_1 
         tenant_resolver_service_1.TenantResolverService,
         prisma_service_1.PrismaService,
         audio_transcription_service_1.AudioTranscriptionService,
-        media_vision_service_1.MediaVisionService])
+        media_vision_service_1.MediaVisionService,
+        waha_adapter_service_1.WahaAdapterService])
 ], MetaWebhookController);
 //# sourceMappingURL=meta-webhook.controller.js.map

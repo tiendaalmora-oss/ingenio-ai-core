@@ -1,4 +1,4 @@
-﻿import { Test, TestingModule } from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
 import { HttpStatus } from '@nestjs/common';
 import { MetaWebhookController } from './meta-webhook.controller';
 import { ReceiveMessageService } from './receive-message.service';
@@ -6,6 +6,7 @@ import { TenantResolverService } from '../../tenant/services/tenant-resolver.ser
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { AudioTranscriptionService } from '../../media-processing/services/audio-transcription.service';
 import { MediaVisionService } from '../../media-processing/services/media-vision.service';
+import { WahaAdapterService } from '../../outbound-engine/services/waha-adapter.service';
 
 describe('MetaWebhookController (Candado de Enrutamiento WAHA / Meta)', () => {
   let controller: MetaWebhookController;
@@ -14,6 +15,7 @@ describe('MetaWebhookController (Candado de Enrutamiento WAHA / Meta)', () => {
   let prisma: any;
   let audioTranscriptionService: any;
   let mediaVisionService: any;
+  let wahaAdapter: any;
 
   const createMockRes = () => {
     const res: any = {};
@@ -62,6 +64,11 @@ describe('MetaWebhookController (Candado de Enrutamiento WAHA / Meta)', () => {
       analyzeImage: jest.fn(),
     };
 
+    wahaAdapter = {
+      isSentBySystem: jest.fn().mockReturnValue(false),
+      markMessageAsSentBySystem: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [MetaWebhookController],
       providers: [
@@ -70,6 +77,7 @@ describe('MetaWebhookController (Candado de Enrutamiento WAHA / Meta)', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: AudioTranscriptionService, useValue: audioTranscriptionService },
         { provide: MediaVisionService, useValue: mediaVisionService },
+        { provide: WahaAdapterService, useValue: wahaAdapter },
       ],
     }).compile();
 

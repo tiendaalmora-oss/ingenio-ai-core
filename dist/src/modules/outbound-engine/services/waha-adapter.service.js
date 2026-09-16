@@ -19,9 +19,38 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
     metaChannelAdapter;
     logger = new common_1.Logger(WahaAdapterService_1.name);
     cachedActiveSession = null;
+    sentBySystemMessageIds = new Map();
     constructor(prisma, metaChannelAdapter) {
         this.prisma = prisma;
         this.metaChannelAdapter = metaChannelAdapter;
+    }
+    markMessageAsSentBySystem(messageId) {
+        if (!messageId || typeof messageId !== 'string')
+            return;
+        const now = Date.now();
+        this.sentBySystemMessageIds.set(messageId, now);
+        const parts = messageId.split('_');
+        if (parts.length >= 2) {
+            this.sentBySystemMessageIds.set(parts[parts.length - 1], now);
+        }
+        if (this.sentBySystemMessageIds.size > 300) {
+            for (const [id, ts] of this.sentBySystemMessageIds.entries()) {
+                if (now - ts > 180_000) {
+                    this.sentBySystemMessageIds.delete(id);
+                }
+            }
+        }
+    }
+    isSentBySystem(messageId) {
+        if (!messageId || typeof messageId !== 'string')
+            return false;
+        if (this.sentBySystemMessageIds.has(messageId))
+            return true;
+        const parts = messageId.split('_');
+        if (parts.length >= 2 && this.sentBySystemMessageIds.has(parts[parts.length - 1])) {
+            return true;
+        }
+        return false;
     }
     normalizeJid(rawId) {
         if (!rawId)
@@ -319,8 +348,12 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
                 throw new Error(`Waha response con error ${response.status}: ${response.statusText}. Body: ${errBody}`);
             }
             const result = await response.json();
-            this.logger.log(`Mensaje entregado exitosamente a WAHA. MessageId: ${result.id || result.key?.id || 'ok'}`);
-            return result.id || result.key?.id || 'waha-msg-ok';
+            const messageId = result.id || result.key?.id || 'waha-msg-ok';
+            if (messageId && messageId !== 'waha-msg-ok') {
+                this.markMessageAsSentBySystem(messageId);
+            }
+            this.logger.log(`Mensaje entregado exitosamente a WAHA. MessageId: ${messageId}`);
+            return messageId;
         }
         catch (err) {
             this.logger.error(`Excepción comunicando con WAHA para ${chatId}: ${err.message}`);

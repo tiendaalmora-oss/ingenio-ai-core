@@ -5,7 +5,10 @@ export declare class WahaAdapterService {
     private readonly metaChannelAdapter;
     private readonly logger;
     private cachedActiveSession;
+    private readonly sentBySystemMessageIds;
     constructor(prisma: PrismaService, metaChannelAdapter: MetaChannelAdapterService);
+    markMessageAsSentBySystem(messageId: string): void;
+    isSentBySystem(messageId: string): boolean;
     normalizeJid(rawId: string): string;
     resolveTargetChatId(contactIdOrPhone: string): Promise<{
         chatId: string;
