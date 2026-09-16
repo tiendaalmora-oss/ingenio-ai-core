@@ -17,7 +17,7 @@ let PromptComposerService = class PromptComposerService {
     compose(input) {
         const { kosBundle, memory, history, conversationSummary, activeGoal, availableSkills, currentMessage, mode, followUpRule } = input;
         const systemInstructions = this.buildSystemKOS(kosBundle);
-        const memoryContext = this.buildMemoryContext(memory, history);
+        const memoryContext = this.buildMemoryContext(memory, history, currentMessage);
         const summaryContext = conversationSummary ? `\n[RESUMEN DE CONVERSACIÓN]\n${conversationSummary}\n` : '';
         const goalContext = activeGoal ? `\n[OBJETIVO ACTIVO]\n${activeGoal}\n` : '';
         const skillsContext = availableSkills && availableSkills.length > 0
@@ -31,6 +31,9 @@ let PromptComposerService = class PromptComposerService {
 - Respeta estrictamente los guiones, textos, ofertas y emojis configurados en tu base de conocimiento KOS.
 - 🛑 CERO MONÓLOGO O EXPLICACIONES EN INGLÉS: NUNCA escribas pensamientos internos, notas de planificación o frases en inglés como "Initialize a new conversation...", "The first message is...", "I should also update the business memory...". Tu respuesta debe contener ÚNICAMENTE el texto en español final que recibirá el cliente en WhatsApp, sin envolverlo en comillas dobles externas.
 - 🛑 PROHIBIDO ESCRIBIR LLAMADAS DE HERRAMIENTAS EN EL TEXTO: NUNCA escribas sintaxis interna de herramientas como "call:update_business_memory..." o bloques entre llaves en tu respuesta de texto. Las herramientas se ejecutan de forma invisible a través de la API, NUNCA redactándolas como texto para el cliente.
+- 🛑 REGLA ESTRICTA DE COMPROBANTES HISTÓRICOS:
+  * Los comprobantes de pago, imágenes o referencias bancarias que aparezcan en mensajes anteriores del historial corresponden a transacciones pasadas ya entregadas y archivadas.
+  * NUNCA envíes felicitaciones ni confirmaciones de pago ("Ya registramos tu comprobante...", "En breves minutos te entregamos tu acceso...") a menos que el mensaje entrante ACTUAL del usuario contenga un nuevo comprobante recién enviado. Si el usuario está enviando una pregunta, consulta o solicitud de compra, responde exclusivamente a su mensaje actual.
 
 [ARQUITECTURA DE PROGRESIÓN PASO A PASO DEL EMBUDO DE CADA PRODUCTO]:
 1. SEGUIMIENTO SECUENCIAL ESTRICTO (1 SOLO PASO POR MENSAJE):
@@ -74,8 +77,10 @@ let PromptComposerService = class PromptComposerService {
    - Si el mensaje describe una FOTO GENERAL que NO es un comprobante: responde amablemente al contexto de la foto sin asumir un pago ficticio.
    - Si el mensaje contiene '[Nota de voz del usuario]': responde con naturalidad a lo expresado en el audio.
 
-5. CLIENTES CON COMPRA CONFIRMADA (POST-VENTA VIP):
-   - Si el cliente ya completó una compra verificada, trátalo como cliente VIP. Ayúdalo con sus accesos, dudas de soporte o consultas adicionales, y si consulta por otro producto del catálogo, inicia el embudo del nuevo producto con trato preferencial.
+5. CLIENTES CON COMPRA CONFIRMADA (POST-VENTA VIP Y RECOMPRA):
+   - Si el cliente ya completó una compra verificada, trátalo como cliente VIP de la casa.
+   - Si consulta dudas sobre sus accesos o soporte de su compra anterior, asístelo amablemente y con empatía.
+   - Si el cliente consulta por OTRA materia del catálogo, pide información o dice "Quiero", "1", "Pásame los datos" para un nuevo producto: INICIA DE INMEDIATO el flujo comercial para la nueva materia y proporciónale los datos de pago con total normalidad para concretar su nueva compra. La prohibición de cobrar aplica únicamente para no volver a cobrar el producto que ya pagó, NUNCA para compras de nuevos productos o combos.
 
 6. SOLICITUD DE ASESOR HUMANO Y RECHAZO / OPT-OUT:
    - Si el cliente solicita atención con una persona real o asesor: llama a pause_bot_and_handoff con reason: 'HUMAN_REQUESTED' y leadStatus: 'HANDOFF', confirmando amablemente que un asesor humano atenderá el chat.
@@ -244,7 +249,7 @@ ${ruleText}
         }
         return result;
     }
-    buildMemoryContext(memory, history) {
+    buildMemoryContext(memory, history, currentMessage) {
         if (!memory)
             return '[BUSINESS MEMORY]: Ninguna memoria previa detectada.\n[ESTADO DEL EMBUDO]: INICIO — El cliente está llegando por primera vez. Inicia con saludo y calificación.';
         const baseMemory = `[BUSINESS MEMORY]:
@@ -255,17 +260,27 @@ ${ruleText}
 - Estado del Lead: ${memory.leadStatus || 'Desconocido'}
 - Objeciones: ${memory.objections?.join(', ') || 'Ninguna'}
 - Tags: ${memory.tags?.join(', ') || 'Ninguno'}`;
-        const funnelState = this.detectFunnelState(history || [], memory);
+        const funnelState = this.detectFunnelState(history || [], memory, currentMessage);
         return `${baseMemory}\n\n${funnelState}`;
     }
-    detectFunnelState(history, memory) {
-        const outbound = history.filter((h) => h.direction === 'OUTBOUND' || h.role === 'assistant');
-        if (outbound.length === 0) {
-            return `[ESTADO DEL EMBUDO]:
-⏳ Paso 1 PENDIENTE — Primera interacción. Saluda y califica al cliente.
-🛑 INSTRUCCIÓN: Inicia el embudo desde el Paso 1 (saludo y pregunta de calificación).`;
+    detectFunnelState(history, memory, currentMessage) {
+        let lastPaymentIdx = -1;
+        for (let i = history.length - 1; i >= 0; i--) {
+            const h = history[i];
+            const content = (h.content || '').toLowerCase();
+            if (content.includes('[comprobante de pago') ||
+                content.includes('ya registramos tu comprobante') ||
+                content.includes('registramos tu pago') ||
+                content.includes('pago confirmado') ||
+                (Array.isArray(h.toolCalls) && h.toolCalls.some((tc) => tc.arguments?.tags?.includes('PAGO_CONFIRMADO')))) {
+                lastPaymentIdx = i;
+                break;
+            }
         }
-        const allBotText = outbound.map((h) => (h.content || '').toLowerCase()).join(' ');
+        const activeHistory = lastPaymentIdx >= 0 ? history.slice(lastPaymentIdx + 1) : history;
+        const outbound = activeHistory.filter((h) => h.direction === 'OUTBOUND' || h.role === 'assistant');
+        const isPaid = memory?.leadStatus === 'CLOSED' ||
+            (Array.isArray(memory?.tags) && memory.tags.includes('PAGO_CONFIRMADO'));
         const paso1Done = outbound.some((h) => {
             const c = (h.content || '').toLowerCase();
             return c.includes('qué año') || c.includes('que año') || c.includes('qué años') ||
@@ -293,16 +308,66 @@ ${ruleText}
                 c.includes('cedula') || c.includes('titular') || c.includes('cuenta') ||
                 c.includes('escribe quiero') || c.includes('escribe "quiero"');
         });
-        const isPaid = memory?.leadStatus === 'CLOSED' ||
-            (Array.isArray(memory?.tags) && memory.tags.includes('PAGO_CONFIRMADO'));
+        const recentInboundText = [
+            ...activeHistory.filter((h) => h.direction === 'INBOUND' || h.role === 'user').map((h) => h.content || ''),
+            currentMessage || ''
+        ].join(' ').toLowerCase();
+        const isSupportInquiry = recentInboundText.includes('no me abre') ||
+            recentInboundText.includes('no puedo entrar') ||
+            recentInboundText.includes('no me llegó') ||
+            recentInboundText.includes('no me llego') ||
+            recentInboundText.includes('problema con el drive') ||
+            recentInboundText.includes('acceso al drive') ||
+            recentInboundText.includes('mi correo') ||
+            recentInboundText.includes('no puedo descargar');
+        const hasBuyOrProductIntent = recentInboundText.includes('quiero') ||
+            recentInboundText.includes('comprar') ||
+            recentInboundText.includes('precio') ||
+            recentInboundText.includes('costo') ||
+            recentInboundText.includes('como pago') ||
+            recentInboundText.includes('cómo pago') ||
+            recentInboundText.includes('datos de pago') ||
+            recentInboundText.includes('pasame los datos') ||
+            recentInboundText.includes('pásame los datos') ||
+            (currentMessage || '').trim() === '1' ||
+            (currentMessage || '').trim().toLowerCase() === 'quiero 1' ||
+            recentInboundText.includes('quimica') || recentInboundText.includes('química') ||
+            recentInboundText.includes('fisica') || recentInboundText.includes('física') ||
+            recentInboundText.includes('matematica') || recentInboundText.includes('matemática') ||
+            recentInboundText.includes('biologia') || recentInboundText.includes('biología') ||
+            recentInboundText.includes('ingles') || recentInboundText.includes('inglés') ||
+            recentInboundText.includes('preescolar') || recentInboundText.includes('bachillerato') ||
+            recentInboundText.includes('combo') || recentInboundText.includes('otro kit') ||
+            recentInboundText.includes('otra materia');
+        const isRepurchaseOrNewInquiry = isPaid && hasBuyOrProductIntent && !isSupportInquiry;
         let stateLines = ['[ESTADO DEL EMBUDO - LEE ESTO ANTES DE RESPONDER]:'];
         stateLines.push(paso1Done ? '✅ Paso 1 COMPLETADO — Calificación inicial ya realizada.' : '⏳ Paso 1 PENDIENTE — Calificación inicial.');
         stateLines.push(paso2Done ? '✅ Paso 2 COMPLETADO — Presentación del producto ya enviada.' : '⏳ Paso 2 PENDIENTE — Presentación del producto.');
         stateLines.push(paso3Done ? '✅ Paso 3 COMPLETADO — Oferta y precio ya enviados.' : '⏳ Paso 3 PENDIENTE — Oferta y precio.');
         stateLines.push(paso4Done ? '✅ Paso 4 COMPLETADO — Datos de pago ya entregados.' : '⏳ Paso 4 PENDIENTE — Datos de pago.');
         let instruction = '';
-        if (isPaid) {
-            instruction = `\n🟢 CLIENTE CONFIRMADO COMO PAGADOR (leadStatus: CLOSED).\n🛑 INSTRUCCIÓN CRÍTICA: Este cliente ya pagó. Trátalo como VIP. Ayúdalo con sus accesos o consultas. NO le pidas que pague de nuevo.`;
+        if (isRepurchaseOrNewInquiry) {
+            if (paso4Done) {
+                instruction = `\n🟢 CLIENTE REGISTRADO VIP / RECOMPRA — DATOS DE PAGO ENTREGADOS.\n🛑 INSTRUCCIÓN CRÍTICA:\n- Los datos de pago para su nueva compra ya fueron entregados.\n- Responde amablemente a cualquier duda técnica o método de pago y queda atento a su nuevo comprobante.`;
+            }
+            else if (paso3Done) {
+                instruction = `\n🟢 CLIENTE REGISTRADO VIP / RECOMPRA — EN ETAPA DE CIERRE.\n🛑 INSTRUCCIÓN CRÍTICA: La oferta para el nuevo producto ya fue presentada. Si el cliente confirma la compra diciendo "Quiero", "1", "Pásame los datos" o similar: ENTREGA DE INMEDIATO los datos oficiales de Pago Móvil / Binance para que concrete su nueva materia con total normalidad. (La prohibición de cobrar aplica únicamente a su compra vieja ya pagada, NUNCA a una nueva materia).`;
+            }
+            else if (paso2Done) {
+                instruction = `\n🟢 CLIENTE REGISTRADO VIP / RECOMPRA — EN ETAPA DE PRESENTACIÓN.\n🛑 INSTRUCCIÓN CRÍTICA: Presenta la oferta con precio y bonos para la nueva materia o combo de su interés.`;
+            }
+            else {
+                instruction = `\n🟢 CLIENTE REGISTRADO VIP / RECOMPRA DE NUEVA MATERIA O CONSULTA COMERCIAL.
+🛑 INSTRUCCIÓN CRÍTICA DE RECOMPRA Y VENTA CRUZADA:
+- Este cliente ya es cliente verificado de la casa y ahora desea consultar o adquirir una NUEVA materia o combo del catálogo.
+- Trátalo con calidez y reconocimiento como cliente VIP.
+- 🛑 CERO CONFIRMACIONES VIEJAS: NO reenvíes felicitaciones ni confirmaciones de pagos antiguos del historial.
+- Si pregunta por una nueva materia: preséntale su información, enlaces y precio directamente sin reiniciar el saludo.
+- Si el cliente confirma la compra diciendo "Quiero", "1", "Pásame los datos" o similar: ENTREGA DE INMEDIATO los datos de pago oficiales para su nueva compra con total normalidad.`;
+            }
+        }
+        else if (isPaid) {
+            instruction = `\n🟢 CLIENTE CONFIRMADO COMO PAGADOR (leadStatus: CLOSED).\n🛑 INSTRUCCIÓN CRÍTICA: Este cliente ya pagó su compra anterior. Trátalo como VIP. Si consulta sobre sus accesos, enlaces o soporte, asístelo amablemente. Si en cambio desea adquirir otra materia o un combo adicional, guíalo en su nueva compra con trato preferencial.`;
         }
         else if (paso4Done) {
             instruction = `\n⏳ CLIENTE EN ESPERA DE PAGO — Los datos de pago ya fueron entregados.\n🛑 INSTRUCCIONES CRÍTICAS:\n- Responde ÚNICAMENTE a lo que el cliente preguntó en este mensaje. No re-envíes el pitch ni los datos ya entregados.\n- Si el cliente dice "no me llegó nada": pregúntale qué parte específica no recibió. NO re-envíes todo el catálogo automáticamente.\n- Si el cliente tiene una duda técnica: respóndela directo con tu base de conocimiento.\n- Si el cliente dice "ok", "gracias" o "ahora pago": confirma brevemente con calidez que quedas atento.\n- 🚫 PROHIBIDO: Volver a presentar el producto completo, los beneficios detallados ni el precio si ya fueron enviados.`;
