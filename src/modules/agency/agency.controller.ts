@@ -160,11 +160,14 @@ export class AgencyController {
 
   /**
    * POST /agency/subaccounts/:id/waha/start
-   * Iniciar sesión en WAHA y configurar webhooks
+   * Iniciar sesión en WAHA y configurar webhooks (con soporte opcional de proxy)
    */
   @Post('subaccounts/:id/waha/start')
-  startWaha(@Param('id') tenantId: string) {
-    return this.agencyService.startSubaccountWaha(tenantId);
+  startWaha(
+    @Param('id') tenantId: string,
+    @Body() body?: { proxy?: { server: string; username?: string; password?: string } },
+  ) {
+    return this.agencyService.startSubaccountWaha(tenantId, body?.proxy);
   }
 
   /**

@@ -210,15 +210,28 @@ export class AgencyService {
 
   // ── GESTIÓN WAHA MULTI-TENANT ───────────────────────────────
 
-  private getWahaConfig() {
+  private getWahaConfig(tenantId?: string | null, sessionName?: string | null) {
+    const isProd = this.isProtectedSession(tenantId, sessionName);
+    if (isProd) {
+      const rawUrl = process.env.WAHA_PROD_URL || process.env.WAHA_API_URL || 'https://waha.ingeniodigital.shop';
+      return {
+        apiUrl: rawUrl.replace(/\/+$/, ''),
+        apiKey: process.env.WAHA_PROD_API_KEY || process.env.WAHA_API_KEY || 'secreto123',
+        webhookUrl: `${process.env.CORE_API_URL || 'https://core.ai.ingeniodigital.shop'}/webhooks/meta`,
+        isProd: true,
+      };
+    }
+
+    const rawUrl = process.env.WAHA_SANDBOX_URL || process.env.WAHA_API_URL || 'https://waha.ingeniodigital.shop';
     return {
-      apiUrl: process.env.WAHA_API_URL || 'https://waha.ingeniodigital.shop',
-      apiKey: process.env.WAHA_API_KEY || 'secreto123',
+      apiUrl: rawUrl.replace(/\/+$/, ''),
+      apiKey: process.env.WAHA_SANDBOX_API_KEY || process.env.WAHA_API_KEY || 'secreto123',
       webhookUrl: `${process.env.CORE_API_URL || 'https://core.ai.ingeniodigital.shop'}/webhooks/meta`,
+      isProd: false,
     };
   }
 
-  private isProtectedSession(tenantId: string, sessionName?: string | null): boolean {
+  private isProtectedSession(tenantId?: string | null, sessionName?: string | null): boolean {
     return (
       tenantId === 'dba1c54c-89c6-41e9-ae9d-03613377a5b3' ||
       sessionName === 'ferreos'
@@ -253,7 +266,7 @@ export class AgencyService {
 
     const sessionName = tenant.wahaSession || (await this.ensureTenantWahaSession(tenantId));
     const isProtected = this.isProtectedSession(tenantId, sessionName);
-    const { apiUrl, apiKey } = this.getWahaConfig();
+    const { apiUrl, apiKey } = this.getWahaConfig(tenantId, sessionName);
 
     try {
       const res = await fetch(`${apiUrl}/api/sessions/${sessionName}`, {
@@ -298,15 +311,21 @@ export class AgencyService {
   }
 
   /**
-   * Inicia o crea la sesión en WAHA con los webhooks enrutados a Core
+   * Inicia o crea la sesión en WAHA con los webhooks enrutados a Core.
+   * Admite opcionalmente configuración de proxy residencial para WhatsApp Web.
    */
-  async startSubaccountWaha(tenantId: string) {
+  async startSubaccountWaha(
+    tenantId: string,
+    proxyConfig?: { server: string; username?: string; password?: string },
+  ) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) throw new NotFoundException('Subcuenta no encontrada.');
 
     const sessionName = tenant.wahaSession || (await this.ensureTenantWahaSession(tenantId));
     const isProtected = this.isProtectedSession(tenantId, sessionName);
-    const { apiUrl, apiKey, webhookUrl } = this.getWahaConfig();
+    const { apiUrl, apiKey, webhookUrl, isProd } = this.getWahaConfig(tenantId, sessionName);
+
+    this.logger.log(`[WAHA] Arrancando sesión "${sessionName}" en ${isProd ? 'PROD' : 'SANDBOX'} (${apiUrl})`);
 
     // 1. Verificar si ya existe en WAHA
     const checkRes = await fetch(`${apiUrl}/api/sessions/${sessionName}`, {
@@ -335,6 +354,24 @@ export class AgencyService {
       }
     } else {
       // 2. Crear y arrancar nueva sesión en WAHA
+      const sessionConfig: any = {
+        webhooks: [
+          {
+            url: webhookUrl,
+            events: ['session.status', 'message'],
+          },
+        ],
+      };
+
+      if (proxyConfig && proxyConfig.server) {
+        sessionConfig.proxy = {
+          server: proxyConfig.server,
+          ...(proxyConfig.username && { username: proxyConfig.username }),
+          ...(proxyConfig.password && { password: proxyConfig.password }),
+        };
+        this.logger.log(`[WAHA] Configurando proxy para sesión ${sessionName}: ${proxyConfig.server}`);
+      }
+
       const createRes = await fetch(`${apiUrl}/api/sessions`, {
         method: 'POST',
         headers: {
@@ -345,14 +382,7 @@ export class AgencyService {
         body: JSON.stringify({
           name: sessionName,
           start: true,
-          config: {
-            webhooks: [
-              {
-                url: webhookUrl,
-                events: ['session.status', 'message'],
-              },
-            ],
-          },
+          config: sessionConfig,
         }),
       });
 
@@ -374,7 +404,7 @@ export class AgencyService {
 
     const sessionName = tenant.wahaSession || (await this.ensureTenantWahaSession(tenantId));
     const isProtected = this.isProtectedSession(tenantId, sessionName);
-    const { apiUrl, apiKey } = this.getWahaConfig();
+    const { apiUrl, apiKey } = this.getWahaConfig(tenantId, sessionName);
 
     try {
       const res = await fetch(`${apiUrl}/api/${sessionName}/auth/qr`, {
@@ -442,7 +472,7 @@ export class AgencyService {
       return { success: true, message: 'No había sesión configurada.' };
     }
 
-    const { apiUrl, apiKey } = this.getWahaConfig();
+    const { apiUrl, apiKey } = this.getWahaConfig(tenantId, sessionName);
 
     await fetch(`${apiUrl}/api/sessions/${sessionName}/logout`, {
       method: 'POST',

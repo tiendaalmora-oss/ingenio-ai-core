@@ -120,4 +120,23 @@ describe('PromptComposerService — Recompra y Blindaje de Clientes Pagados', ()
     expect(sysMsg).toContain('REGLA ESTRICTA DE COMPROBANTES HISTÓRICOS');
     expect(sysMsg).toContain('NUNCA envíes felicitaciones ni confirmaciones de pago');
   });
+
+  it('6. Contiene la instrucción explícita que autoriza enlaces de regalo y páginas web configuradas en el embudo', () => {
+    const input: PromptComposerInput = {
+      kosBundle: {
+        identity: 'Bot de Ventas',
+        business: 'Ingenio Digital',
+        productos: [{ nombre: 'Kit Bíblico', embudoVenta: 'Regalo: https://drive.google.com/...' }]
+      },
+      memory: null,
+      history: []
+    };
+
+    const messages = service.compose(input);
+    const sysMsg = messages[0].content;
+
+    expect(sysMsg).toContain('ENLACES AUTORIZADOS DEL EMBUDO (REGALOS Y PÁGINAS WEB)');
+    expect(sysMsg).toContain('DEBES incluir exactamente el enlace correspondiente tal como está indicado en el guion del embudo');
+  });
 });
+

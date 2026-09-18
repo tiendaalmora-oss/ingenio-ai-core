@@ -137,6 +137,34 @@ export class WahaAdapterService {
   }
 
   /**
+   * Resuelve la configuración de conexión de WAHA (URL y API Key) de acuerdo al tenant y sesión.
+   * Aísla la campaña de producción (ferreos / Kits Docentes) en WAHA_PROD_URL y dirige
+   * subcuentas y números de prueba a WAHA_SANDBOX_URL.
+   */
+  resolveWahaConfig(tenantId?: string, sessionName?: string): { apiUrl: string; apiKey: string; isProd: boolean } {
+    const isProd =
+      tenantId === 'dba1c54c-89c6-41e9-ae9d-03613377a5b3' ||
+      sessionName === 'ferreos';
+
+    if (isProd) {
+      const rawUrl = process.env.WAHA_PROD_URL || process.env.WAHA_API_URL || 'https://waha.ingeniodigital.shop';
+      return {
+        apiUrl: rawUrl.replace(/\/+$/, ''),
+        apiKey: process.env.WAHA_PROD_API_KEY || process.env.WAHA_API_KEY || '',
+        isProd: true,
+      };
+    }
+
+    // Para subcuentas o instancias de prueba
+    const rawUrl = process.env.WAHA_SANDBOX_URL || process.env.WAHA_API_URL || 'https://waha.ingeniodigital.shop';
+    return {
+      apiUrl: rawUrl.replace(/\/+$/, ''),
+      apiKey: process.env.WAHA_SANDBOX_API_KEY || process.env.WAHA_API_KEY || '',
+      isProd: false,
+    };
+  }
+
+  /**
    * Resuelve dinámicamente la sesión activa de WAHA.
    * Evita errores 422 si tenant.wahaSession es nulo o 'default' no existe en WAHA.
    */
@@ -168,9 +196,9 @@ export class WahaAdapterService {
       return this.cachedActiveSession;
     }
 
-    // Auto-descubrimiento en tiempo de ejecución consultando WAHA
+    // Auto-descubrimiento en tiempo de ejecución consultando WAHA prod
     try {
-      const sessions = await this.getWahaSessions();
+      const sessions = await this.getWahaSessions('prod');
       if (Array.isArray(sessions) && sessions.length > 0) {
         const working =
           sessions.find((s: any) => s.status === 'WORKING' || s.status === 'CONNECTED' || s.status === 'STARTING') ||
@@ -289,23 +317,22 @@ export class WahaAdapterService {
 
   async startTyping(tenantId: string, contactIdOrPhone: string): Promise<void> {
     try {
-      const wahaUrl = process.env.WAHA_API_URL;
-      if (!wahaUrl) return;
-
       const session = await this.resolveSession(tenantId);
-      const apiKey = process.env.WAHA_API_KEY || '';
+      const config = this.resolveWahaConfig(tenantId, session);
+      if (!config.apiUrl) return;
+
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       };
-      if (apiKey) headers['X-Api-Key'] = apiKey;
+      if (config.apiKey) headers['X-Api-Key'] = config.apiKey;
 
       const target = await this.resolveTargetChatId(contactIdOrPhone);
       const chatId = target.chatId;
 
-      this.logger.log(`[WAHA] Solicitando estado "Escribiendo..." para ${chatId} (sesión: ${session})`);
+      this.logger.log(`[WAHA] Solicitando estado "Escribiendo..." para ${chatId} (sesión: ${session}, host: ${config.apiUrl})`);
 
-      const result = await this.executeTypingWithRetry(wahaUrl, session, chatId, headers, true);
+      const result = await this.executeTypingWithRetry(config.apiUrl, session, chatId, headers, true);
       if (result.success && result.usedChatId !== chatId && target.contactId) {
         await this.healContactExternalId(target.contactId, result.usedChatId);
       }
@@ -316,21 +343,20 @@ export class WahaAdapterService {
 
   async stopTyping(tenantId: string, contactIdOrPhone: string): Promise<void> {
     try {
-      const wahaUrl = process.env.WAHA_API_URL;
-      if (!wahaUrl) return;
-
       const session = await this.resolveSession(tenantId);
-      const apiKey = process.env.WAHA_API_KEY || '';
+      const config = this.resolveWahaConfig(tenantId, session);
+      if (!config.apiUrl) return;
+
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       };
-      if (apiKey) headers['X-Api-Key'] = apiKey;
+      if (config.apiKey) headers['X-Api-Key'] = config.apiKey;
 
       const target = await this.resolveTargetChatId(contactIdOrPhone);
       const chatId = target.chatId;
 
-      await this.executeTypingWithRetry(wahaUrl, session, chatId, headers, false);
+      await this.executeTypingWithRetry(config.apiUrl, session, chatId, headers, false);
     } catch {
       /* silencioso */
     }
@@ -354,25 +380,24 @@ export class WahaAdapterService {
     const target = await this.resolveTargetChatId(contactIdOrPhone);
     let chatId = target.chatId;
 
-    this.logger.log(`Enviando mensaje vía WAHA a ${chatId} (ref: ${contactIdOrPhone})...`);
-
-    const wahaUrl = process.env.WAHA_API_URL;
-    if (!wahaUrl) {
-      throw new Error('WAHA_API_URL is not configured');
+    const session = await this.resolveSession(tenantId);
+    const config = this.resolveWahaConfig(tenantId, session);
+    if (!config.apiUrl) {
+      throw new Error('WAHA API URL is not configured');
     }
 
-    const session = await this.resolveSession(tenantId);
-    const apiKey = process.env.WAHA_API_KEY || '';
+    this.logger.log(`Enviando mensaje vía WAHA [${config.isProd ? 'PROD' : 'SANDBOX'}] (${config.apiUrl}) a ${chatId} (ref: ${contactIdOrPhone})...`);
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Accept: 'application/json',
     };
-    if (apiKey) {
-      headers['X-Api-Key'] = apiKey;
+    if (config.apiKey) {
+      headers['X-Api-Key'] = config.apiKey;
     }
 
     try {
-      let response = await fetch(`${wahaUrl}/api/sendText`, {
+      let response = await fetch(`${config.apiUrl}/api/sendText`, {
         method: 'POST',
         headers: headers,
         body: JSON.stringify({
@@ -392,7 +417,7 @@ export class WahaAdapterService {
         const lidChatId = chatId.replace('@c.us', '@lid');
         this.logger.warn(`[WAHA] Envío falló con @c.us (${response.status}). Reintentando con ${lidChatId}...`);
         chatId = lidChatId;
-        response = await fetch(`${wahaUrl}/api/sendText`, {
+        response = await fetch(`${config.apiUrl}/api/sendText`, {
           method: 'POST',
           headers: headers,
           body: JSON.stringify({
@@ -412,7 +437,7 @@ export class WahaAdapterService {
         const cusChatId = chatId.replace('@lid', '@c.us');
         this.logger.warn(`[WAHA] Envío falló con @lid (${response.status}). Reintentando con ${cusChatId}...`);
         chatId = cusChatId;
-        response = await fetch(`${wahaUrl}/api/sendText`, {
+        response = await fetch(`${config.apiUrl}/api/sendText`, {
           method: 'POST',
           headers: headers,
           body: JSON.stringify({
@@ -445,24 +470,42 @@ export class WahaAdapterService {
   }
 
   /**
-   * Consulta las sesiones activas en WAHA para diagnóstico
+   * Consulta las sesiones activas en WAHA para diagnóstico (soporta prod, sandbox o all).
    */
-  async getWahaSessions(): Promise<any> {
-    const wahaUrl = process.env.WAHA_API_URL;
-    if (!wahaUrl) return { error: 'WAHA_API_URL no configurado' };
+  async getWahaSessions(target: 'prod' | 'sandbox' | 'all' = 'prod'): Promise<any> {
+    const prodConfig = this.resolveWahaConfig('dba1c54c-89c6-41e9-ae9d-03613377a5b3', 'ferreos');
+    const sandboxConfig = this.resolveWahaConfig('subaccount-test', 'sub_sandbox');
 
-    const apiKey = process.env.WAHA_API_KEY || '';
-    const headers: Record<string, string> = { Accept: 'application/json' };
-    if (apiKey) headers['X-Api-Key'] = apiKey;
-
-    try {
-      const response = await fetch(`${wahaUrl}/api/sessions?all=true`, { headers });
-      if (!response.ok) {
-        return { status: response.status, error: await response.text() };
+    const fetchSessions = async (config: { apiUrl: string; apiKey: string }) => {
+      if (!config.apiUrl) return { error: 'WAHA URL no configurado' };
+      const headers: Record<string, string> = { Accept: 'application/json' };
+      if (config.apiKey) headers['X-Api-Key'] = config.apiKey;
+      try {
+        const response = await fetch(`${config.apiUrl}/api/sessions?all=true`, {
+          headers,
+          signal: AbortSignal.timeout(4000),
+        });
+        if (!response.ok) {
+          return { status: response.status, error: await response.text() };
+        }
+        return await response.json();
+      } catch (e: any) {
+        return { error: e.message };
       }
-      return await response.json();
-    } catch (e: any) {
-      return { error: e.message };
+    };
+
+    if (target === 'all') {
+      const [prod, sandbox] = await Promise.all([
+        fetchSessions(prodConfig),
+        fetchSessions(sandboxConfig),
+      ]);
+      return { prod, sandbox };
     }
+
+    if (target === 'sandbox') {
+      return fetchSessions(sandboxConfig);
+    }
+
+    return fetchSessions(prodConfig);
   }
 }

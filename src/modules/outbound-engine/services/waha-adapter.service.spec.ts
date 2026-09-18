@@ -9,6 +9,10 @@ describe('WahaAdapterService (WhatsApp LID y Presencia "Escribiendo...")', () =>
   let metaAdapter: any;
 
   beforeEach(async () => {
+    delete process.env.WAHA_PROD_URL;
+    delete process.env.WAHA_SANDBOX_URL;
+    delete process.env.WAHA_PROD_API_KEY;
+    delete process.env.WAHA_SANDBOX_API_KEY;
     process.env.WAHA_API_URL = 'https://waha-mock.example.com';
     process.env.WAHA_API_KEY = 'test-key';
     delete process.env.WAHA_SESSION;
@@ -243,6 +247,85 @@ describe('WahaAdapterService (WhatsApp LID y Presencia "Escribiendo...")', () =>
         where: { id: 'contact-uuid-3' },
         data: { externalId: '163810052673674@c.us' },
       });
+    });
+  });
+
+  describe('Dual-Gateway Routing (Prod vs Sandbox)', () => {
+    beforeEach(() => {
+      process.env.WAHA_PROD_URL = 'https://waha-prod.ingeniodigital.shop';
+      process.env.WAHA_PROD_API_KEY = 'key-prod-123';
+      process.env.WAHA_SANDBOX_URL = 'https://waha-sandbox.ingeniodigital.shop';
+      process.env.WAHA_SANDBOX_API_KEY = 'key-sandbox-456';
+    });
+
+    it('debe enrutar el tenant de producción principal a WAHA_PROD_URL', () => {
+      const config = service.resolveWahaConfig('dba1c54c-89c6-41e9-ae9d-03613377a5b3');
+      expect(config.apiUrl).toBe('https://waha-prod.ingeniodigital.shop');
+      expect(config.apiKey).toBe('key-prod-123');
+      expect(config.isProd).toBe(true);
+    });
+
+    it('debe enrutar la sesión "ferreos" a WAHA_PROD_URL independientemente del tenantId', () => {
+      const config = service.resolveWahaConfig(undefined, 'ferreos');
+      expect(config.apiUrl).toBe('https://waha-prod.ingeniodigital.shop');
+      expect(config.apiKey).toBe('key-prod-123');
+      expect(config.isProd).toBe(true);
+    });
+
+    it('debe enrutar subcuentas o tenants secundarios a WAHA_SANDBOX_URL', () => {
+      const config = service.resolveWahaConfig('tenant-subcuenta-xyz', 'sub_abc123');
+      expect(config.apiUrl).toBe('https://waha-sandbox.ingeniodigital.shop');
+      expect(config.apiKey).toBe('key-sandbox-456');
+      expect(config.isProd).toBe(false);
+    });
+
+    it('debe hacer fallback seguro a WAHA_API_URL si WAHA_SANDBOX_URL no está definido', () => {
+      delete process.env.WAHA_SANDBOX_URL;
+      delete process.env.WAHA_SANDBOX_API_KEY;
+      process.env.WAHA_API_URL = 'https://waha-default.example.com';
+      process.env.WAHA_API_KEY = 'default-key';
+
+      const config = service.resolveWahaConfig('tenant-subcuenta-xyz');
+      expect(config.apiUrl).toBe('https://waha-default.example.com');
+      expect(config.apiKey).toBe('default-key');
+      expect(config.isProd).toBe(false);
+    });
+
+    it('debe despachar sendMessage al host de producción si el tenant es ferreos/prod', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'prod-msg-001' }),
+      });
+      global.fetch = mockFetch as any;
+
+      await service.sendMessage('dba1c54c-89c6-41e9-ae9d-03613377a5b3', '584121234567@c.us', 'Mensaje Prod');
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://waha-prod.ingeniodigital.shop/api/sendText',
+        expect.objectContaining({
+          headers: expect.objectContaining({ 'X-Api-Key': 'key-prod-123' }),
+        })
+      );
+    });
+
+    it('debe despachar sendMessage al host de sandbox si el tenant es una subcuenta', async () => {
+      prisma.tenant.findUnique.mockResolvedValueOnce({ id: 'sub-tenant-99', wahaSession: 'sub_testline' });
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'sandbox-msg-002' }),
+      });
+      global.fetch = mockFetch as any;
+
+      await service.sendMessage('sub-tenant-99', '584149876543@c.us', 'Mensaje Sandbox');
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://waha-sandbox.ingeniodigital.shop/api/sendText',
+        expect.objectContaining({
+          headers: expect.objectContaining({ 'X-Api-Key': 'key-sandbox-456' }),
+        })
+      );
     });
   });
 });
