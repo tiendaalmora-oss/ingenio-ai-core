@@ -142,7 +142,7 @@ describe('AgencyService — Dual-Gateway WAHA & Proxy Isolation', () => {
               webhooks: [
                 {
                   url: 'https://core.ai.ingeniodigital.shop/webhooks/meta',
-                  events: ['session.status', 'message'],
+                  events: ['session.status', 'message', 'message.any'],
                 },
               ],
               proxy: proxyPayload,

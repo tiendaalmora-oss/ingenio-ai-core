@@ -102,32 +102,118 @@ export class MetaWebhookController {
 
           if (!manualText) return;
 
-          // 2. Doble chequeo anti-falso-positivo: ¿Existe una interacción saliente idéntica reciente (< 15s) en DB?
-          // (Si el bot acababa de registrar este mismo texto, es un echo del bot)
+          // 2. Búsqueda exhaustiva del contacto multi-país y multi-formato
           const toWithoutZero = toDigits.startsWith('0') ? toDigits.replace(/^0+/, '') : toDigits;
           const toWith58 = toDigits.startsWith('58') ? toDigits : (toWithoutZero ? `58${toWithoutZero}` : '');
 
-          const existingContact = await this.prisma.contact.findFirst({
+          const orConditions: any[] = [
+            { externalId: toRaw },
+            { externalId: toDigits },
+            { phone: toDigits },
+            { phoneNormalized: toDigits },
+            { phone: toWithoutZero },
+            { phoneNormalized: toWithoutZero },
+            { phone: toWith58 },
+            { phoneNormalized: toWith58 },
+          ];
+
+          if (toDigits) {
+            orConditions.push({ externalId: `${toDigits}@c.us` });
+            orConditions.push({ externalId: `${toDigits}@lid` });
+            orConditions.push({ phone: `+${toDigits}` });
+          }
+
+          // Variantes Argentina (+54 y prefijo móvil 9)
+          if (toDigits.startsWith('549')) {
+            const without9 = '54' + toDigits.slice(3);
+            const national = toDigits.slice(3);
+            orConditions.push(
+              { phone: without9 },
+              { phoneNormalized: without9 },
+              { externalId: without9 },
+              { externalId: `${without9}@c.us` },
+              { phone: `+${without9}` },
+              { phone: national },
+              { phoneNormalized: national },
+              { phone: `0${national}` },
+              { phoneNormalized: `0${national}` },
+            );
+          } else if (toDigits.startsWith('54') && !toDigits.startsWith('549')) {
+            const with9 = '549' + toDigits.slice(2);
+            const national = toDigits.slice(2);
+            orConditions.push(
+              { phone: with9 },
+              { phoneNormalized: with9 },
+              { externalId: with9 },
+              { externalId: `${with9}@c.us` },
+              { phone: `+${with9}` },
+              { phone: national },
+              { phoneNormalized: national },
+              { phone: `0${national}` },
+              { phoneNormalized: `0${national}` },
+            );
+          }
+
+          // Variantes Venezuela (+58)
+          if (toDigits.startsWith('58')) {
+            const without58 = toDigits.slice(2);
+            if (without58) {
+              orConditions.push(
+                { phone: without58 },
+                { phoneNormalized: without58 },
+                { phone: `0${without58}` },
+                { phoneNormalized: `0${without58}` },
+                { externalId: `${without58}@c.us` },
+              );
+            }
+          }
+
+          // Búsqueda por terminación de 10 dígitos (para números estándar móviles internacionales)
+          // No aplicar a LIDs numéricos internos de WhatsApp (14-16 dígitos)
+          const isLid = toRaw.endsWith('@lid') || (toDigits.length >= 14 && toDigits.length <= 16 && toDigits.startsWith('20'));
+          if (!isLid && toDigits.length >= 10) {
+            const last10 = toDigits.slice(-10);
+            orConditions.push(
+              { phoneNormalized: { endsWith: last10 } },
+              { phone: { endsWith: last10 } },
+            );
+          }
+
+          let contact = await this.prisma.contact.findFirst({
             where: {
               tenantId,
-              OR: [
-                { externalId: toRaw },
-                { externalId: toDigits },
-                { phone: toDigits },
-                { phoneNormalized: toDigits },
-                { phone: toWithoutZero },
-                { phoneNormalized: toWithoutZero },
-                { phone: toWith58 },
-                { phoneNormalized: toWith58 },
-              ]
+              OR: orConditions,
             }
           });
 
-          if (existingContact) {
-            const conv = await this.prisma.conversation.findFirst({
-              where: { contactId: existingContact.id },
+          if (!contact && this.prisma.contact.create) {
+            // Si el contacto aún no existe en el CRM (ej. el asesor inició el chat desde su teléfono móvil),
+            // lo registramos para que quede blindado en HANDOFF y no sea tomado por el bot como prospecto frío.
+            contact = await this.prisma.contact.create({
+              data: {
+                tenantId,
+                externalId: toRaw,
+                phone: toDigits,
+                phoneNormalized: toDigits,
+                name: toDigits || 'Prospecto',
+              }
+            }).catch(() => null);
+          }
+
+          if (contact) {
+            let conv = await this.prisma.conversation.findFirst({
+              where: { contactId: contact.id },
               orderBy: { id: 'desc' }
             });
+
+            if (!conv && this.prisma.conversation.create) {
+              conv = await this.prisma.conversation.create({
+                data: {
+                  contactId: contact.id,
+                  status: 'HANDOFF',
+                }
+              }).catch(() => null);
+            }
 
             if (conv) {
               const recentBotEcho = this.prisma.interaction?.findFirst
@@ -186,13 +272,13 @@ export class MetaWebhookController {
 
               // 4. Actualizar Business Memory del lead con tag de intervención manual
               try {
-                const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: existingContact.id } });
+                const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: contact.id } });
                 const currentTags = (memory?.tags as string[]) || [];
                 const updatedTags = Array.from(new Set([...currentTags, 'INTERVENCION_HUMANA', 'ATENCION_MANUAL']));
                 await this.prisma.businessMemory.upsert({
-                  where: { contactId: existingContact.id },
+                  where: { contactId: contact.id },
                   create: {
-                    contactId: existingContact.id,
+                    contactId: contact.id,
                     leadStatus: 'HANDOFF',
                     tags: updatedTags,
                   },

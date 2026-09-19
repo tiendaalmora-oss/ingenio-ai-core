@@ -358,7 +358,7 @@ export class AgencyService {
         webhooks: [
           {
             url: webhookUrl,
-            events: ['session.status', 'message'],
+            events: ['session.status', 'message', 'message.any'],
           },
         ],
       };

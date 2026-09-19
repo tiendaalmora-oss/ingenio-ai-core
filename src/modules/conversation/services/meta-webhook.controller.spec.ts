@@ -240,5 +240,101 @@ describe('MetaWebhookController (Candado de Enrutamiento WAHA / Meta)', () => {
         undefined
       );
     });
+
+    it('Candado 4.6: Mensaje saliente desde el teléfono físico (fromMe: true) en Argentina (+54 9 11 ...) debe pausar en HANDOFF', async () => {
+      const res = createMockRes();
+      const contactMock = { id: 'contact-arg', phone: '541125938527', phoneNormalized: '541125938527' };
+      const convMock = { id: 'conv-arg', contactId: 'contact-arg', status: 'ACTIVE' };
+
+      prisma.contact.findFirst.mockImplementation(async ({ where }: any) => {
+        const matched = where.OR.some((cond: any) =>
+          cond.phone === '541125938527' ||
+          cond.phoneNormalized === '541125938527' ||
+          cond.phoneNormalized?.endsWith === '1125938527'
+        );
+        return matched ? contactMock : null;
+      });
+      prisma.conversation.findFirst.mockResolvedValue(convMock);
+
+      const body = {
+        event: 'message.any',
+        session: 'sub_cc08101c1f',
+        payload: {
+          fromMe: true,
+          from: '5491100000000:0@c.us',
+          to: '5491125938527@c.us',
+          body: 'Hola! Te atiendo directamente desde el móvil.',
+        },
+      };
+
+      await controller.receiveMessage(body, res);
+
+      expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
+      expect(receiveMessageService.execute).not.toHaveBeenCalled();
+      expect(prisma.conversation.update).toHaveBeenCalledWith({
+        where: { id: 'conv-arg' },
+        data: { status: 'HANDOFF' },
+      });
+      expect(prisma.interaction.create).toHaveBeenCalledWith({
+        data: {
+          conversationId: 'conv-arg',
+          direction: 'OUTBOUND',
+          type: 'TEXT',
+          content: 'Hola! Te atiendo directamente desde el móvil.',
+          role: 'assistant',
+        },
+      });
+    });
+
+    it('Candado 4.7: Mensaje saliente desde el teléfono físico (fromMe: true) con Privacy LID (@lid) debe pausar en HANDOFF', async () => {
+      const res = createMockRes();
+      const contactMock = { id: 'contact-lid', externalId: '201674652135471@lid', phone: '201674652135471' };
+      const convMock = { id: 'conv-lid', contactId: 'contact-lid', status: 'ACTIVE' };
+
+      prisma.contact.findFirst.mockResolvedValue(contactMock);
+      prisma.conversation.findFirst.mockResolvedValue(convMock);
+
+      const body = {
+        event: 'message.any',
+        session: 'sub_cc08101c1f',
+        payload: {
+          fromMe: true,
+          to: '201674652135471@lid',
+          body: 'Hola, te respondo al LID',
+        },
+      };
+
+      await controller.receiveMessage(body, res);
+
+      expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
+      expect(receiveMessageService.execute).not.toHaveBeenCalled();
+      expect(prisma.conversation.update).toHaveBeenCalledWith({
+        where: { id: 'conv-lid' },
+        data: { status: 'HANDOFF' },
+      });
+    });
+
+    it('Candado 4.8: Mensaje saliente enviado por el sistema (bot/CRM) detectado por wahaAdapter.isSentBySystem debe ignorarse sin alterar estado', async () => {
+      const res = createMockRes();
+      wahaAdapter.isSentBySystem.mockReturnValueOnce(true);
+
+      const body = {
+        event: 'message.any',
+        session: 'sesion-tienda',
+        payload: {
+          id: { _serialized: 'true_584249876543@c.us_BOTMSG123' },
+          fromMe: true,
+          to: '584121234567@c.us',
+          body: 'Mensaje automático del bot',
+        },
+      };
+
+      await controller.receiveMessage(body, res);
+
+      expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
+      expect(prisma.conversation.update).not.toHaveBeenCalled();
+      expect(prisma.interaction.create).not.toHaveBeenCalled();
+      expect(receiveMessageService.execute).not.toHaveBeenCalled();
+    });
   });
 });
