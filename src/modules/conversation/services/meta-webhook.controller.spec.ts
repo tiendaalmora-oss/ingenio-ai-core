@@ -47,6 +47,8 @@ describe('MetaWebhookController (Candado de Enrutamiento WAHA / Meta)', () => {
       },
       interaction: {
         create: jest.fn().mockResolvedValue({}),
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
       },
       pendingOutboundMessage: {
         deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -66,7 +68,9 @@ describe('MetaWebhookController (Candado de Enrutamiento WAHA / Meta)', () => {
 
     wahaAdapter = {
       isSentBySystem: jest.fn().mockReturnValue(false),
+      isSentBySystemContent: jest.fn().mockReturnValue(false),
       markMessageAsSentBySystem: jest.fn(),
+      markOutboundDispatched: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -326,6 +330,63 @@ describe('MetaWebhookController (Candado de Enrutamiento WAHA / Meta)', () => {
           fromMe: true,
           to: '584121234567@c.us',
           body: 'Mensaje automático del bot',
+        },
+      };
+
+      await controller.receiveMessage(body, res);
+
+      expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
+      expect(prisma.conversation.update).not.toHaveBeenCalled();
+      expect(prisma.interaction.create).not.toHaveBeenCalled();
+      expect(receiveMessageService.execute).not.toHaveBeenCalled();
+    });
+
+    it('Candado 4.9: Mensaje saliente con coincidencia de contenido reciente en wahaAdapter.isSentBySystemContent debe ignorarse como eco y no alterar HANDOFF', async () => {
+      const res = createMockRes();
+      wahaAdapter.isSentBySystemContent.mockReturnValueOnce(true);
+
+      const body = {
+        event: 'message.any',
+        session: 'sesion-tienda',
+        payload: {
+          fromMe: true,
+          to: '584121234567@c.us',
+          body: '¡Hola, profe! Qué gusto saludarte.',
+        },
+      };
+
+      await controller.receiveMessage(body, res);
+
+      expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
+      expect(prisma.conversation.update).not.toHaveBeenCalled();
+      expect(prisma.interaction.create).not.toHaveBeenCalled();
+      expect(receiveMessageService.execute).not.toHaveBeenCalled();
+    });
+
+    it('Candado 4.10: Mensaje saliente con coincidencia en DB (recentOutboundInteractions) debe ignorarse como eco y no alterar HANDOFF', async () => {
+      const res = createMockRes();
+      const contactMock = { id: 'contact-test', phone: '584121234567', phoneNormalized: '584121234567' };
+      const convMock = { id: 'conv-test', contactId: 'contact-test', status: 'ACTIVE' };
+
+      prisma.contact.findFirst.mockResolvedValue(contactMock);
+      prisma.conversation.findFirst.mockResolvedValue(convMock);
+      prisma.interaction.findMany.mockResolvedValueOnce([
+        {
+          id: 'inter-1',
+          content: '¡Hola, profe! Qué gusto saludarte.',
+          direction: 'OUTBOUND',
+          role: 'assistant',
+          type: 'TOOL_CALL',
+        },
+      ]);
+
+      const body = {
+        event: 'message.any',
+        session: 'sesion-tienda',
+        payload: {
+          fromMe: true,
+          to: '584121234567@c.us',
+          body: '¡Hola, profe! Qué gusto saludarte.',
         },
       };
 

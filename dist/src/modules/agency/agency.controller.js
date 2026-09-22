@@ -69,8 +69,8 @@ let AgencyController = class AgencyController {
     getWahaStatus(tenantId) {
         return this.agencyService.getSubaccountWahaStatus(tenantId);
     }
-    startWaha(tenantId) {
-        return this.agencyService.startSubaccountWaha(tenantId);
+    startWaha(tenantId, body) {
+        return this.agencyService.startSubaccountWaha(tenantId, body?.proxy);
     }
     getWahaQr(tenantId) {
         return this.agencyService.getSubaccountWahaQr(tenantId);
@@ -180,8 +180,9 @@ __decorate([
 __decorate([
     (0, common_1.Post)('subaccounts/:id/waha/start'),
     __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", void 0)
 ], AgencyController.prototype, "startWaha", null);
 __decorate([

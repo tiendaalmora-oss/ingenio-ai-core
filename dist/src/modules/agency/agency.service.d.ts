@@ -213,7 +213,11 @@ export declare class AgencyService {
         phone?: undefined;
         pushName?: undefined;
     }>;
-    startSubaccountWaha(tenantId: string): Promise<{
+    startSubaccountWaha(tenantId: string, proxyConfig?: {
+        server: string;
+        username?: string;
+        password?: string;
+    }): Promise<{
         session: string;
         status: any;
         phone: any;

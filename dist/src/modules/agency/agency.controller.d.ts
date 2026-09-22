@@ -205,7 +205,13 @@ export declare class AgencyController {
         phone?: undefined;
         pushName?: undefined;
     }>;
-    startWaha(tenantId: string): Promise<{
+    startWaha(tenantId: string, body?: {
+        proxy?: {
+            server: string;
+            username?: string;
+            password?: string;
+        };
+    }): Promise<{
         session: string;
         status: any;
         phone: any;

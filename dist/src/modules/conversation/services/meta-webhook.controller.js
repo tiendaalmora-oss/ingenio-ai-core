@@ -90,40 +90,113 @@ let MetaWebhookController = MetaWebhookController_1 = class MetaWebhookControlle
                     }
                     if (!manualText)
                         return;
+                    if ((toDigits && this.wahaAdapter.isSentBySystemContent(toDigits, manualText)) ||
+                        (toRaw && this.wahaAdapter.isSentBySystemContent(toRaw, manualText))) {
+                        this.logger.debug(`[WAHA Echo] Mensaje saliente hacia ${toDigits || toRaw} confirmado como enviado por el sistema por contenido. Ignorando.`);
+                        return;
+                    }
                     const toWithoutZero = toDigits.startsWith('0') ? toDigits.replace(/^0+/, '') : toDigits;
                     const toWith58 = toDigits.startsWith('58') ? toDigits : (toWithoutZero ? `58${toWithoutZero}` : '');
-                    const existingContact = await this.prisma.contact.findFirst({
+                    const orConditions = [
+                        { externalId: toRaw },
+                        { externalId: toDigits },
+                        { phone: toDigits },
+                        { phoneNormalized: toDigits },
+                        { phone: toWithoutZero },
+                        { phoneNormalized: toWithoutZero },
+                        { phone: toWith58 },
+                        { phoneNormalized: toWith58 },
+                    ];
+                    if (toDigits) {
+                        orConditions.push({ externalId: `${toDigits}@c.us` });
+                        orConditions.push({ externalId: `${toDigits}@lid` });
+                        orConditions.push({ phone: `+${toDigits}` });
+                    }
+                    if (toDigits.startsWith('549')) {
+                        const without9 = '54' + toDigits.slice(3);
+                        const national = toDigits.slice(3);
+                        orConditions.push({ phone: without9 }, { phoneNormalized: without9 }, { externalId: without9 }, { externalId: `${without9}@c.us` }, { phone: `+${without9}` }, { phone: national }, { phoneNormalized: national }, { phone: `0${national}` }, { phoneNormalized: `0${national}` });
+                    }
+                    else if (toDigits.startsWith('54') && !toDigits.startsWith('549')) {
+                        const with9 = '549' + toDigits.slice(2);
+                        const national = toDigits.slice(2);
+                        orConditions.push({ phone: with9 }, { phoneNormalized: with9 }, { externalId: with9 }, { externalId: `${with9}@c.us` }, { phone: `+${with9}` }, { phone: national }, { phoneNormalized: national }, { phone: `0${national}` }, { phoneNormalized: `0${national}` });
+                    }
+                    if (toDigits.startsWith('58')) {
+                        const without58 = toDigits.slice(2);
+                        if (without58) {
+                            orConditions.push({ phone: without58 }, { phoneNormalized: without58 }, { phone: `0${without58}` }, { phoneNormalized: `0${without58}` }, { externalId: `${without58}@c.us` });
+                        }
+                    }
+                    const isLid = toRaw.endsWith('@lid') || (toDigits.length >= 14 && toDigits.length <= 16 && toDigits.startsWith('20'));
+                    if (!isLid && toDigits.length >= 10) {
+                        const last10 = toDigits.slice(-10);
+                        orConditions.push({ phoneNormalized: { endsWith: last10 } }, { phone: { endsWith: last10 } });
+                    }
+                    let contact = await this.prisma.contact.findFirst({
                         where: {
                             tenantId,
-                            OR: [
-                                { externalId: toRaw },
-                                { externalId: toDigits },
-                                { phone: toDigits },
-                                { phoneNormalized: toDigits },
-                                { phone: toWithoutZero },
-                                { phoneNormalized: toWithoutZero },
-                                { phone: toWith58 },
-                                { phoneNormalized: toWith58 },
-                            ]
+                            OR: orConditions,
                         }
                     });
-                    if (existingContact) {
-                        const conv = await this.prisma.conversation.findFirst({
-                            where: { contactId: existingContact.id },
+                    if (!contact && this.prisma.contact.create) {
+                        contact = await this.prisma.contact.create({
+                            data: {
+                                tenantId,
+                                externalId: toRaw,
+                                phone: toDigits,
+                                phoneNormalized: toDigits,
+                                name: toDigits || 'Prospecto',
+                            }
+                        }).catch(() => null);
+                    }
+                    if (contact) {
+                        let conv = await this.prisma.conversation.findFirst({
+                            where: { contactId: contact.id },
                             orderBy: { id: 'desc' }
                         });
+                        if (!conv && this.prisma.conversation.create) {
+                            conv = await this.prisma.conversation.create({
+                                data: {
+                                    contactId: contact.id,
+                                    status: 'HANDOFF',
+                                }
+                            }).catch(() => null);
+                        }
                         if (conv) {
-                            const recentBotEcho = this.prisma.interaction?.findFirst
-                                ? await this.prisma.interaction.findFirst({
+                            const recentOutboundInteractions = this.prisma.interaction?.findMany
+                                ? await this.prisma.interaction.findMany({
                                     where: {
                                         conversationId: conv.id,
                                         direction: 'OUTBOUND',
-                                        role: 'assistant',
-                                        content: manualText,
-                                        timestamp: { gte: new Date(Date.now() - 15_000) }
-                                    }
+                                        timestamp: { gte: new Date(Date.now() - 60_000) }
+                                    },
+                                    select: { content: true, role: true, type: true },
+                                    take: 5,
+                                    orderBy: { id: 'desc' }
                                 })
-                                : null;
+                                : [];
+                            const normManual = manualText
+                                .toLowerCase()
+                                .normalize('NFD')
+                                .replace(/[\u0300-\u036f]/g, '')
+                                .replace(/[^\w\s]/g, '')
+                                .replace(/\s+/g, ' ')
+                                .trim();
+                            const recentBotEcho = recentOutboundInteractions.find((inter) => {
+                                const normDb = (inter.content || '')
+                                    .toLowerCase()
+                                    .normalize('NFD')
+                                    .replace(/[\u0300-\u036f]/g, '')
+                                    .replace(/[^\w\s]/g, '')
+                                    .replace(/\s+/g, ' ')
+                                    .trim();
+                                return (inter.content === manualText ||
+                                    normDb === normManual ||
+                                    (normDb.length > 20 &&
+                                        normManual.length > 20 &&
+                                        (normDb.includes(normManual) || normManual.includes(normDb))));
+                            });
                             if (recentBotEcho) {
                                 this.logger.debug(`[WAHA Echo] Mensaje saliente coincide con interacción reciente en DB (${conv.id}). Ignorando.`);
                                 return;
@@ -158,13 +231,13 @@ let MetaWebhookController = MetaWebhookController_1 = class MetaWebhookControlle
                                 this.logger.log(`[Mobile Sync] Cancelados ${deletedFollowUps.count} seguimientos pendientes para conversación ${conv.id}`);
                             }
                             try {
-                                const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: existingContact.id } });
+                                const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: contact.id } });
                                 const currentTags = memory?.tags || [];
                                 const updatedTags = Array.from(new Set([...currentTags, 'INTERVENCION_HUMANA', 'ATENCION_MANUAL']));
                                 await this.prisma.businessMemory.upsert({
-                                    where: { contactId: existingContact.id },
+                                    where: { contactId: contact.id },
                                     create: {
-                                        contactId: existingContact.id,
+                                        contactId: contact.id,
                                         leadStatus: 'HANDOFF',
                                         tags: updatedTags,
                                     },

@@ -9,6 +9,8 @@ export class WahaAdapterService {
   // Cache en memoria para rastrear IDs de mensajes enviados por el sistema (API/bot/CRM)
   // Evita falsos positivos al detectar intervención humana en webhooks salientes (fromMe = true)
   private readonly sentBySystemMessageIds = new Map<string, number>();
+  // Cache en memoria por destinatario y contenido para blindaje anti-echo infalible
+  private readonly recentOutboundsByTarget = new Map<string, Array<{ textNorm: string; timestamp: number }>>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -16,21 +18,45 @@ export class WahaAdapterService {
   ) {}
 
   /**
+   * Normaliza texto para comparación tolerante a emojis, tildes, saltos y signos.
+   */
+  private normalizeComparisonText(text: string): string {
+    if (!text) return '';
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[\r\n\t]+/g, ' ')
+      .replace(/[^\w\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  /**
    * Registra un ID de mensaje como enviado por el sistema (bot o CRM dashboard).
    */
-  markMessageAsSentBySystem(messageId: string): void {
-    if (!messageId || typeof messageId !== 'string') return;
+  markMessageAsSentBySystem(messageId: any): void {
+    if (!messageId) return;
+    const idStr = typeof messageId === 'object'
+      ? (messageId._serialized || messageId.id || '')
+      : String(messageId);
+    if (!idStr || idStr === 'waha-msg-ok') return;
+
     const now = Date.now();
-    this.sentBySystemMessageIds.set(messageId, now);
+    this.sentBySystemMessageIds.set(idStr, now);
 
     // Extraer sub-clave (ej: true_58412...@c.us_3EB027... -> 3EB027...)
-    const parts = messageId.split('_');
+    const parts = idStr.split('_');
     if (parts.length >= 2) {
       this.sentBySystemMessageIds.set(parts[parts.length - 1], now);
     }
+    const rawSuffix = idStr.replace(/^(true|false)_[^_]+_/, '');
+    if (rawSuffix) {
+      this.sentBySystemMessageIds.set(rawSuffix, now);
+    }
 
     // Purgar entradas antiguas (> 3 minutos) si el caché crece
-    if (this.sentBySystemMessageIds.size > 300) {
+    if (this.sentBySystemMessageIds.size > 500) {
       for (const [id, ts] of this.sentBySystemMessageIds.entries()) {
         if (now - ts > 180_000) {
           this.sentBySystemMessageIds.delete(id);
@@ -40,13 +66,88 @@ export class WahaAdapterService {
   }
 
   /**
+   * Registra el contenido de un mensaje emitido hacia un destinatario para blindaje anti-echo instantáneo.
+   */
+  markOutboundDispatched(targetChatIdOrPhone: string, content: string): void {
+    if (!targetChatIdOrPhone || !content) return;
+    const now = Date.now();
+    const textNorm = this.normalizeComparisonText(content);
+    if (!textNorm) return;
+
+    const digits = targetChatIdOrPhone.replace(/@(c\.us|lid|s\.whatsapp\.net)$/, '').replace(/\D/g, '');
+    const keys = new Set<string>();
+    if (digits) keys.add(digits);
+    if (digits.length >= 10) keys.add(digits.slice(-10));
+    keys.add(targetChatIdOrPhone);
+
+    for (const key of keys) {
+      const list = this.recentOutboundsByTarget.get(key) || [];
+      list.push({ textNorm, timestamp: now });
+      const filtered = list.filter((e) => now - e.timestamp < 90_000).slice(-10);
+      this.recentOutboundsByTarget.set(key, filtered);
+    }
+
+    if (this.recentOutboundsByTarget.size > 500) {
+      for (const [k, list] of this.recentOutboundsByTarget.entries()) {
+        const active = list.filter((e) => now - e.timestamp < 90_000);
+        if (active.length === 0) {
+          this.recentOutboundsByTarget.delete(k);
+        } else {
+          this.recentOutboundsByTarget.set(k, active);
+        }
+      }
+    }
+  }
+
+  /**
+   * Verifica si un mensaje con contenido similar fue despachado hacia este destinatario en los últimos 75 segundos.
+   */
+  isSentBySystemContent(targetChatIdOrPhone: string, content: string): boolean {
+    if (!targetChatIdOrPhone || !content) return false;
+    const now = Date.now();
+    const incomingNorm = this.normalizeComparisonText(content);
+    if (!incomingNorm) return false;
+
+    const digits = targetChatIdOrPhone.replace(/@(c\.us|lid|s\.whatsapp\.net)$/, '').replace(/\D/g, '');
+    const keysToTest = [digits, digits.length >= 10 ? digits.slice(-10) : '', targetChatIdOrPhone].filter(Boolean);
+
+    for (const key of keysToTest) {
+      const list = this.recentOutboundsByTarget.get(key);
+      if (!list || list.length === 0) continue;
+
+      for (const entry of list) {
+        if (now - entry.timestamp > 75_000) continue;
+        if (
+          entry.textNorm === incomingNorm ||
+          entry.textNorm.includes(incomingNorm) ||
+          incomingNorm.includes(entry.textNorm) ||
+          (entry.textNorm.length > 20 &&
+            incomingNorm.length > 20 &&
+            entry.textNorm.slice(0, 30) === incomingNorm.slice(0, 30))
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
    * Verifica si un ID de mensaje fue despachado por el sistema.
    */
-  isSentBySystem(messageId: string): boolean {
-    if (!messageId || typeof messageId !== 'string') return false;
-    if (this.sentBySystemMessageIds.has(messageId)) return true;
-    const parts = messageId.split('_');
+  isSentBySystem(messageId: any): boolean {
+    if (!messageId) return false;
+    const idStr = typeof messageId === 'object'
+      ? (messageId._serialized || messageId.id || '')
+      : String(messageId);
+    if (!idStr) return false;
+    if (this.sentBySystemMessageIds.has(idStr)) return true;
+    const parts = idStr.split('_');
     if (parts.length >= 2 && this.sentBySystemMessageIds.has(parts[parts.length - 1])) {
+      return true;
+    }
+    const rawSuffix = idStr.replace(/^(true|false)_[^_]+_/, '');
+    if (rawSuffix && this.sentBySystemMessageIds.has(rawSuffix)) {
       return true;
     }
     return false;
@@ -396,6 +497,12 @@ export class WahaAdapterService {
       headers['X-Api-Key'] = config.apiKey;
     }
 
+    // Blindaje anti-echo inmediato: Registrar destino y contenido antes de invocar la red
+    this.markOutboundDispatched(chatId, content);
+    if (contactIdOrPhone && contactIdOrPhone !== chatId) {
+      this.markOutboundDispatched(contactIdOrPhone, content);
+    }
+
     try {
       let response = await fetch(`${config.apiUrl}/api/sendText`, {
         method: 'POST',
@@ -417,6 +524,7 @@ export class WahaAdapterService {
         const lidChatId = chatId.replace('@c.us', '@lid');
         this.logger.warn(`[WAHA] Envío falló con @c.us (${response.status}). Reintentando con ${lidChatId}...`);
         chatId = lidChatId;
+        this.markOutboundDispatched(lidChatId, content);
         response = await fetch(`${config.apiUrl}/api/sendText`, {
           method: 'POST',
           headers: headers,
@@ -437,6 +545,7 @@ export class WahaAdapterService {
         const cusChatId = chatId.replace('@lid', '@c.us');
         this.logger.warn(`[WAHA] Envío falló con @lid (${response.status}). Reintentando con ${cusChatId}...`);
         chatId = cusChatId;
+        this.markOutboundDispatched(cusChatId, content);
         response = await fetch(`${config.apiUrl}/api/sendText`, {
           method: 'POST',
           headers: headers,
@@ -456,8 +565,9 @@ export class WahaAdapterService {
         throw new Error(`Waha response con error ${response.status}: ${response.statusText}. Body: ${errBody}`);
       }
 
-      const result = await response.json();
-      const messageId = result.id || result.key?.id || 'waha-msg-ok';
+      const result = await response.json().catch(() => ({}));
+      const rawId = result?.id?._serialized || result?.id || result?.key?.id || result?._data?.id?._serialized || 'waha-msg-ok';
+      const messageId = typeof rawId === 'object' ? (rawId._serialized || rawId.id || 'waha-msg-ok') : String(rawId);
       if (messageId && messageId !== 'waha-msg-ok') {
         this.markMessageAsSentBySystem(messageId);
       }

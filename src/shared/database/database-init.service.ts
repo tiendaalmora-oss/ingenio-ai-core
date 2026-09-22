@@ -39,21 +39,23 @@ export class DatabaseInitService implements OnApplicationBootstrap {
         );
         await this.ensureKnowledgeBundle(tenant.id);
       } else {
-        const main = tenants[0];
-        if (main.wahaSession !== targetSession) {
+        const alreadyWithTarget = tenants.find((t) => t.wahaSession === targetSession);
+        if (alreadyWithTarget) {
+          this.logger.log(
+            `✅ Tenant "${alreadyWithTarget.name}" (${alreadyWithTarget.id}) already has correct wahaSession (${targetSession})`,
+          );
+          await this.ensureKnowledgeBundle(alreadyWithTarget.id);
+        } else {
+          const prodTenant = tenants.find((t) => t.id === 'dba1c54c-89c6-41e9-ae9d-03613377a5b3') || tenants[0];
           await this.prisma.tenant.update({
-            where: { id: main.id },
+            where: { id: prodTenant.id },
             data: { wahaSession: targetSession },
           });
           this.logger.log(
-            `✅ Tenant "${main.name}" patched: wahaSession set to ${targetSession}`,
+            `✅ Tenant "${prodTenant.name}" patched: wahaSession set to ${targetSession}`,
           );
-        } else {
-          this.logger.log(
-            `✅ Tenant "${main.name}" already has correct wahaSession (${targetSession})`,
-          );
+          await this.ensureKnowledgeBundle(prodTenant.id);
         }
-        await this.ensureKnowledgeBundle(main.id);
       }
     } catch (err: any) {
       this.logger.error(`❌ Database initialization failed: ${err.message}`);

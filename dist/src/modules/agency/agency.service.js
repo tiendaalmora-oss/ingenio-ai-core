@@ -220,11 +220,23 @@ let AgencyService = AgencyService_1 = class AgencyService {
         ]);
         return { agencies, unassignedTenants };
     }
-    getWahaConfig() {
+    getWahaConfig(tenantId, sessionName) {
+        const isProd = this.isProtectedSession(tenantId, sessionName);
+        if (isProd) {
+            const rawUrl = process.env.WAHA_PROD_URL || process.env.WAHA_API_URL || 'https://waha.ingeniodigital.shop';
+            return {
+                apiUrl: rawUrl.replace(/\/+$/, ''),
+                apiKey: process.env.WAHA_PROD_API_KEY || process.env.WAHA_API_KEY || 'secreto123',
+                webhookUrl: `${process.env.CORE_API_URL || 'https://core.ai.ingeniodigital.shop'}/webhooks/meta`,
+                isProd: true,
+            };
+        }
+        const rawUrl = process.env.WAHA_SANDBOX_URL || process.env.WAHA_API_URL || 'https://waha.ingeniodigital.shop';
         return {
-            apiUrl: process.env.WAHA_API_URL || 'https://waha.ingeniodigital.shop',
-            apiKey: process.env.WAHA_API_KEY || 'secreto123',
+            apiUrl: rawUrl.replace(/\/+$/, ''),
+            apiKey: process.env.WAHA_SANDBOX_API_KEY || process.env.WAHA_API_KEY || 'secreto123',
             webhookUrl: `${process.env.CORE_API_URL || 'https://core.ai.ingeniodigital.shop'}/webhooks/meta`,
+            isProd: false,
         };
     }
     isProtectedSession(tenantId, sessionName) {
@@ -251,7 +263,7 @@ let AgencyService = AgencyService_1 = class AgencyService {
             throw new common_1.NotFoundException('Subcuenta no encontrada.');
         const sessionName = tenant.wahaSession || (await this.ensureTenantWahaSession(tenantId));
         const isProtected = this.isProtectedSession(tenantId, sessionName);
-        const { apiUrl, apiKey } = this.getWahaConfig();
+        const { apiUrl, apiKey } = this.getWahaConfig(tenantId, sessionName);
         try {
             const res = await fetch(`${apiUrl}/api/sessions/${sessionName}`, {
                 headers: { 'X-Api-Key': apiKey, Accept: 'application/json' },
@@ -292,13 +304,14 @@ let AgencyService = AgencyService_1 = class AgencyService {
             };
         }
     }
-    async startSubaccountWaha(tenantId) {
+    async startSubaccountWaha(tenantId, proxyConfig) {
         const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
         if (!tenant)
             throw new common_1.NotFoundException('Subcuenta no encontrada.');
         const sessionName = tenant.wahaSession || (await this.ensureTenantWahaSession(tenantId));
         const isProtected = this.isProtectedSession(tenantId, sessionName);
-        const { apiUrl, apiKey, webhookUrl } = this.getWahaConfig();
+        const { apiUrl, apiKey, webhookUrl, isProd } = this.getWahaConfig(tenantId, sessionName);
+        this.logger.log(`[WAHA] Arrancando sesión "${sessionName}" en ${isProd ? 'PROD' : 'SANDBOX'} (${apiUrl})`);
         const checkRes = await fetch(`${apiUrl}/api/sessions/${sessionName}`, {
             headers: { 'X-Api-Key': apiKey, Accept: 'application/json' },
             signal: AbortSignal.timeout(4000),
@@ -322,6 +335,22 @@ let AgencyService = AgencyService_1 = class AgencyService {
             }
         }
         else {
+            const sessionConfig = {
+                webhooks: [
+                    {
+                        url: webhookUrl,
+                        events: ['session.status', 'message', 'message.any'],
+                    },
+                ],
+            };
+            if (proxyConfig && proxyConfig.server) {
+                sessionConfig.proxy = {
+                    server: proxyConfig.server,
+                    ...(proxyConfig.username && { username: proxyConfig.username }),
+                    ...(proxyConfig.password && { password: proxyConfig.password }),
+                };
+                this.logger.log(`[WAHA] Configurando proxy para sesión ${sessionName}: ${proxyConfig.server}`);
+            }
             const createRes = await fetch(`${apiUrl}/api/sessions`, {
                 method: 'POST',
                 headers: {
@@ -332,14 +361,7 @@ let AgencyService = AgencyService_1 = class AgencyService {
                 body: JSON.stringify({
                     name: sessionName,
                     start: true,
-                    config: {
-                        webhooks: [
-                            {
-                                url: webhookUrl,
-                                events: ['session.status', 'message'],
-                            },
-                        ],
-                    },
+                    config: sessionConfig,
                 }),
             });
             if (!createRes.ok) {
@@ -355,7 +377,7 @@ let AgencyService = AgencyService_1 = class AgencyService {
             throw new common_1.NotFoundException('Subcuenta no encontrada.');
         const sessionName = tenant.wahaSession || (await this.ensureTenantWahaSession(tenantId));
         const isProtected = this.isProtectedSession(tenantId, sessionName);
-        const { apiUrl, apiKey } = this.getWahaConfig();
+        const { apiUrl, apiKey } = this.getWahaConfig(tenantId, sessionName);
         try {
             const res = await fetch(`${apiUrl}/api/${sessionName}/auth/qr`, {
                 headers: { 'X-Api-Key': apiKey },
@@ -411,7 +433,7 @@ let AgencyService = AgencyService_1 = class AgencyService {
         if (!sessionName) {
             return { success: true, message: 'No había sesión configurada.' };
         }
-        const { apiUrl, apiKey } = this.getWahaConfig();
+        const { apiUrl, apiKey } = this.getWahaConfig(tenantId, sessionName);
         await fetch(`${apiUrl}/api/sessions/${sessionName}/logout`, {
             method: 'POST',
             headers: { 'X-Api-Key': apiKey },

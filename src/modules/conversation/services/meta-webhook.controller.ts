@@ -102,6 +102,15 @@ export class MetaWebhookController {
 
           if (!manualText) return;
 
+          // 1b. Si el contenido saliente coincide con un mensaje despachado recientemente por el sistema a este número, ignorar echo
+          if (
+            (toDigits && this.wahaAdapter.isSentBySystemContent(toDigits, manualText)) ||
+            (toRaw && this.wahaAdapter.isSentBySystemContent(toRaw, manualText))
+          ) {
+            this.logger.debug(`[WAHA Echo] Mensaje saliente hacia ${toDigits || toRaw} confirmado como enviado por el sistema por contenido. Ignorando.`);
+            return;
+          }
+
           // 2. Búsqueda exhaustiva del contacto multi-país y multi-formato
           const toWithoutZero = toDigits.startsWith('0') ? toDigits.replace(/^0+/, '') : toDigits;
           const toWith58 = toDigits.startsWith('58') ? toDigits : (toWithoutZero ? `58${toWithoutZero}` : '');
@@ -216,17 +225,45 @@ export class MetaWebhookController {
             }
 
             if (conv) {
-              const recentBotEcho = this.prisma.interaction?.findFirst
-                ? await this.prisma.interaction.findFirst({
+              // Verificación anti-echo en base de datos (ventana de 60s tolerante a formato)
+              const recentOutboundInteractions = this.prisma.interaction?.findMany
+                ? await this.prisma.interaction.findMany({
                     where: {
                       conversationId: conv.id,
                       direction: 'OUTBOUND',
-                      role: 'assistant',
-                      content: manualText,
-                      timestamp: { gte: new Date(Date.now() - 15_000) }
-                    }
+                      timestamp: { gte: new Date(Date.now() - 60_000) }
+                    },
+                    select: { content: true, role: true, type: true },
+                    take: 5,
+                    orderBy: { id: 'desc' }
                   })
-                : null;
+                : [];
+
+              const normManual = manualText
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^\w\s]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+              const recentBotEcho = recentOutboundInteractions.find((inter: any) => {
+                const normDb = (inter.content || '')
+                  .toLowerCase()
+                  .normalize('NFD')
+                  .replace(/[\u0300-\u036f]/g, '')
+                  .replace(/[^\w\s]/g, '')
+                  .replace(/\s+/g, ' ')
+                  .trim();
+                return (
+                  inter.content === manualText ||
+                  normDb === normManual ||
+                  (normDb.length > 20 &&
+                    normManual.length > 20 &&
+                    (normDb.includes(normManual) || normManual.includes(normDb)))
+                );
+              });
+
               if (recentBotEcho) {
                 this.logger.debug(`[WAHA Echo] Mensaje saliente coincide con interacción reciente en DB (${conv.id}). Ignorando.`);
                 return;

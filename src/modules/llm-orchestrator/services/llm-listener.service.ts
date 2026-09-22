@@ -688,6 +688,17 @@ export class LlmListenerService {
               role: 'assistant'
             }
           });
+        } else {
+          // Sincronizar el contenido final sanitizado en el registro TOOL_CALL para consistencia en DB y anti-echo
+          await this.prisma.interaction.updateMany({
+            where: {
+              conversationId: payload.conversationId,
+              direction: 'OUTBOUND',
+              type: 'TOOL_CALL',
+              role: 'assistant',
+            },
+            data: { content: finalContent }
+          }).catch(() => {});
         }
 
         // Siempre emitir el evento para que WhatsApp reciba el mensaje

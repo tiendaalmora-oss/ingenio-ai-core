@@ -518,6 +518,17 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                         }
                     });
                 }
+                else {
+                    await this.prisma.interaction.updateMany({
+                        where: {
+                            conversationId: payload.conversationId,
+                            direction: 'OUTBOUND',
+                            type: 'TOOL_CALL',
+                            role: 'assistant',
+                        },
+                        data: { content: finalContent }
+                    }).catch(() => { });
+                }
                 this.eventEmitter.emit('response.generated', new response_generated_event_1.ResponseGeneratedEvent(payload.tenantId, payload.conversationId, finalContent));
                 if (reglasBot.enableMessageLimit !== false) {
                     const maxMessages = Number(reglasBot.maxBotMessages) || 25;
