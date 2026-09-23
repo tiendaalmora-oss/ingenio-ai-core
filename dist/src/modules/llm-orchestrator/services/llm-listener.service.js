@@ -84,7 +84,24 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 textNorm.includes('kit de') ||
                 textNorm.includes('mega kit') ||
                 textNorm.includes('mas informacion'));
-            if (isAutoResetEnabled) {
+            if (isCampaignTrigger && (conversation.status === 'HANDOFF' || conversation.status === 'PAUSED')) {
+                const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } });
+                const tags = memory?.tags || [];
+                const isExplicitHumanRequest = tags.includes('ASESOR_SOLICITADO') || tags.includes('HANDOFF_HUMANO');
+                if (!isExplicitHumanRequest) {
+                    this.logger.log(`[Campaign Auto-Wake] Conversación ${payload.conversationId} reactivada automáticamente en ACTIVE por nuevo trigger de campaña: "${payload.content}".`);
+                    await this.prisma.conversation.update({
+                        where: { id: payload.conversationId },
+                        data: { status: 'ACTIVE' }
+                    });
+                    conversation.status = 'ACTIVE';
+                }
+                else {
+                    this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en HANDOFF por solicitud explícita de humano previa. Manteniendo bot en pausa.`);
+                    return;
+                }
+            }
+            else if (isAutoResetEnabled) {
                 const resetHours = Number(reglasBot.resetHours) || 24;
                 const resetMs = resetHours * 3600 * 1000;
                 const previousInteraction = this.prisma?.interaction?.findFirst

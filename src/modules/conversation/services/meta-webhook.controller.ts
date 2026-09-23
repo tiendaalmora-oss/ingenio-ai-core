@@ -111,6 +111,28 @@ export class MetaWebhookController {
             return;
           }
 
+          // 1c. Saludos automáticos del dispositivo (ej: Mensaje de Bienvenida de WhatsApp Business en el móvil)
+          // Si el texto saliente es un saludo simple o mensaje de bienvenida automático ("Hola!", "Hola", "Buenas", etc.),
+          // NO debe tratarse como intervención de un operador humano ni pausar el bot.
+          const cleanGreeting = manualText
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^\w\s]/g, '')
+            .trim();
+
+          const isAutoGreeting =
+            /^(hola|buenas|buen dia|buenos dias|buenas tardes|buenas noches|bienvenido|bienvenida)$/i.test(cleanGreeting) ||
+            cleanGreeting === 'hola' ||
+            cleanGreeting === 'hola como estas' ||
+            cleanGreeting.startsWith('gracias por comunicarte') ||
+            cleanGreeting.startsWith('gracias por contactarnos');
+
+          if (isAutoGreeting) {
+            this.logger.log(`[WAHA Outbound] Saludo automático del dispositivo WhatsApp detectado hacia ${toDigits || toRaw} ("${manualText}"). Ignorando para mantener bot activo.`);
+            return;
+          }
+
           // 2. Búsqueda exhaustiva del contacto multi-país y multi-formato
           const toWithoutZero = toDigits.startsWith('0') ? toDigits.replace(/^0+/, '') : toDigits;
           const toWith58 = toDigits.startsWith('58') ? toDigits : (toWithoutZero ? `58${toWithoutZero}` : '');

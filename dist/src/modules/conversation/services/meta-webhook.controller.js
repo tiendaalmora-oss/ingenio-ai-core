@@ -95,6 +95,21 @@ let MetaWebhookController = MetaWebhookController_1 = class MetaWebhookControlle
                         this.logger.debug(`[WAHA Echo] Mensaje saliente hacia ${toDigits || toRaw} confirmado como enviado por el sistema por contenido. Ignorando.`);
                         return;
                     }
+                    const cleanGreeting = manualText
+                        .toLowerCase()
+                        .normalize('NFD')
+                        .replace(/[\u0300-\u036f]/g, '')
+                        .replace(/[^\w\s]/g, '')
+                        .trim();
+                    const isAutoGreeting = /^(hola|buenas|buen dia|buenos dias|buenas tardes|buenas noches|bienvenido|bienvenida)$/i.test(cleanGreeting) ||
+                        cleanGreeting === 'hola' ||
+                        cleanGreeting === 'hola como estas' ||
+                        cleanGreeting.startsWith('gracias por comunicarte') ||
+                        cleanGreeting.startsWith('gracias por contactarnos');
+                    if (isAutoGreeting) {
+                        this.logger.log(`[WAHA Outbound] Saludo automático del dispositivo WhatsApp detectado hacia ${toDigits || toRaw} ("${manualText}"). Ignorando para mantener bot activo.`);
+                        return;
+                    }
                     const toWithoutZero = toDigits.startsWith('0') ? toDigits.replace(/^0+/, '') : toDigits;
                     const toWith58 = toDigits.startsWith('58') ? toDigits : (toWithoutZero ? `58${toWithoutZero}` : '');
                     const orConditions = [
