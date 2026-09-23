@@ -153,7 +153,7 @@ describe('MetaWebhookController (Candado de Enrutamiento WAHA / Meta)', () => {
       // 2. CANDADO CRÍTICO: NO llamar a la IA (receiveMessageService.execute)
       expect(receiveMessageService.execute).not.toHaveBeenCalled();
 
-      // 3. Debe registrar la interacción saliente manual en el CRM
+      // 3. Debe registrar la interacción saliente en el CRM
       expect(prisma.interaction.create).toHaveBeenCalledWith({
         data: {
           conversationId: 'conv-xyz',
@@ -164,15 +164,37 @@ describe('MetaWebhookController (Candado de Enrutamiento WAHA / Meta)', () => {
         },
       });
 
-      // 4. Debe pausar la conversación en HANDOFF
-      expect(prisma.conversation.update).toHaveBeenCalledWith({
-        where: { id: 'conv-xyz' },
+      // 4. Mensajes salientes casuales o de saludo NO pausan automáticamente en HANDOFF
+      expect(prisma.conversation.update).not.toHaveBeenCalledWith(expect.objectContaining({
         data: { status: 'HANDOFF' },
-      });
+      }));
+    });
 
-      // 5. Debe cancelar cualquier mensaje pendiente en cola para esa conversación
-      expect(prisma.pendingOutboundMessage.deleteMany).toHaveBeenCalledWith({
-        where: { conversationId: 'conv-xyz' },
+    it('Candado 4.2b: Mensaje saliente con comando explícito (#stop, #pausa) sí debe pausar en HANDOFF', async () => {
+      const res = createMockRes();
+      const contactMock = { id: 'contact-stop', externalId: '584120000000@c.us', phone: '584120000000' };
+      const convMock = { id: 'conv-stop', contactId: 'contact-stop', status: 'ACTIVE' };
+
+      prisma.contact.findFirst.mockResolvedValue(contactMock);
+      prisma.conversation.findFirst.mockResolvedValue(convMock);
+
+      const body = {
+        event: 'message.any',
+        session: 'sesion-tienda',
+        payload: {
+          fromMe: true,
+          to: '584120000000@c.us',
+          body: '#stop',
+        },
+      };
+
+      await controller.receiveMessage(body, res);
+
+      expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
+      expect(receiveMessageService.execute).not.toHaveBeenCalled();
+      expect(prisma.conversation.update).toHaveBeenCalledWith({
+        where: { id: 'conv-stop' },
+        data: { status: 'HANDOFF' },
       });
     });
 
@@ -275,10 +297,9 @@ describe('MetaWebhookController (Candado de Enrutamiento WAHA / Meta)', () => {
 
       expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
       expect(receiveMessageService.execute).not.toHaveBeenCalled();
-      expect(prisma.conversation.update).toHaveBeenCalledWith({
-        where: { id: 'conv-arg' },
+      expect(prisma.conversation.update).not.toHaveBeenCalledWith(expect.objectContaining({
         data: { status: 'HANDOFF' },
-      });
+      }));
       expect(prisma.interaction.create).toHaveBeenCalledWith({
         data: {
           conversationId: 'conv-arg',
@@ -290,7 +311,7 @@ describe('MetaWebhookController (Candado de Enrutamiento WAHA / Meta)', () => {
       });
     });
 
-    it('Candado 4.7: Mensaje saliente desde el teléfono físico (fromMe: true) con Privacy LID (@lid) debe pausar en HANDOFF', async () => {
+    it('Candado 4.7: Mensaje saliente desde el teléfono físico (fromMe: true) con Privacy LID (@lid) no pausa bot automáticamente', async () => {
       const res = createMockRes();
       const contactMock = { id: 'contact-lid', externalId: '201674652135471@lid', phone: '201674652135471' };
       const convMock = { id: 'conv-lid', contactId: 'contact-lid', status: 'ACTIVE' };
@@ -312,9 +333,17 @@ describe('MetaWebhookController (Candado de Enrutamiento WAHA / Meta)', () => {
 
       expect(res.status).toHaveBeenCalledWith(HttpStatus.OK);
       expect(receiveMessageService.execute).not.toHaveBeenCalled();
-      expect(prisma.conversation.update).toHaveBeenCalledWith({
-        where: { id: 'conv-lid' },
+      expect(prisma.conversation.update).not.toHaveBeenCalledWith(expect.objectContaining({
         data: { status: 'HANDOFF' },
+      }));
+      expect(prisma.interaction.create).toHaveBeenCalledWith({
+        data: {
+          conversationId: 'conv-lid',
+          direction: 'OUTBOUND',
+          type: 'TEXT',
+          content: 'Hola, te respondo al LID',
+          role: 'assistant',
+        },
       });
     });
 

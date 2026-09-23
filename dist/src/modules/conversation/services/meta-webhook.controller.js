@@ -225,7 +225,11 @@ let MetaWebhookController = MetaWebhookController_1 = class MetaWebhookControlle
                                 });
                                 return;
                             }
-                            this.logger.log(`[Mobile Operator Intercept] Operador intervino desde el teléfono para ${toRaw}: "${manualText.substring(0, 45)}...". Pausando bot en HANDOFF.`);
+                            const isExplicitPauseCommand = (textNorm === '#stop' ||
+                                textNorm === '#pausa' ||
+                                textNorm === '#humano' ||
+                                textNorm === '#asesor' ||
+                                textNorm === '#pause');
                             await this.prisma.interaction.create({
                                 data: {
                                     conversationId: conv.id,
@@ -235,34 +239,40 @@ let MetaWebhookController = MetaWebhookController_1 = class MetaWebhookControlle
                                     role: 'assistant',
                                 }
                             });
-                            await this.prisma.conversation.update({
-                                where: { id: conv.id },
-                                data: { status: 'HANDOFF' }
-                            });
-                            const deletedFollowUps = await this.prisma.pendingOutboundMessage.deleteMany({
-                                where: { conversationId: conv.id }
-                            });
-                            if (deletedFollowUps.count > 0) {
-                                this.logger.log(`[Mobile Sync] Cancelados ${deletedFollowUps.count} seguimientos pendientes para conversación ${conv.id}`);
-                            }
-                            try {
-                                const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: contact.id } });
-                                const currentTags = memory?.tags || [];
-                                const updatedTags = Array.from(new Set([...currentTags, 'INTERVENCION_HUMANA', 'ATENCION_MANUAL']));
-                                await this.prisma.businessMemory.upsert({
-                                    where: { contactId: contact.id },
-                                    create: {
-                                        contactId: contact.id,
-                                        leadStatus: 'HANDOFF',
-                                        tags: updatedTags,
-                                    },
-                                    update: {
-                                        leadStatus: 'HANDOFF',
-                                        tags: updatedTags,
-                                    }
+                            if (isExplicitPauseCommand) {
+                                this.logger.log(`[Mobile Operator Intercept] Comando explícito de pausa recibido desde WhatsApp ("${textNorm}") para ${toRaw}. Pausando bot en HANDOFF.`);
+                                await this.prisma.conversation.update({
+                                    where: { id: conv.id },
+                                    data: { status: 'HANDOFF' }
                                 });
+                                const deletedFollowUps = await this.prisma.pendingOutboundMessage.deleteMany({
+                                    where: { conversationId: conv.id }
+                                });
+                                if (deletedFollowUps.count > 0) {
+                                    this.logger.log(`[Mobile Sync] Cancelados ${deletedFollowUps.count} seguimientos pendientes para conversación ${conv.id}`);
+                                }
+                                try {
+                                    const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: contact.id } });
+                                    const currentTags = memory?.tags || [];
+                                    const updatedTags = Array.from(new Set([...currentTags, 'INTERVENCION_HUMANA', 'ATENCION_MANUAL']));
+                                    await this.prisma.businessMemory.upsert({
+                                        where: { contactId: contact.id },
+                                        create: {
+                                            contactId: contact.id,
+                                            leadStatus: 'HANDOFF',
+                                            tags: updatedTags,
+                                        },
+                                        update: {
+                                            leadStatus: 'HANDOFF',
+                                            tags: updatedTags,
+                                        }
+                                    });
+                                }
+                                catch (_) { }
                             }
-                            catch (_) { }
+                            else {
+                                this.logger.log(`[Mobile Outbound Sync] Mensaje saliente registrado en historial para ${toRaw}: "${manualText.substring(0, 45)}...". Bot permanece activo (status=${conv.status}).`);
+                            }
                         }
                     }
                     return;
@@ -275,15 +285,6 @@ let MetaWebhookController = MetaWebhookController_1 = class MetaWebhookControlle
                     return;
                 }
                 tenantId = await this.tenantResolver.resolveFromWahaSession(body.session || 'default');
-                if (body.session && tenantId) {
-                    try {
-                        await this.prisma.tenant.update({
-                            where: { id: tenantId },
-                            data: { wahaSession: body.session }
-                        });
-                    }
-                    catch { }
-                }
                 pushName = payload.notifyName || payload._data?.notifyName || payload.pushName || payload._data?.pushName;
                 const hasMedia = payload.hasMedia || Boolean(payload.media);
                 const media = payload.media || {};

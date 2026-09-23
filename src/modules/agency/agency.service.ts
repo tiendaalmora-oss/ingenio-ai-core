@@ -333,6 +333,8 @@ export class AgencyService {
       signal: AbortSignal.timeout(4000),
     }).catch(() => null);
 
+    let needsCreation = false;
+
     if (checkRes && checkRes.ok) {
       const existing = await checkRes.json();
       if (existing.status === 'WORKING') {
@@ -345,14 +347,27 @@ export class AgencyService {
         };
       }
 
-      // Si está en STOPPED o FAILED, iniciarlo
+      // Si está en STOPPED o FAILED, WAHA WEBJS engine suele tener bloqueos de proceso/perfil.
+      // Limpiar la sesión previa y re-crearla garantiza un Chromium fresco y código QR inmediato.
       if (existing.status === 'STOPPED' || existing.status === 'FAILED') {
-        await fetch(`${apiUrl}/api/sessions/${sessionName}/start`, {
+        this.logger.warn(`[WAHA] Sesión "${sessionName}" en estado ${existing.status}. Purgando y re-creando limpiamente.`);
+        await fetch(`${apiUrl}/api/sessions/${sessionName}/stop`, {
           method: 'POST',
           headers: { 'X-Api-Key': apiKey },
-        });
+        }).catch(() => null);
+
+        await fetch(`${apiUrl}/api/sessions/${sessionName}`, {
+          method: 'DELETE',
+          headers: { 'X-Api-Key': apiKey },
+        }).catch(() => null);
+
+        needsCreation = true;
       }
     } else {
+      needsCreation = true;
+    }
+
+    if (needsCreation) {
       // 2. Crear y arrancar nueva sesión en WAHA
       const sessionConfig: any = {
         webhooks: [
@@ -414,6 +429,39 @@ export class AgencyService {
 
       if (res.status === 422) {
         const status = await this.getSubaccountWahaStatus(tenantId);
+        // Si está en FAILED, STOPPED o NOT_CONFIGURED, auto-reparar la sesión al vuelo
+        if (status.status === 'FAILED' || status.status === 'STOPPED' || status.status === 'NOT_CONFIGURED') {
+          this.logger.log(`[WAHA QR Auto-Heal] Sesión ${sessionName} en estado ${status.status}. Re-iniciando sesión limpia para generar QR.`);
+          await this.startSubaccountWaha(tenantId);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          const retryRes = await fetch(`${apiUrl}/api/${sessionName}/auth/qr`, {
+            headers: { 'X-Api-Key': apiKey },
+            signal: AbortSignal.timeout(6000),
+          }).catch(() => null);
+
+          if (retryRes && retryRes.ok) {
+            const buffer = await retryRes.arrayBuffer();
+            const base64 = Buffer.from(buffer).toString('base64');
+            return {
+              session: sessionName,
+              status: 'SCAN_QR_CODE',
+              qr: `data:image/png;base64,${base64}`,
+              isProtected,
+            };
+          }
+        }
+
+        if (status.status === 'WORKING') {
+          return {
+            session: sessionName,
+            status: 'WORKING',
+            qr: null,
+            isProtected,
+            phone: status.phone,
+            message: 'La sesión ya está conectada y activa en WhatsApp.',
+          };
+        }
+
         return {
           session: sessionName,
           status: status.status,

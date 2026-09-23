@@ -302,9 +302,16 @@ export class MetaWebhookController {
                 return;
               }
 
-              this.logger.log(`[Mobile Operator Intercept] Operador intervino desde el teléfono para ${toRaw}: "${manualText.substring(0, 45)}...". Pausando bot en HANDOFF.`);
+              // Soporte para comandos explícitos de pausa/asesor desde WhatsApp (#stop, #pausa, #humano, #asesor)
+              const isExplicitPauseCommand = (
+                textNorm === '#stop' ||
+                textNorm === '#pausa' ||
+                textNorm === '#humano' ||
+                textNorm === '#asesor' ||
+                textNorm === '#pause'
+              );
 
-              // 1. Guardar la interacción del operador en la conversación
+              // 1. Guardar la interacción del operador/anuncio en la conversación para que se refleje en el CRM
               await this.prisma.interaction.create({
                 data: {
                   conversationId: conv.id,
@@ -315,38 +322,44 @@ export class MetaWebhookController {
                 }
               });
 
-              // 2. Pausar la conversación inmediatamente en HANDOFF
-              await this.prisma.conversation.update({
-                where: { id: conv.id },
-                data: { status: 'HANDOFF' }
-              });
+              if (isExplicitPauseCommand) {
+                this.logger.log(`[Mobile Operator Intercept] Comando explícito de pausa recibido desde WhatsApp ("${textNorm}") para ${toRaw}. Pausando bot en HANDOFF.`);
 
-              // 3. Cancelar de inmediato cualquier seguimiento pendiente para este contacto
-              const deletedFollowUps = await this.prisma.pendingOutboundMessage.deleteMany({
-                where: { conversationId: conv.id }
-              });
-              if (deletedFollowUps.count > 0) {
-                this.logger.log(`[Mobile Sync] Cancelados ${deletedFollowUps.count} seguimientos pendientes para conversación ${conv.id}`);
-              }
-
-              // 4. Actualizar Business Memory del lead con tag de intervención manual
-              try {
-                const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: contact.id } });
-                const currentTags = (memory?.tags as string[]) || [];
-                const updatedTags = Array.from(new Set([...currentTags, 'INTERVENCION_HUMANA', 'ATENCION_MANUAL']));
-                await this.prisma.businessMemory.upsert({
-                  where: { contactId: contact.id },
-                  create: {
-                    contactId: contact.id,
-                    leadStatus: 'HANDOFF',
-                    tags: updatedTags,
-                  },
-                  update: {
-                    leadStatus: 'HANDOFF',
-                    tags: updatedTags,
-                  }
+                // Pausar la conversación inmediatamente en HANDOFF
+                await this.prisma.conversation.update({
+                  where: { id: conv.id },
+                  data: { status: 'HANDOFF' }
                 });
-              } catch (_) {}
+
+                // Cancelar de inmediato cualquier seguimiento pendiente para este contacto
+                const deletedFollowUps = await this.prisma.pendingOutboundMessage.deleteMany({
+                  where: { conversationId: conv.id }
+                });
+                if (deletedFollowUps.count > 0) {
+                  this.logger.log(`[Mobile Sync] Cancelados ${deletedFollowUps.count} seguimientos pendientes para conversación ${conv.id}`);
+                }
+
+                // Actualizar Business Memory del lead con tag de intervención manual
+                try {
+                  const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: contact.id } });
+                  const currentTags = (memory?.tags as string[]) || [];
+                  const updatedTags = Array.from(new Set([...currentTags, 'INTERVENCION_HUMANA', 'ATENCION_MANUAL']));
+                  await this.prisma.businessMemory.upsert({
+                    where: { contactId: contact.id },
+                    create: {
+                      contactId: contact.id,
+                      leadStatus: 'HANDOFF',
+                      tags: updatedTags,
+                    },
+                    update: {
+                      leadStatus: 'HANDOFF',
+                      tags: updatedTags,
+                    }
+                  });
+                } catch (_) {}
+              } else {
+                this.logger.log(`[Mobile Outbound Sync] Mensaje saliente registrado en historial para ${toRaw}: "${manualText.substring(0, 45)}...". Bot permanece activo (status=${conv.status}).`);
+              }
             }
           }
           return; // No procesar con la IA
@@ -364,16 +377,6 @@ export class MetaWebhookController {
         }
 
         tenantId = await this.tenantResolver.resolveFromWahaSession(body.session || 'default');
-
-        // Sincronizar wahaSession en el tenant
-        if (body.session && tenantId) {
-          try {
-            await this.prisma.tenant.update({
-              where: { id: tenantId },
-              data: { wahaSession: body.session }
-            });
-          } catch { /* ignorar */ }
-        }
 
         // Nombre del perfil de WhatsApp
         pushName = payload.notifyName || payload._data?.notifyName || payload.pushName || payload._data?.pushName;

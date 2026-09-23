@@ -13,6 +13,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TenantResolverService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../../shared/database/prisma.service");
+const PROD_MAIN_TENANT_ID = 'dba1c54c-89c6-41e9-ae9d-03613377a5b3';
 let TenantResolverService = TenantResolverService_1 = class TenantResolverService {
     prisma;
     logger = new common_1.Logger(TenantResolverService_1.name);
@@ -20,22 +21,56 @@ let TenantResolverService = TenantResolverService_1 = class TenantResolverServic
         this.prisma = prisma;
     }
     async resolveFromWahaSession(sessionName) {
-        if (!sessionName) {
-            throw new common_1.NotFoundException('WAHA session name is required to resolve tenant');
+        const cleanSession = (sessionName || '').trim();
+        if (!cleanSession || cleanSession === 'default' || cleanSession === 'ferreos') {
+            const prodTenant = await this.prisma.tenant.findFirst({
+                where: {
+                    OR: [
+                        { id: PROD_MAIN_TENANT_ID },
+                        { wahaSession: 'ferreos' }
+                    ]
+                },
+                select: { id: true }
+            });
+            if (prodTenant)
+                return prodTenant.id;
+            return PROD_MAIN_TENANT_ID;
         }
-        const tenant = await this.prisma.tenant.findUnique({
-            where: { wahaSession: sessionName },
+        const exactTenant = await this.prisma.tenant.findUnique({
+            where: { wahaSession: cleanSession },
+            select: { id: true }
         });
-        if (tenant) {
-            return tenant.id;
+        if (exactTenant) {
+            return exactTenant.id;
         }
-        const allTenants = await this.prisma.tenant.findMany({ take: 2 });
-        if (allTenants.length === 1) {
-            this.logger.warn(`No tenant found for wahaSession="${sessionName}". ` +
-                `Falling back to single tenant "${allTenants[0].id}" (wahaSession="${allTenants[0].wahaSession}").`);
-            return allTenants[0].id;
+        if (cleanSession.startsWith('sub_')) {
+            const rawIdPrefix = cleanSession.replace(/^sub_/, '');
+            const tenantByPrefix = await this.prisma.tenant.findFirst({
+                where: {
+                    id: { startsWith: rawIdPrefix.slice(0, 8) }
+                },
+                select: { id: true }
+            });
+            if (tenantByPrefix) {
+                return tenantByPrefix.id;
+            }
         }
-        throw new common_1.NotFoundException(`No tenant found for WAHA session: ${sessionName}`);
+        this.logger.warn(`[TenantResolver] No se encontró tenant exacto para wahaSession="${cleanSession}". Usando cuenta principal de producción por contingencia.`);
+        const fallbackTenant = await this.prisma.tenant.findFirst({
+            where: {
+                OR: [
+                    { id: PROD_MAIN_TENANT_ID },
+                    { wahaSession: 'ferreos' }
+                ]
+            },
+            select: { id: true }
+        });
+        if (fallbackTenant)
+            return fallbackTenant.id;
+        const anyTenant = await this.prisma.tenant.findFirst({ select: { id: true } });
+        if (anyTenant)
+            return anyTenant.id;
+        return PROD_MAIN_TENANT_ID;
     }
 };
 exports.TenantResolverService = TenantResolverService;

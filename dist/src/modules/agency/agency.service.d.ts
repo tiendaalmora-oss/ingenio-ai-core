@@ -234,16 +234,10 @@ export declare class AgencyService {
     }>;
     getSubaccountWahaQr(tenantId: string): Promise<{
         session: string;
-        status: any;
-        qr: null;
-        isProtected: boolean;
-        message: string;
-        error?: undefined;
-    } | {
-        session: string;
         status: string;
         qr: string;
         isProtected: boolean;
+        phone?: undefined;
         message?: undefined;
         error?: undefined;
     } | {
@@ -251,7 +245,24 @@ export declare class AgencyService {
         status: string;
         qr: null;
         isProtected: boolean;
+        phone: any;
+        message: string;
+        error?: undefined;
+    } | {
+        session: string;
+        status: any;
+        qr: null;
+        isProtected: boolean;
+        message: string;
+        phone?: undefined;
+        error?: undefined;
+    } | {
+        session: string;
+        status: string;
+        qr: null;
+        isProtected: boolean;
         error: any;
+        phone?: undefined;
         message?: undefined;
     }>;
     logoutSubaccountWaha(tenantId: string): Promise<{

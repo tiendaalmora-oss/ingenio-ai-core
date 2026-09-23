@@ -230,12 +230,17 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
         if (process.env.WAHA_SESSION) {
             return process.env.WAHA_SESSION;
         }
-        const tenantWithSession = await this.prisma.tenant.findFirst({
-            where: { wahaSession: { not: null } },
+        const prodTenant = await this.prisma.tenant.findFirst({
+            where: {
+                OR: [
+                    { id: 'dba1c54c-89c6-41e9-ae9d-03613377a5b3' },
+                    { wahaSession: 'ferreos' }
+                ]
+            },
             select: { wahaSession: true },
         });
-        if (tenantWithSession?.wahaSession) {
-            return tenantWithSession.wahaSession;
+        if (prodTenant?.wahaSession) {
+            return prodTenant.wahaSession;
         }
         if (this.cachedActiveSession) {
             return this.cachedActiveSession;
@@ -254,7 +259,7 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
         }
         catch {
         }
-        return 'default';
+        return 'ferreos';
     }
     async healContactExternalId(contactId, verifiedJid) {
         if (!contactId || !verifiedJid)

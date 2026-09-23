@@ -1,5 +1,7 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../shared/database/prisma.service';
+
+const PROD_MAIN_TENANT_ID = 'dba1c54c-89c6-41e9-ae9d-03613377a5b3';
 
 @Injectable()
 export class TenantResolverService {
@@ -9,36 +11,70 @@ export class TenantResolverService {
 
   /**
    * Resolves the real tenant.id from a WAHA session string.
-   * For single-tenant setups, falls back to the first available tenant
-   * if the exact wahaSession name is not found (handles dev/prod naming mismatches).
+   * Handles multi-tenant subaccounts ('sub_*'), prod session ('ferreos'),
+   * and resiliently falls back to the main production tenant if session is undefined or 'default'.
    */
   async resolveFromWahaSession(sessionName: string): Promise<string> {
-    if (!sessionName) {
-      throw new NotFoundException('WAHA session name is required to resolve tenant');
+    const cleanSession = (sessionName || '').trim();
+
+    // 1. Si no hay sesión o es 'ferreos' / 'default', asociar a la cuenta principal de producción
+    if (!cleanSession || cleanSession === 'default' || cleanSession === 'ferreos') {
+      const prodTenant = await this.prisma.tenant.findFirst({
+        where: {
+          OR: [
+            { id: PROD_MAIN_TENANT_ID },
+            { wahaSession: 'ferreos' }
+          ]
+        },
+        select: { id: true }
+      });
+      if (prodTenant) return prodTenant.id;
+      return PROD_MAIN_TENANT_ID;
     }
 
-    // 1. Try exact match first
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { wahaSession: sessionName },
+    // 2. Coincidencia exacta por wahaSession (para subcuentas o sesiones personalizadas)
+    const exactTenant = await this.prisma.tenant.findUnique({
+      where: { wahaSession: cleanSession },
+      select: { id: true }
+    });
+    if (exactTenant) {
+      return exactTenant.id;
+    }
+
+    // 3. Si tiene prefijo sub_, intentar buscar por prefijo del id del tenant
+    if (cleanSession.startsWith('sub_')) {
+      const rawIdPrefix = cleanSession.replace(/^sub_/, '');
+      const tenantByPrefix = await this.prisma.tenant.findFirst({
+        where: {
+          id: { startsWith: rawIdPrefix.slice(0, 8) }
+        },
+        select: { id: true }
+      });
+      if (tenantByPrefix) {
+        return tenantByPrefix.id;
+      }
+    }
+
+    // 4. Fallback seguro: jamás arrojar 404 para no perder mensajes de clientes en el webhook
+    this.logger.warn(
+      `[TenantResolver] No se encontró tenant exacto para wahaSession="${cleanSession}". Usando cuenta principal de producción por contingencia.`
+    );
+    const fallbackTenant = await this.prisma.tenant.findFirst({
+      where: {
+        OR: [
+          { id: PROD_MAIN_TENANT_ID },
+          { wahaSession: 'ferreos' }
+        ]
+      },
+      select: { id: true }
     });
 
-    if (tenant) {
-      return tenant.id;
-    }
+    if (fallbackTenant) return fallbackTenant.id;
 
-    // 2. Fallback: in single-tenant deployments the session name in WAHA
-    //    may differ from the stored wahaSession value (e.g. 'default' vs 'ferreos').
-    //    Use the first and only tenant available.
-    const allTenants = await this.prisma.tenant.findMany({ take: 2 });
+    // Si la DB estuviera vacía de la principal, tomar el primer tenant existente
+    const anyTenant = await this.prisma.tenant.findFirst({ select: { id: true } });
+    if (anyTenant) return anyTenant.id;
 
-    if (allTenants.length === 1) {
-      this.logger.warn(
-        `No tenant found for wahaSession="${sessionName}". ` +
-        `Falling back to single tenant "${allTenants[0].id}" (wahaSession="${allTenants[0].wahaSession}").`,
-      );
-      return allTenants[0].id;
-    }
-
-    throw new NotFoundException(`No tenant found for WAHA session: ${sessionName}`);
+    return PROD_MAIN_TENANT_ID;
   }
 }
