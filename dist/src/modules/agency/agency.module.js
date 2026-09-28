@@ -10,6 +10,7 @@ exports.AgencyModule = void 0;
 const common_1 = require("@nestjs/common");
 const agency_controller_1 = require("./agency.controller");
 const agency_service_1 = require("./agency.service");
+const waha_watchdog_service_1 = require("./waha-watchdog.service");
 const prisma_service_1 = require("../../shared/database/prisma.service");
 let AgencyModule = class AgencyModule {
 };
@@ -17,8 +18,8 @@ exports.AgencyModule = AgencyModule;
 exports.AgencyModule = AgencyModule = __decorate([
     (0, common_1.Module)({
         controllers: [agency_controller_1.AgencyController],
-        providers: [agency_service_1.AgencyService, prisma_service_1.PrismaService],
-        exports: [agency_service_1.AgencyService],
+        providers: [agency_service_1.AgencyService, waha_watchdog_service_1.WahaWatchdogService, prisma_service_1.PrismaService],
+        exports: [agency_service_1.AgencyService, waha_watchdog_service_1.WahaWatchdogService],
     })
 ], AgencyModule);
 //# sourceMappingURL=agency.module.js.map

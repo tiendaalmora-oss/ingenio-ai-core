@@ -15,8 +15,22 @@ function PortalHandler() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tenantInfo, setTenantInfo] = useState<any>(null);
+  const [adminWarning, setAdminWarning] = useState<any | null>(null);
 
   const key = searchParams.get('key');
+
+  const proceedLogin = (data: any) => {
+    setLoading(true);
+    setAdminWarning(null);
+    setTenantInfo(data);
+
+    // Guardar credenciales de cliente
+    setCredentials(data.tenantId, data.token, 'client', data.tenantName, data.name);
+
+    setTimeout(() => {
+      router.replace('/conversations');
+    }, 1200);
+  };
 
   useEffect(() => {
     if (!key) {
@@ -30,21 +44,23 @@ function PortalHandler() {
         const res = await api.get(`/auth/magic/${encodeURIComponent(key)}`);
         const data = res.data;
 
-        setTenantInfo(data);
+        // Comprobar si el usuario en este navegador ya tiene rol de administrador de agencia
+        const isAgencyAdmin = typeof window !== 'undefined' && localStorage.getItem('user_role') === 'agency_admin';
 
-        // Guardar credenciales de cliente
-        setCredentials(data.tenantId, data.token, 'client', data.tenantName, data.name);
+        if (isAgencyAdmin) {
+          // Prevenir sobreescritura accidental de la sesión de administrador
+          setTenantInfo(data);
+          setAdminWarning(data);
+          setLoading(false);
+          return;
+        }
 
-        // Pequeño delay de bienvenida antes de redirigir
-        setTimeout(() => {
-          router.replace('/conversations');
-        }, 1200);
+        proceedLogin(data);
       } catch (err: any) {
         setError(
           err?.response?.data?.message ||
             'El enlace de acceso ha expirado o no es válido. Contacta a tu administrador para recibir un nuevo enlace.',
         );
-      } finally {
         setLoading(false);
       }
     };
@@ -62,6 +78,40 @@ function PortalHandler() {
             </div>
             <h2 className="text-xl font-bold text-slate-900">Validando acceso seguro...</h2>
             <p className="text-sm text-slate-500">Conectando con tu espacio de trabajo independiente.</p>
+          </div>
+        ) : adminWarning ? (
+          <div className="py-4 space-y-4 text-left">
+            <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+              <AlertCircle className="w-7 h-7" />
+            </div>
+            <div className="text-center">
+              <h2 className="text-lg font-bold text-slate-900">Sesión de Administrador Activa</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Actualmente estás conectado como Administrador de la Agencia.
+              </p>
+            </div>
+            <div className="p-3.5 bg-amber-50/80 border border-amber-200/60 rounded-xl text-xs text-amber-900 leading-relaxed">
+              <p className="font-semibold mb-1">Subcuenta del enlace: {adminWarning.tenantName}</p>
+              <p>
+                Si continúas en esta ventana, tu sesión de administrador se cerrará y cambiará a este cliente. 
+                Para probar el acceso del cliente sin perder tu sesión principal, te recomendamos abrir este enlace en una <strong>pestaña de incógnito</strong> o en otro navegador.
+              </p>
+            </div>
+            <div className="space-y-2 pt-2">
+              <Link
+                href="/agency"
+                className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition shadow-xs"
+              >
+                Volver a mi Panel de Agencia
+              </Link>
+              <button
+                type="button"
+                onClick={() => proceedLogin(adminWarning)}
+                className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-medium transition"
+              >
+                Ingresar como cliente aquí (cerrar sesión de admin)
+              </button>
+            </div>
           </div>
         ) : error ? (
           <div className="py-6 space-y-4">
