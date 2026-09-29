@@ -7,6 +7,11 @@ export interface WahaMediaPayload {
   filename?: string;
 }
 
+export interface MediaContext {
+  tenantId?: string;
+  session?: string;
+}
+
 @Injectable()
 export class AudioTranscriptionService {
   private readonly logger = new Logger(AudioTranscriptionService.name);
@@ -14,11 +19,11 @@ export class AudioTranscriptionService {
   /**
    * Transcribe un archivo de audio o nota de voz proveniente de WAHA / Meta a texto en lenguaje natural.
    */
-  async transcribe(media: WahaMediaPayload): Promise<string> {
+  async transcribe(media: WahaMediaPayload, context?: MediaContext): Promise<string> {
     try {
-      this.logger.log(`Descargando y procesando audio (mimetype: ${media.mimetype || 'audio/ogg'})...`);
+      this.logger.log(`Descargando y procesando audio (mimetype: ${media.mimetype || 'audio/ogg'}, session: ${context?.session || 'default'})...`);
       
-      const audioBuffer = await this.downloadMediaBuffer(media);
+      const audioBuffer = await this.downloadMediaBuffer(media, context);
       if (!audioBuffer || audioBuffer.length === 0) {
         this.logger.warn('No se pudo obtener el buffer de audio de WAHA.');
         return '🎤 [Nota de voz recibida - audio no legible]';
@@ -40,18 +45,74 @@ export class AudioTranscriptionService {
   }
 
   /**
+   * Resuelve la configuración de conexión de WAHA (URL y API Key) de acuerdo al tenant y sesión.
+   * Aísla la campaña de producción (ferreos / Kits Docentes) en WAHA_PROD_URL y dirige
+   * subcuentas y números de prueba a WAHA_SANDBOX_URL.
+   */
+  private resolveWahaConfig(context?: MediaContext): { apiUrl: string; apiKey: string } {
+    const isProd =
+      context?.tenantId === 'dba1c54c-89c6-41e9-ae9d-03613377a5b3' ||
+      context?.session === 'ferreos';
+
+    if (isProd) {
+      const rawUrl = process.env.WAHA_PROD_URL || process.env.WAHA_API_URL || 'https://waha.ingeniodigital.shop';
+      return {
+        apiUrl: rawUrl.replace(/\/+$/, ''),
+        apiKey: process.env.WAHA_PROD_API_KEY || process.env.WAHA_API_KEY || '',
+      };
+    }
+
+    const rawUrl = process.env.WAHA_SANDBOX_URL || process.env.WAHA_API_URL || 'https://waha.ingeniodigital.shop';
+    return {
+      apiUrl: rawUrl.replace(/\/+$/, ''),
+      apiKey: process.env.WAHA_SANDBOX_API_KEY || process.env.WAHA_API_KEY || '',
+    };
+  }
+
+  /**
+   * Reescribe URLs locales, de contenedor Docker o relativas al endpoint real de WAHA correspondiente.
+   */
+  private resolveWahaMediaUrl(url: string, wahaBaseUrl: string): string {
+    const base = wahaBaseUrl.replace(/\/+$/, '');
+    if (
+      url.startsWith('http://localhost') ||
+      url.startsWith('http://127.0.0.1') ||
+      url.startsWith('http://waha:') ||
+      url.startsWith('http://waha-sandbox:') ||
+      url.startsWith('/')
+    ) {
+      const path = url.startsWith('/') ? url : url.replace(/^https?:\/\/[^\/]+/, '');
+      return `${base}${path}`;
+    }
+
+    // Si la URL apunta al host WAHA opuesto por configuración estática del contenedor WAHA
+    const prodHost = (process.env.WAHA_PROD_URL || 'https://waha.ingeniodigital.shop').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const sandboxHost = (process.env.WAHA_SANDBOX_URL || 'https://waha-sandbox.ingeniodigital.shop').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+
+    try {
+      const parsed = new URL(url);
+      if (parsed.host === prodHost || parsed.host === sandboxHost) {
+        const path = `${parsed.pathname}${parsed.search}`;
+        return `${base}${path}`;
+      }
+    } catch (_) {}
+
+    return url;
+  }
+
+  /**
    * Descarga el archivo de audio desde WAHA (vía URL o base64).
    */
-  private async downloadMediaBuffer(media: WahaMediaPayload): Promise<Buffer | null> {
+  private async downloadMediaBuffer(media: WahaMediaPayload, context?: MediaContext): Promise<Buffer | null> {
     if (media.data) {
       return Buffer.from(media.data, 'base64');
     }
 
     if (media.url) {
-      const resolvedUrl = this.resolveWahaMediaUrl(media.url);
-      this.logger.log(`Descargando audio de WAHA desde: ${resolvedUrl}`);
+      const { apiUrl, apiKey } = this.resolveWahaConfig(context);
+      const resolvedUrl = this.resolveWahaMediaUrl(media.url, apiUrl);
+      this.logger.log(`Descargando audio de WAHA (${context?.session || 'default'}) desde: ${resolvedUrl}`);
 
-      const apiKey = process.env.WAHA_API_KEY || '';
       const headers: Record<string, string> = {};
       if (apiKey) headers['X-Api-Key'] = apiKey;
 
@@ -64,21 +125,6 @@ export class AudioTranscriptionService {
     }
 
     return null;
-  }
-
-  /**
-   * Reescribe URLs locales o relativas al endpoint real de WAHA configurado.
-   */
-  private resolveWahaMediaUrl(url: string): string {
-    const wahaBase = (process.env.WAHA_API_URL || 'http://waha:3000').replace(/\/+$/, '');
-    if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) {
-      const path = url.replace(/^https?:\/\/[^\/]+/, '');
-      return `${wahaBase}${path}`;
-    }
-    if (url.startsWith('/')) {
-      return `${wahaBase}${url}`;
-    }
-    return url;
   }
 
   /**
@@ -112,7 +158,7 @@ export class AudioTranscriptionService {
       );
     }
 
-    // Caso 3: OpenRouter / Gemini Multimodal Audio
+    // Caso 3: OpenRouter / Gemini Multimodal Audio (input_audio nativo)
     if (provider === 'openrouter' || provider === 'gemini' || aiApiKey) {
       try {
         const apiKey = aiApiKey || openaiKey || '';
@@ -122,10 +168,16 @@ export class AudioTranscriptionService {
 
         const model = process.env.AI_MODEL || 'google/gemini-2.5-flash-lite';
         const base64Audio = audioBuffer.toString('base64');
-        const cleanMime = mimetype.split(';')[0] || 'audio/ogg';
-        const dataUrl = `data:${cleanMime};base64,${base64Audio}`;
+        
+        let format = 'ogg';
+        const rawMime = mimetype.toLowerCase();
+        if (rawMime.includes('ogg') || rawMime.includes('opus')) format = 'ogg';
+        else if (rawMime.includes('mp3') || rawMime.includes('mpeg')) format = 'mp3';
+        else if (rawMime.includes('wav')) format = 'wav';
+        else if (rawMime.includes('m4a') || rawMime.includes('mp4') || rawMime.includes('aac')) format = 'aac';
+        else if (rawMime.includes('flac')) format = 'flac';
 
-        this.logger.log(`Transcribiendo audio vía ${provider} (${model})...`);
+        this.logger.log(`Transcribiendo audio vía ${provider} (${model}, formato: ${format})...`);
 
         const response = await fetch(`${baseUrl}/chat/completions`, {
           method: 'POST',
@@ -146,8 +198,11 @@ export class AudioTranscriptionService {
                     text: 'Por favor transcribe fiel y exactamente palabra por palabra lo que dice la persona en este audio en español. Devuelve ÚNICAMENTE el texto que dijo la persona, sin comentarios, sin formato extra y sin comillas.' 
                   },
                   { 
-                    type: 'image_url', 
-                    image_url: { url: dataUrl } 
+                    type: 'input_audio', 
+                    input_audio: {
+                      data: base64Audio,
+                      format: format,
+                    } 
                   }
                 ]
               }
@@ -162,7 +217,8 @@ export class AudioTranscriptionService {
           const text = data.choices?.[0]?.message?.content?.trim();
           if (text && text.length > 0) return text;
         } else {
-          this.logger.warn(`OpenRouter multimodal audio response status: ${response.status}`);
+          const errText = await response.text().catch(() => '');
+          this.logger.warn(`OpenRouter multimodal audio response status: ${response.status} - ${errText}`);
         }
       } catch (e: any) {
         this.logger.warn(`Fallback multimodal audio error: ${e.message}`);

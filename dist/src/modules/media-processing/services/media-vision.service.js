@@ -11,10 +11,10 @@ exports.MediaVisionService = void 0;
 const common_1 = require("@nestjs/common");
 let MediaVisionService = MediaVisionService_1 = class MediaVisionService {
     logger = new common_1.Logger(MediaVisionService_1.name);
-    async analyzeImage(media, caption) {
+    async analyzeImage(media, caption, context) {
         try {
-            this.logger.log(`Descargando y analizando imagen visualmente (mimetype: ${media.mimetype || 'image/jpeg'})...`);
-            const base64Data = await this.downloadImageBase64(media);
+            this.logger.log(`Descargando y analizando imagen visualmente (mimetype: ${media.mimetype || 'image/jpeg'}, session: ${context?.session || 'default'})...`);
+            const base64Data = await this.downloadImageBase64(media, context);
             if (!base64Data) {
                 this.logger.warn('No se pudo obtener la imagen en base64 de WAHA.');
                 return caption ? `📸 [Imagen adjunta con texto]: "${caption}"` : '📸 [El usuario adjuntó una imagen]';
@@ -32,14 +32,52 @@ let MediaVisionService = MediaVisionService_1 = class MediaVisionService {
                 : '📸 [El usuario envió una imagen o captura de pantalla]';
         }
     }
-    async downloadImageBase64(media) {
+    resolveWahaConfig(context) {
+        const isProd = context?.tenantId === 'dba1c54c-89c6-41e9-ae9d-03613377a5b3' ||
+            context?.session === 'ferreos';
+        if (isProd) {
+            const rawUrl = process.env.WAHA_PROD_URL || process.env.WAHA_API_URL || 'https://waha.ingeniodigital.shop';
+            return {
+                apiUrl: rawUrl.replace(/\/+$/, ''),
+                apiKey: process.env.WAHA_PROD_API_KEY || process.env.WAHA_API_KEY || '',
+            };
+        }
+        const rawUrl = process.env.WAHA_SANDBOX_URL || process.env.WAHA_API_URL || 'https://waha.ingeniodigital.shop';
+        return {
+            apiUrl: rawUrl.replace(/\/+$/, ''),
+            apiKey: process.env.WAHA_SANDBOX_API_KEY || process.env.WAHA_API_KEY || '',
+        };
+    }
+    resolveWahaMediaUrl(url, wahaBaseUrl) {
+        const base = wahaBaseUrl.replace(/\/+$/, '');
+        if (url.startsWith('http://localhost') ||
+            url.startsWith('http://127.0.0.1') ||
+            url.startsWith('http://waha:') ||
+            url.startsWith('http://waha-sandbox:') ||
+            url.startsWith('/')) {
+            const path = url.startsWith('/') ? url : url.replace(/^https?:\/\/[^\/]+/, '');
+            return `${base}${path}`;
+        }
+        const prodHost = (process.env.WAHA_PROD_URL || 'https://waha.ingeniodigital.shop').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+        const sandboxHost = (process.env.WAHA_SANDBOX_URL || 'https://waha-sandbox.ingeniodigital.shop').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+        try {
+            const parsed = new URL(url);
+            if (parsed.host === prodHost || parsed.host === sandboxHost) {
+                const path = `${parsed.pathname}${parsed.search}`;
+                return `${base}${path}`;
+            }
+        }
+        catch (_) { }
+        return url;
+    }
+    async downloadImageBase64(media, context) {
         if (media.data) {
             return media.data;
         }
         if (media.url) {
-            const resolvedUrl = this.resolveWahaMediaUrl(media.url);
-            this.logger.log(`Descargando imagen de WAHA desde: ${resolvedUrl}`);
-            const apiKey = process.env.WAHA_API_KEY || '';
+            const { apiUrl, apiKey } = this.resolveWahaConfig(context);
+            const resolvedUrl = this.resolveWahaMediaUrl(media.url, apiUrl);
+            this.logger.log(`Descargando imagen de WAHA (${context?.session || 'default'}) desde: ${resolvedUrl}`);
             const headers = {};
             if (apiKey)
                 headers['X-Api-Key'] = apiKey;
@@ -51,17 +89,6 @@ let MediaVisionService = MediaVisionService_1 = class MediaVisionService {
             return Buffer.from(arrayBuffer).toString('base64');
         }
         return null;
-    }
-    resolveWahaMediaUrl(url) {
-        const wahaBase = (process.env.WAHA_API_URL || 'http://waha:3000').replace(/\/+$/, '');
-        if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) {
-            const path = url.replace(/^https?:\/\/[^\/]+/, '');
-            return `${wahaBase}${path}`;
-        }
-        if (url.startsWith('/')) {
-            return `${wahaBase}${url}`;
-        }
-        return url;
     }
     async callVisionModel(dataUrl, caption) {
         const provider = (process.env.AI_PROVIDER ?? 'openai').toLowerCase();

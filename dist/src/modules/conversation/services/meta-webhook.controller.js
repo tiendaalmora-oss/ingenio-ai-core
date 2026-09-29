@@ -291,13 +291,13 @@ let MetaWebhookController = MetaWebhookController_1 = class MetaWebhookControlle
                 const mimetype = (media.mimetype || payload._data?.mimetype || '').toLowerCase();
                 const messageType = (payload.type || '').toLowerCase();
                 if (hasMedia && (mimetype.startsWith('audio/') || messageType === 'ptt' || messageType === 'audio')) {
-                    this.logger.log(`Procesando nota de voz entrante de ${contactId}...`);
-                    content = await this.audioTranscriptionService.transcribe(media);
+                    this.logger.log(`Procesando nota de voz entrante de ${contactId} (session: ${body.session || 'default'}, tenant: ${tenantId})...`);
+                    content = await this.audioTranscriptionService.transcribe(media, { tenantId, session: body.session });
                 }
                 else if (hasMedia && (mimetype.startsWith('image/') || messageType === 'image')) {
-                    this.logger.log(`Procesando imagen entrante de ${contactId}...`);
+                    this.logger.log(`Procesando imagen entrante de ${contactId} (session: ${body.session || 'default'}, tenant: ${tenantId})...`);
                     const caption = payload.body || payload.caption || '';
-                    content = await this.mediaVisionService.analyzeImage(media, caption);
+                    content = await this.mediaVisionService.analyzeImage(media, caption, { tenantId, session: body.session });
                 }
                 else {
                     content = payload.body || '';
@@ -317,10 +317,10 @@ let MetaWebhookController = MetaWebhookController_1 = class MetaWebhookControlle
                 tenantId = defaultTenant?.id || 'dba1c54c-89c6-41e9-ae9d-03613377a5b3';
                 const attachment = messaging.message?.attachments?.[0];
                 if (attachment?.type === 'audio') {
-                    content = await this.audioTranscriptionService.transcribe({ url: attachment.payload?.url });
+                    content = await this.audioTranscriptionService.transcribe({ url: attachment.payload?.url }, { tenantId });
                 }
                 else if (attachment?.type === 'image') {
-                    content = await this.mediaVisionService.analyzeImage({ url: attachment.payload?.url }, messaging.message?.text);
+                    content = await this.mediaVisionService.analyzeImage({ url: attachment.payload?.url }, messaging.message?.text, { tenantId });
                 }
                 else {
                     content = messaging.message?.text;
