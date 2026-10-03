@@ -12,6 +12,10 @@ function sanitizeUserFacingResponse(rawContent) {
     }
     text = text.replace(/<(?:thought|reasoning|scratchpad|inner_monologue)>[\s\S]*?<\/(?:thought|reasoning|scratchpad|inner_monologue)>/gi, '');
     text = text.replace(/\[(?:SYSTEM|STATE|THOUGHT|PENSAMIENTO|TOOL CALLS|HERRAMIENTAS|ACTION|ACCION|PLAN|REASONING)\][\s\S]*?(?=\[(?:FINAL RESPONSE|RESPUESTA FINAL|RESPONSE|RESPUESTA)\]|$)/gi, '');
+    text = text.replace(/\[?(?:METADATO INTERNO DEL SISTEMA\s*-\s*|SISTEMA INTERNO\s*-\s*)?ESTADO DEL EMBUDO[^\]\n]*\]?:?/gi, '');
+    text = text.replace(/^[ \t]*(?:✅|⏳|\u2705|\u23f3)?\s*(?:Estado\s+)?Paso\s+\d+[:\s—\-]*(?:COMPLETADO|PENDIENTE)[^\n]*(?:\r?\n|$)/gim, '');
+    text = text.replace(/^[ \t]*(?:⏳|🟢)?\s*CLIENTE\s+(?:CALIFICADO|EN ETAPA|CONFIRMADO|EN ESPERA|REGISTRADO)[^\n]*(?:\r?\n|$)/gim, '');
+    text = text.replace(/^[ \t]*🛑\s*(?:INSTRUCCI[OÓ]N|CONTROL INTERNO|CONFIDENCIAL|PROHIBIDO)(?:\s+CR[IÍ]TICA)?:?[^\n]*(?:\r?\n|$)/gim, '');
     const quotedMessageMatch = text.match(/(?:The (?:first|next|welcome) message (?:in this funnel )?is:?|Response:?)\s*["“]([¡¿A-ZÁÉÍÓÚ][\s\S]+?)["”]/i);
     if (quotedMessageMatch && quotedMessageMatch[1]) {
         text = quotedMessageMatch[1].trim();

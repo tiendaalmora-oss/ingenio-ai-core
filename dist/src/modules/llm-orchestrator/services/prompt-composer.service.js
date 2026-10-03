@@ -31,6 +31,7 @@ let PromptComposerService = class PromptComposerService {
 - Respeta estrictamente los guiones, textos, ofertas y emojis configurados en tu base de conocimiento KOS.
 - 🛑 CERO MONÓLOGO O EXPLICACIONES EN INGLÉS: NUNCA escribas pensamientos internos, notas de planificación o frases en inglés como "Initialize a new conversation...", "The first message is...", "I should also update the business memory...". Tu respuesta debe contener ÚNICAMENTE el texto en español final que recibirá el cliente en WhatsApp, sin envolverlo en comillas dobles externas.
 - 🛑 PROHIBIDO ESCRIBIR LLAMADAS DE HERRAMIENTAS EN EL TEXTO: NUNCA escribas sintaxis interna de herramientas como "call:update_business_memory..." o bloques entre llaves en tu respuesta de texto. Las herramientas se ejecutan de forma invisible a través de la API, NUNCA redactándolas como texto para el cliente.
+- 🛑 CERO FILTRACIÓN DE METADATOS O ESTADOS DEL EMBUDO: NUNCA escribas frases de control de pasos como "Paso 1 COMPLETADO", "Paso 2 PENDIENTE", "Estado Paso...", ni reproduzcas las etiquetas de estado del embudo en tu mensaje. El cliente solo debe recibir la conversación humana y el guion comercial.
 - 🛑 REGLA ESTRICTA DE COMPROBANTES HISTÓRICOS:
   * Los comprobantes de pago, imágenes o referencias bancarias que aparezcan en mensajes anteriores del historial corresponden a transacciones pasadas ya entregadas y archivadas.
   * NUNCA envíes felicitaciones ni confirmaciones de pago ("Ya registramos tu comprobante...", "En breves minutos te entregamos tu acceso...") a menos que el mensaje entrante ACTUAL del usuario contenga un nuevo comprobante recién enviado. Si el usuario está enviando una pregunta, consulta o solicitud de compra, responde exclusivamente a su mensaje actual.
@@ -341,11 +342,14 @@ ${ruleText}
             recentInboundText.includes('combo') || recentInboundText.includes('otro kit') ||
             recentInboundText.includes('otra materia');
         const isRepurchaseOrNewInquiry = isPaid && hasBuyOrProductIntent && !isSupportInquiry;
-        let stateLines = ['[ESTADO DEL EMBUDO - LEE ESTO ANTES DE RESPONDER]:'];
-        stateLines.push(paso1Done ? '✅ Paso 1 COMPLETADO — Calificación inicial ya realizada.' : '⏳ Paso 1 PENDIENTE — Calificación inicial.');
-        stateLines.push(paso2Done ? '✅ Paso 2 COMPLETADO — Presentación del producto ya enviada.' : '⏳ Paso 2 PENDIENTE — Presentación del producto.');
-        stateLines.push(paso3Done ? '✅ Paso 3 COMPLETADO — Oferta y precio ya enviados.' : '⏳ Paso 3 PENDIENTE — Oferta y precio.');
-        stateLines.push(paso4Done ? '✅ Paso 4 COMPLETADO — Datos de pago ya entregados.' : '⏳ Paso 4 PENDIENTE — Datos de pago.');
+        let stateLines = [
+            '[METADATO INTERNO DEL SISTEMA - ESTADO DEL EMBUDO]:',
+            '🛑 CONFIDENCIAL / PROHIBIDO CITAR AL CLIENTE: Las siguientes líneas son notas internas del CRM para tu control de flujo. JAMÁS las transcribas, copies ni menciones en tu mensaje al cliente.',
+        ];
+        stateLines.push(paso1Done ? 'Estado Paso 1: COMPLETADO (Calificación inicial ya realizada).' : 'Estado Paso 1: PENDIENTE (Calificación inicial).');
+        stateLines.push(paso2Done ? 'Estado Paso 2: COMPLETADO (Presentación del producto ya enviada).' : 'Estado Paso 2: PENDIENTE (Presentación del producto).');
+        stateLines.push(paso3Done ? 'Estado Paso 3: COMPLETADO (Oferta y precio ya enviados).' : 'Estado Paso 3: PENDIENTE (Oferta y precio).');
+        stateLines.push(paso4Done ? 'Estado Paso 4: COMPLETADO (Datos de pago ya entregados).' : 'Estado Paso 4: PENDIENTE (Datos de pago).');
         let instruction = '';
         if (isRepurchaseOrNewInquiry) {
             if (paso4Done) {

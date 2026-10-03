@@ -54,4 +54,34 @@ Excelente! Para continuar, por favor, indícame tu nombre completo y correo elec
     expect(cleaned).toContain('Aquí tienes el detalle:');
     expect(cleaned).toContain('¿Qué te parece?');
   });
+
+  it('should strip leaked funnel state tracking lines from LLM output', () => {
+    const raw = `✅ Paso 1 COMPLETADO — Calificación inicial ya realizada.
+⏳ Paso 2 PENDIENTE — Presentación del producto.
+⏳ Paso 3 PENDIENTE — Oferta y precio.
+⏳ Paso 4 PENDIENTE — Datos de pago.
+
+¡Excelente, profe! Justo para tu nivel tenemos todo preparado. 👏🇻🇪`;
+
+    const cleaned = sanitizeUserFacingResponse(raw);
+    expect(cleaned).not.toContain('Paso 1 COMPLETADO');
+    expect(cleaned).not.toContain('Paso 2 PENDIENTE');
+    expect(cleaned).not.toContain('Paso 3 PENDIENTE');
+    expect(cleaned).not.toContain('Paso 4 PENDIENTE');
+    expect(cleaned).toContain('¡Excelente, profe! Justo para tu nivel tenemos todo preparado. 👏🇻🇪');
+  });
+
+  it('should preserve legitimate marketing content that mentions "Paso a Paso" and checkmarks', () => {
+    const raw = `🧪🔥 MEGA KIT DOCENTE DE QUÍMICA · VENEZUELA 🇻🇪🔥🧪
+
+📁 TODO LO QUE RECIBES EN WORD (.docx) 100% EDITABLE:
+✅ Evaluaciones de 3°, 4° y 5° Año (+ Módulo Extra 1° y 2°) 📝
+✅ Versión Profesor Resuelta Paso a Paso (Escala oficial 20 Puntos) ⏱️
+✅ Planificaciones MPPE de los 3 Momentos Pedagógicos 📋`;
+
+    const cleaned = sanitizeUserFacingResponse(raw);
+    expect(cleaned).toContain('Versión Profesor Resuelta Paso a Paso');
+    expect(cleaned).toContain('✅ Evaluaciones de 3°, 4° y 5° Año');
+    expect(cleaned).toContain('✅ Planificaciones MPPE');
+  });
 });

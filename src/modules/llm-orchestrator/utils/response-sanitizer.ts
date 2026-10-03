@@ -23,6 +23,12 @@ export function sanitizeUserFacingResponse(rawContent: string): string {
   // 4. Eliminar bloques internos tipo pseudo-tags como [SYSTEM], [STATE], [THOUGHT], [TOOL CALLS], [ACTION], etc.
   text = text.replace(/\[(?:SYSTEM|STATE|THOUGHT|PENSAMIENTO|TOOL CALLS|HERRAMIENTAS|ACTION|ACCION|PLAN|REASONING)\][\s\S]*?(?=\[(?:FINAL RESPONSE|RESPUESTA FINAL|RESPONSE|RESPUESTA)\]|$)/gi, '');
 
+  // 4.1 Eliminar líneas y bloques filtrados de estado interno del embudo o instrucciones del sistema
+  text = text.replace(/\[?(?:METADATO INTERNO DEL SISTEMA\s*-\s*|SISTEMA INTERNO\s*-\s*)?ESTADO DEL EMBUDO[^\]\n]*\]?:?/gi, '');
+  text = text.replace(/^[ \t]*(?:✅|⏳|\u2705|\u23f3)?\s*(?:Estado\s+)?Paso\s+\d+[:\s—\-]*(?:COMPLETADO|PENDIENTE)[^\n]*(?:\r?\n|$)/gim, '');
+  text = text.replace(/^[ \t]*(?:⏳|🟢)?\s*CLIENTE\s+(?:CALIFICADO|EN ETAPA|CONFIRMADO|EN ESPERA|REGISTRADO)[^\n]*(?:\r?\n|$)/gim, '');
+  text = text.replace(/^[ \t]*🛑\s*(?:INSTRUCCI[OÓ]N|CONTROL INTERNO|CONFIDENCIAL|PROHIBIDO)(?:\s+CR[IÍ]TICA)?:?[^\n]*(?:\r?\n|$)/gim, '');
+
   // 5. Si el modelo mezcló monólogo de planificación en inglés con el mensaje real entre comillas
   // Ej: `Initialize a new conversation... The first message is: "¡Hola, profe! ... 👇" I should also update...`
   const quotedMessageMatch = text.match(/(?:The (?:first|next|welcome) message (?:in this funnel )?is:?|Response:?)\s*["“]([¡¿A-ZÁÉÍÓÚ][\s\S]+?)["”]/i);
