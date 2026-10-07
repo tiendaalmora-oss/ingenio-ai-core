@@ -28,8 +28,10 @@ import {
   UserPlus,
   Download,
   Flame,
-  CheckCircle2
+  CheckCircle2,
+  BadgeDollarSign
 } from 'lucide-react';
+import Link from 'next/link';
 
 const PAGE_SIZE = 100;
 
@@ -146,6 +148,13 @@ export default function CrmPage() {
         description="Seguimiento visual del embudo de ventas, calificación con IA y gestión de clientes."
         actions={
           <div className="flex items-center gap-2">
+            <Link
+              href="/sales"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 shadow-xs transition"
+            >
+              <BadgeDollarSign className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Ventas del Día</span>
+            </Link>
             <button
               onClick={handleExportCSV}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-xs transition"

@@ -58,12 +58,13 @@ export class BusinessStudioService {
   getMenu() {
     return [
       { id: 'dashboard', title: 'Dashboard', icon: 'LayoutDashboard', route: '/dashboard', enabled: true, order: 1 },
-      { id: 'business-studio', title: 'Business Studio', icon: 'Briefcase', route: '/business-studio', enabled: true, order: 2 },
+      { id: 'sales', title: 'Ventas del Día', icon: 'BadgeDollarSign', route: '/sales', enabled: true, order: 2 },
       { id: 'crm', title: 'CRM', icon: 'Users', route: '/crm', enabled: true, order: 3 },
-      { id: 'conversations', title: 'Conversations', icon: 'MessageSquare', route: '/conversations', enabled: true, order: 4 },
-      { id: 'memory', title: 'Memory', icon: 'Brain', route: '/memory', enabled: true, order: 5 },
-      { id: 'analytics', title: 'Analytics', icon: 'BarChart', route: '/analytics', enabled: true, order: 6 },
-      { id: 'settings', title: 'Settings', icon: 'Settings', route: '/settings', enabled: true, order: 7 }
+      { id: 'business-studio', title: 'Business Studio', icon: 'Briefcase', route: '/business-studio', enabled: true, order: 4 },
+      { id: 'conversations', title: 'Conversations', icon: 'MessageSquare', route: '/conversations', enabled: true, order: 5 },
+      { id: 'memory', title: 'Memory', icon: 'Brain', route: '/memory', enabled: true, order: 6 },
+      { id: 'analytics', title: 'Analytics', icon: 'BarChart', route: '/analytics', enabled: true, order: 7 },
+      { id: 'settings', title: 'Settings', icon: 'Settings', route: '/settings', enabled: true, order: 8 }
     ];
   }
 

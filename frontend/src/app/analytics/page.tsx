@@ -22,7 +22,8 @@ import {
   Tag,
   MessageSquare,
   BarChart3,
-  Calendar
+  Calendar,
+  BadgeDollarSign
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -83,15 +84,22 @@ export default function AnalyticsPage() {
         actions={
           <div className="flex items-center gap-2">
             <Link
+              href="/sales"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition shadow-xs"
+            >
+              <BadgeDollarSign className="w-3.5 h-3.5 text-emerald-600" />
+              Tablero de Ventas
+            </Link>
+            <Link
               href="/crm"
-              className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition shadow-sm"
+              className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition shadow-xs"
             >
               Ver Leads en CRM
             </Link>
             <button
               onClick={() => refetch()}
               disabled={isFetching}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition shadow-sm disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition shadow-xs disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
               Actualizar

@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useUiStore } from '../store/ui.store';
 import {
   LayoutDashboard,
+  BadgeDollarSign,
   Briefcase,
   Users,
   MessageSquare,
@@ -21,6 +22,7 @@ import { useAuthStore } from '../store/auth.store';
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard,
+  BadgeDollarSign,
   Briefcase,
   Users,
   MessageSquare,
