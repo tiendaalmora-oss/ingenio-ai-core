@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { normalizeProductTag } from '../../shared/utils/product-tag.util';
 
 @Injectable()
 export class KnowledgeBundleComposer {
@@ -70,6 +71,8 @@ export class KnowledgeBundleComposer {
            ? raw.productos.map((p: any) => ({
                id: p.id,
                nombre: p.nombre || p.name || '',
+               precio: p.precio || p.price || '',
+               tag: p.tag || normalizeProductTag(p.nombre || p.name || ''),
                embudoVenta: p.embudoVenta || p.secuenciaVenta || p.descripcion || p.description || '',
                baseConocimiento: p.baseConocimiento || p.detallesTecnicos || '',
                categoria: p.categoria || p.category || '',

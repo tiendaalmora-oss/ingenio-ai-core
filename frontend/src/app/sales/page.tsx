@@ -27,9 +27,11 @@ import {
   ShieldCheck,
   Building2,
   Clock,
-  Sparkles
+  Sparkles,
+  User
 } from 'lucide-react';
 import Link from 'next/link';
+import LeadDetailDrawer from '@/features/crm/LeadDetailDrawer';
 
 interface SaleItem {
   id: string;
@@ -92,6 +94,7 @@ export default function SalesDashboardPage() {
   const [selectedProduct, setSelectedProduct] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [activeSaleModal, setActiveSaleModal] = useState<SaleItem | null>(null);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
 
   // Calcular parámetros de fecha según el preset
   const dateParams = useMemo(() => {
@@ -648,14 +651,14 @@ export default function SalesDashboardPage() {
                               </button>
                             )}
 
-                            <Link
-                              href={`/crm`}
-                              title="Ver en CRM"
-                              className="px-2 py-1 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 rounded text-xs font-semibold flex items-center gap-1 transition"
+                            <button
+                              onClick={() => setSelectedLeadId(sale.id)}
+                              title="Abrir ficha del cliente en CRM para editar etiquetas, anular o corregir venta"
+                              className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-xs font-semibold flex items-center gap-1 transition"
                             >
-                              <ExternalLink className="w-3 h-3 text-gray-500" />
-                              Lead
-                            </Link>
+                              <User className="w-3 h-3 text-blue-600" />
+                              Ficha / Corregir
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -758,6 +761,12 @@ export default function SalesDashboardPage() {
           </div>
         </div>
       )}
+
+      {/* ── DRAWER DE DETALLE DEL LEAD PARA CORRECCIONES EN VIVO ─────────────── */}
+      <LeadDetailDrawer
+        leadId={selectedLeadId}
+        onClose={() => setSelectedLeadId(null)}
+      />
     </PageContainer>
   );
 }
