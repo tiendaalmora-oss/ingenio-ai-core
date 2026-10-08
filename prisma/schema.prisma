@@ -62,6 +62,7 @@ model Tenant {
   knowledgeBundle      KnowledgeBundle?
   currentBundleVersion String?
   funnels              Funnel[]
+  campaigns            Campaign[]
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @default(now()) @updatedAt
 }
@@ -94,6 +95,7 @@ model Contact {
   conversations    Conversation[]
   memory           BusinessMemory?
   tasks            Task[]
+  campaignItems    CampaignItem[]
 
   @@unique([tenantId, phoneNormalized])
 }
@@ -214,6 +216,48 @@ model IncomingMessageFailure {
   payload   Json
   error     String
   createdAt DateTime @default(now())
+}
+
+model Campaign {
+  id                  String         @id @default(uuid())
+  tenantId            String
+  tenant              Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name                String
+  channel             String         @default("WHATSAPP") // WHATSAPP, EMAIL, BOTH
+  status              String         @default("DRAFT") // DRAFT, SCHEDULED, RUNNING, PAUSED, COMPLETED, CANCELLED
+  targetFilters       Json?          // { tags: string[], product: string, leadStatus: string }
+  totalRecipients     Int            @default(0)
+  sentCount           Int            @default(0)
+  failedCount         Int            @default(0)
+  messageTemplate     String
+  mediaUrl            String?
+  mediaType           String?        // IMAGE, DOCUMENT
+  mediaFilename       String?
+  subject             String?        // For email
+  dripIntervalSeconds Int            @default(30) // Anti-ban rate limit
+  botResponseMode     String         @default("AI_CONTEXT") // AI_CONTEXT, HANDOFF
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  items               CampaignItem[]
+}
+
+model CampaignItem {
+  id              String    @id @default(uuid())
+  campaignId      String
+  campaign        Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactId       String
+  contact         Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  recipientPhone  String?
+  recipientEmail  String?
+  recipientName   String?
+  renderedMessage String?
+  status          String    @default("PENDING") // PENDING, SENDING, SENT, FAILED
+  errorMessage    String?
+  sentAt          DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([campaignId, status])
 }
 
 

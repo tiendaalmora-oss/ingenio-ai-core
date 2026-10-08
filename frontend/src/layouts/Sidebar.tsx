@@ -17,6 +17,7 @@ import {
   X,
   Building2,
   LogOut,
+  Megaphone,
 } from 'lucide-react';
 import { useAuthStore } from '../store/auth.store';
 
@@ -30,6 +31,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   BarChart,
   Settings,
   Building2,
+  Megaphone,
 };
 
 interface MenuItem {
