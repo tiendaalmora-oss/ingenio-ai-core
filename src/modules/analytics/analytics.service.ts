@@ -117,9 +117,22 @@ function parseAmount(numStr: string): number {
 function parseReceiptDetails(content: string) {
   let bank = 'Pago Móvil / Transferencia';
   let reference: string | null = null;
-  let amount = 7250;
+  let amount = 0;
   let currency: 'BS' | 'USD' = 'BS';
   let receiptDate: string | null = null;
+
+  const upperContent = (content || '').toUpperCase();
+  if (
+    upperContent.includes('ZELLE') ||
+    upperContent.includes('ZINLI') ||
+    upperContent.includes('BINANCE') ||
+    upperContent.includes('PAYPAL') ||
+    upperContent.includes('USDT') ||
+    upperContent.includes('USD') ||
+    (content || '').includes('$')
+  ) {
+    currency = 'USD';
+  }
 
   const bankMatch = content.match(/Banco:\s*([^|\n]+)/i);
   if (bankMatch) bank = bankMatch[1].trim();
@@ -469,14 +482,26 @@ export class AnalyticsService {
       .map((p) => (p.nombre || '').trim())
       .filter(Boolean);
 
+    let defaultTenantPrice = 0;
+    let defaultTenantCurrency: 'BS' | 'USD' = 'BS';
+
     const productPricesMap: Record<string, { price: number; currency: 'BS' | 'USD' }> = {};
     for (const p of registeredProducts) {
       const name = (p.nombre || '').trim();
-      const priceStr = p.precio || '';
+      const priceStr = (p.precio || '').toString();
       const num = parseAmount(priceStr);
-      const cur: 'BS' | 'USD' = priceStr.includes('$') || priceStr.toLowerCase().includes('usd') ? 'USD' : 'BS';
+      const isUsd = priceStr.includes('$') || 
+                    priceStr.toLowerCase().includes('usd') || 
+                    priceStr.toLowerCase().includes('usdt');
+      const cur: 'BS' | 'USD' = isUsd ? 'USD' : 'BS';
+
+      if (num > 0 && defaultTenantPrice === 0) {
+        defaultTenantPrice = num;
+        defaultTenantCurrency = cur;
+      }
+
       if (name) {
-        productPricesMap[name.toLowerCase()] = { price: num || 7250, currency: cur };
+        productPricesMap[name.toLowerCase()] = { price: num, currency: cur };
       }
     }
 
@@ -591,10 +616,12 @@ export class AnalyticsService {
         if (matchedCatalog && matchedCatalog.price > 0) {
           amount = matchedCatalog.price;
           currency = matchedCatalog.currency;
+        } else if (defaultTenantPrice > 0) {
+          amount = defaultTenantPrice;
+          currency = defaultTenantCurrency;
         } else {
-          // Valor estándar por defecto
-          amount = 7250;
-          currency = 'BS';
+          amount = 0;
+          currency = defaultTenantCurrency;
         }
       }
 

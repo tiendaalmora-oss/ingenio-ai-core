@@ -380,15 +380,27 @@ export default function SalesDashboardPage() {
         <div className="space-y-6">
           {/* ── TOP KPI CARDS ─────────────────────────────────────────────────── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Total Facturado en Bs */}
+            {/* Total Facturado */}
             <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  Total Facturado (Bs)
+                  Total Facturado
                 </p>
-                <h3 className="text-2xl font-black text-green-600 mt-1">
-                  {summary?.totalRevenueBs.toLocaleString('es-VE')} Bs
-                </h3>
+                <div className="flex flex-col gap-0.5 mt-1">
+                  {summary?.totalRevenueBs ? (
+                    <h3 className="text-2xl font-black text-green-600">
+                      {summary.totalRevenueBs.toLocaleString('es-VE')} Bs
+                    </h3>
+                  ) : null}
+                  {summary?.totalRevenueUsd ? (
+                    <h3 className="text-2xl font-black text-emerald-600">
+                      ${summary.totalRevenueUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                    </h3>
+                  ) : null}
+                  {!summary?.totalRevenueBs && !summary?.totalRevenueUsd && (
+                    <h3 className="text-2xl font-black text-gray-400">0 Bs</h3>
+                  )}
+                </div>
                 <p className="text-[11px] text-gray-400 mt-0.5">En el periodo seleccionado</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-green-50 text-green-600 flex items-center justify-center font-bold">
@@ -418,9 +430,21 @@ export default function SalesDashboardPage() {
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   Ticket Promedio
                 </p>
-                <h3 className="text-2xl font-black text-purple-600 mt-1">
-                  {summary?.averageTicketBs ? `${summary.averageTicketBs.toLocaleString('es-VE')} Bs` : '0 Bs'}
-                </h3>
+                <div className="flex flex-col gap-0.5 mt-1">
+                  {summary?.averageTicketBs ? (
+                    <h3 className="text-2xl font-black text-purple-600">
+                      {summary.averageTicketBs.toLocaleString('es-VE')} Bs
+                    </h3>
+                  ) : null}
+                  {summary?.totalRevenueUsd && summary?.totalSales ? (
+                    <h3 className="text-2xl font-black text-purple-600">
+                      ${(summary.totalRevenueUsd / summary.totalSales).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                    </h3>
+                  ) : null}
+                  {!summary?.averageTicketBs && (!summary?.totalRevenueUsd || !summary?.totalSales) && (
+                    <h3 className="text-2xl font-black text-gray-400">0 Bs</h3>
+                  )}
+                </div>
                 <p className="text-[11px] text-gray-400 mt-0.5">Promedio por transacción</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
