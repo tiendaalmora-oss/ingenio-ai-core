@@ -143,42 +143,109 @@ function parseReceiptDetails(content: string) {
   return { bank, reference, amount, currency, receiptDate };
 }
 
-function inferProduct(interests: string[] | undefined, tags: string[] | undefined): { products: string[]; primaryProduct: string } {
-  if (interests && interests.length > 0) {
-    return {
-      products: interests,
-      primaryProduct: interests[0],
-    };
+function normalizeText(text: string): string {
+  return (text || '')
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+function formatDateInTimezone(date: Date, timeZone: string = 'America/Caracas'): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
+  } catch {
+    return date.toISOString().split('T')[0];
+  }
+}
+
+function matchProductFromCatalog(
+  interests: string[] | undefined,
+  tags: string[] | undefined,
+  officialProducts: string[],
+): { products: string[]; primaryProduct: string } {
+  const candidates = [...(interests || []), ...(tags || [])].filter(Boolean);
+
+  // 1. Si no hay productos oficiales registrados para el tenant, fallback con candidatos o venta general
+  if (!officialProducts || officialProducts.length === 0) {
+    if (candidates.length > 0) {
+      return { products: [candidates[0]], primaryProduct: candidates[0] };
+    }
+    return { products: ['Venta General'], primaryProduct: 'Venta General' };
   }
 
-  const detected: string[] = [];
-  const tagList = tags || [];
-  for (const t of tagList) {
-    const upper = t.toUpperCase();
-    if (upper.includes('MATEMATICA')) detected.push('Kit Docente de Matemática');
-    else if (upper.includes('QUIMICA')) detected.push('Kit Docente de Química');
-    else if (upper.includes('FISICA')) detected.push('Kit Docente de Física');
-    else if (upper.includes('INGLES')) detected.push('Kit Docente de Inglés');
-    else if (upper.includes('BIOLOGIA')) detected.push('Kit Docente de Biología');
-    else if (upper.includes('CASTELLANO')) detected.push('Kit Docente de Castellano');
-    else if (upper.includes('CEJAS')) detected.push('Masterclass Cejas y Pestañas');
-    else if (upper.includes('TAROT')) detected.push('Kit Tarot Terapéutico');
-    else if (upper.includes('PREESCOLAR')) detected.push('Kit Educación Inicial / Preescolar');
-    else if (upper.includes('BIBLICO')) detected.push('Kit Bíblico Infantil');
-    else if (upper.includes('ROBOTICA')) detected.push('Kit Robótica y Computación');
+  // 2. Si el tenant solo tiene 1 producto oficial (ej. Cejas y Pestañas), asignarlo directamente
+  if (officialProducts.length === 1) {
+    return { products: [officialProducts[0]], primaryProduct: officialProducts[0] };
   }
 
-  const unique = Array.from(new Set(detected));
-  if (unique.length > 0) {
-    return {
-      products: unique,
-      primaryProduct: unique[0],
-    };
+  // 3. Búsqueda exacta: si algún interés coincide exactamente con un producto oficial
+  for (const cand of candidates) {
+    const candNorm = normalizeText(cand);
+    for (const official of officialProducts) {
+      if (candNorm === normalizeText(official)) {
+        return { products: [official], primaryProduct: official };
+      }
+    }
   }
 
+  // 4. Mapeo semántico / palabras clave principales para materias y categorías
+  const subjectKeywords: { [key: string]: string[] } = {
+    matematica: ['MATEMATICA', 'CALCULO', 'ALGEBRA', 'GEOMETRIA', 'ARITMETICA'],
+    fisica: ['FISICA', 'CINEMATICA', 'DINAMICA', 'ESTATICA', 'ONDAS', 'TERMODINAMICA'],
+    quimica: ['QUIMICA', 'TABLA PERIODICA', 'ESTEQUIOMETRIA', 'ENLACE'],
+    biologia: ['BIOLOGIA', 'GENETICA', 'CELULA', 'ANATOMIA'],
+    ingles: ['INGLES', 'ENGLISH', 'VERBO TO BE'],
+    castellano: ['CASTELLANO', 'LITERATURA', 'GRAMATICA', 'LENGUAJE', 'ORTOGRAFIA'],
+    preescolar: ['PREESCOLAR', 'INICIAL', 'MATERNAL', 'INFANTIL', 'NOTAS MPPE'],
+    biblico: ['BIBLICO', 'BIBLIA', 'CRISTIANO', 'ESCUELA DOMINICAL', 'PASTOR'],
+    robotica: ['ROBOTICA', 'COMPUTACION', 'INFORMATICA', 'TECNOLOGIA', 'PROGRAMACION'],
+    cejas: ['CEJA', 'PESTANA', 'LASH', 'BROW', 'MICROPIGMENTACION', 'MICROBLADING'],
+    tarot: ['TAROT', 'ORACULO', 'TERAPEUTICO', 'CARTAS'],
+  };
+
+  for (const cand of candidates) {
+    const candNorm = normalizeText(cand);
+
+    for (const [subject, kws] of Object.entries(subjectKeywords)) {
+      const matchesCandidate = kws.some((kw) => candNorm.includes(kw));
+      if (matchesCandidate) {
+        const matchedOfficial = officialProducts.find((p) => {
+          const offNorm = normalizeText(p);
+          return kws.some((kw) => offNorm.includes(kw)) || offNorm.toLowerCase().includes(subject);
+        });
+        if (matchedOfficial) {
+          return { products: [matchedOfficial], primaryProduct: matchedOfficial };
+        }
+      }
+    }
+  }
+
+  // 5. Búsqueda por palabras significativas compartidas (>= 4 caracteres no triviales)
+  const stopWords = new Set(['PARA', 'DE', 'DEL', 'LOS', 'LAS', 'CON', 'DOCENTE', 'BACHILLERATO', 'VENEZUELA', 'KIT', 'MEGA', 'PRODUCTO']);
+  for (const cand of candidates) {
+    const candWords = normalizeText(cand)
+      .split(/[\s,.-]+/)
+      .filter((w) => w.length >= 4 && !stopWords.has(w));
+
+    for (const official of officialProducts) {
+      const offNorm = normalizeText(official);
+      const hasMatch = candWords.some((word) => offNorm.includes(word));
+      if (hasMatch) {
+        return { products: [official], primaryProduct: official };
+      }
+    }
+  }
+
+  // 6. Si ningún producto oficial coincide con certeza
   return {
-    products: ['Producto Digital / Venta Confirmada'],
-    primaryProduct: 'Producto Digital / Venta Confirmada',
+    products: ['Venta General / Sin Asignar'],
+    primaryProduct: 'Venta General / Sin Asignar',
   };
 }
 
@@ -381,7 +448,7 @@ export class AnalyticsService {
    * Tablero comercial detallado de ventas por día y por producto.
    */
   async getSalesDashboard(tenantId: string, query: SalesFilterQuery = {}): Promise<SalesDashboardData> {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = formatDateInTimezone(new Date(), 'America/Caracas');
     let selectedDate = query.date === 'today' ? todayStr : (query.date || todayStr);
     let mode: 'day' | 'range' | 'all' = 'day';
 
@@ -391,13 +458,16 @@ export class AnalyticsService {
       mode = 'range';
     }
 
-    // 1. Cargar productos registrados en el Knowledge Bundle para precios y autocompletado
+    // 1. Cargar productos registrados en el Knowledge Bundle para precios y autocompletado oficial
     const bundle = await this.prisma.knowledgeBundle.findUnique({
       where: { tenantId },
     });
     const rawBundle: any = bundle?.systemPrompt || {};
     const rawData: any = rawBundle['_raw'] || rawBundle;
     const registeredProducts: any[] = rawData['productos'] || [];
+    const officialProductNames: string[] = registeredProducts
+      .map((p) => (p.nombre || '').trim())
+      .filter(Boolean);
 
     const productPricesMap: Record<string, { price: number; currency: 'BS' | 'USD' }> = {};
     for (const p of registeredProducts) {
@@ -453,18 +523,18 @@ export class AnalyticsService {
     });
 
     const allSales: SaleItem[] = [];
-    const allProductsSet = new Set<string>();
-
-    // Agregar nombres de los productos registrados
-    for (const p of registeredProducts) {
-      if (p.nombre) allProductsSet.add(p.nombre.trim());
-    }
+    const allProductsSet = new Set<string>(officialProductNames);
 
     for (const c of closedContacts) {
-      // a. Inferir producto
-      const { products, primaryProduct } = inferProduct(c.memory?.interests, c.memory?.tags);
-      allProductsSet.add(primaryProduct);
-      for (const prod of products) allProductsSet.add(prod);
+      // a. Inferir producto comparando estrictamente con el catálogo de Business Studio
+      const { products, primaryProduct } = matchProductFromCatalog(
+        c.memory?.interests,
+        c.memory?.tags,
+        officialProductNames,
+      );
+      if (primaryProduct !== 'Venta General / Sin Asignar') {
+        allProductsSet.add(primaryProduct);
+      }
 
       // b. Buscar comprobante de pago o recibo en las interacciones
       let detectedReceipt: {
@@ -494,7 +564,7 @@ export class AnalyticsService {
         matchedConvId = c.conversations[0].id;
       }
 
-      // c. Determinar timestamp y fecha de la venta
+      // c. Determinar timestamp y fecha de la venta en zona horaria local (America/Caracas UTC-4)
       let saleTimestampDate: Date;
       if (receiptInteraction?.timestamp) {
         saleTimestampDate = new Date(receiptInteraction.timestamp);
@@ -509,7 +579,7 @@ export class AnalyticsService {
       }
 
       const saleTimestamp = saleTimestampDate.toISOString();
-      const saleDate = saleTimestamp.split('T')[0];
+      const saleDate = formatDateInTimezone(saleTimestampDate, 'America/Caracas');
 
       // d. Determinar monto y moneda
       let amount = detectedReceipt?.amount || 0;

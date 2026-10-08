@@ -85,10 +85,17 @@ interface SalesDashboardData {
   recentSaleDates: string[];
 }
 
+function getLocalDateStr(d: Date = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export default function SalesDashboardPage() {
   // Preset de fechas: 'today' | 'yesterday' | 'last7' | 'thisMonth' | 'all' | 'custom'
   const [datePreset, setDatePreset] = useState<'today' | 'yesterday' | 'last7' | 'thisMonth' | 'all' | 'custom'>('today');
-  const [customDate, setCustomDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [customDate, setCustomDate] = useState<string>(() => getLocalDateStr());
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
   const [selectedProduct, setSelectedProduct] = useState<string>('all');
@@ -96,10 +103,10 @@ export default function SalesDashboardPage() {
   const [activeSaleModal, setActiveSaleModal] = useState<SaleItem | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
 
-  // Calcular parámetros de fecha según el preset
+  // Calcular parámetros de fecha según el preset utilizando la hora local del usuario
   const dateParams = useMemo(() => {
     const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = getLocalDateStr(today);
 
     if (datePreset === 'today') {
       return { date: todayStr };
@@ -107,16 +114,16 @@ export default function SalesDashboardPage() {
     if (datePreset === 'yesterday') {
       const yest = new Date(today);
       yest.setDate(yest.getDate() - 1);
-      return { date: yest.toISOString().split('T')[0] };
+      return { date: getLocalDateStr(yest) };
     }
     if (datePreset === 'last7') {
       const start = new Date(today);
       start.setDate(start.getDate() - 6);
-      return { startDate: start.toISOString().split('T')[0], endDate: todayStr };
+      return { startDate: getLocalDateStr(start), endDate: todayStr };
     }
     if (datePreset === 'thisMonth') {
       const start = new Date(today.getFullYear(), today.getMonth(), 1);
-      return { startDate: start.toISOString().split('T')[0], endDate: todayStr };
+      return { startDate: getLocalDateStr(start), endDate: todayStr };
     }
     if (datePreset === 'all') {
       return { date: 'all' };
