@@ -1,14 +1,14 @@
-export interface TargetFiltersDto {
+export class TargetFiltersDto {
   leadStatus?: string; // 'ALL' | 'CLOSED' | 'WARM' | 'HOT' | 'COLD'
   product?: string;    // 'ALL' | specific product name
   tags?: string[];
 }
 
-export interface CreateCampaignDto {
-  name: string;
+export class CreateCampaignDto {
+  name!: string;
   channel?: 'WHATSAPP' | 'EMAIL' | 'BOTH';
   targetFilters?: TargetFiltersDto;
-  messageTemplate: string;
+  messageTemplate!: string;
   mediaUrl?: string;
   mediaType?: 'IMAGE' | 'DOCUMENT';
   mediaFilename?: string;
@@ -17,7 +17,7 @@ export interface CreateCampaignDto {
   autoStart?: boolean;
 }
 
-export interface EstimateAudienceDto {
+export class EstimateAudienceDto {
   leadStatus?: string;
   product?: string;
   tags?: string[];
