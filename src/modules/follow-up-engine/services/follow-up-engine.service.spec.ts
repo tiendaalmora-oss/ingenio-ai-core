@@ -81,5 +81,120 @@ describe('FollowUpEngineService (Candado de Horario de Atención)', () => {
       expect(prisma.tenant.findMany).not.toHaveBeenCalled();
       expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
+
+    it('Blindaje Anti-Comprador 1: Debe OMITIR clientes con leadStatus CLIENT o SALE', async () => {
+      jest.spyOn(service as any, 'isWithinAllowedWindow').mockReturnValue(true);
+
+      prisma.conversation.findMany.mockResolvedValue([
+        {
+          id: 'conv-buyer-1',
+          status: 'ACTIVE',
+          contact: {
+            phone: '584121799352',
+            tenantId: 'tenant-1',
+            memory: { leadStatus: 'CLIENT', tags: ['INTERESADO_QUIMICA'] }
+          },
+          interactions: [
+            { direction: 'OUTBOUND', content: 'Mensaje anterior', timestamp: new Date(Date.now() - 3600000 * 24 * 16) }
+          ]
+        }
+      ]);
+
+      prisma.knowledgeBundle.findUnique.mockResolvedValue({
+        tenantId: 'tenant-1',
+        systemPrompt: {
+          seguimientos: [{ tiempo: '15 dias', instruccion: 'Reactivar' }]
+        }
+      });
+
+      const report = await service.evaluateFollowUps();
+
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
+      expect(report.skipped).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            conversationId: 'conv-buyer-1',
+            reason: expect.stringContaining('already a verified buyer')
+          })
+        ])
+      );
+    });
+
+    it('Blindaje Anti-Comprador 2: Debe OMITIR clientes con tag PAGO_CONFIRMADO', async () => {
+      jest.spyOn(service as any, 'isWithinAllowedWindow').mockReturnValue(true);
+
+      prisma.conversation.findMany.mockResolvedValue([
+        {
+          id: 'conv-buyer-2',
+          status: 'ACTIVE',
+          contact: {
+            phone: '584121799352',
+            tenantId: 'tenant-1',
+            memory: { leadStatus: 'WARM', tags: ['PAGO_CONFIRMADO'] }
+          },
+          interactions: [
+            { direction: 'OUTBOUND', content: 'Mensaje anterior', timestamp: new Date(Date.now() - 3600000 * 24 * 16) }
+          ]
+        }
+      ]);
+
+      prisma.knowledgeBundle.findUnique.mockResolvedValue({
+        tenantId: 'tenant-1',
+        systemPrompt: {
+          seguimientos: [{ tiempo: '15 dias', instruccion: 'Reactivar' }]
+        }
+      });
+
+      const report = await service.evaluateFollowUps();
+
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
+      expect(report.skipped).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            conversationId: 'conv-buyer-2',
+            reason: expect.stringContaining('already a verified buyer')
+          })
+        ])
+      );
+    });
+
+    it('Blindaje Anti-Comprador 3: Debe OMITIR clientes si la conversacion contiene un comprobante detectado', async () => {
+      jest.spyOn(service as any, 'isWithinAllowedWindow').mockReturnValue(true);
+
+      prisma.conversation.findMany.mockResolvedValue([
+        {
+          id: 'conv-buyer-3',
+          status: 'ACTIVE',
+          contact: {
+            phone: '584121799352',
+            tenantId: 'tenant-1',
+            memory: { leadStatus: 'HOT', tags: [] }
+          },
+          interactions: [
+            { direction: 'OUTBOUND', content: 'Mensaje anterior', timestamp: new Date(Date.now() - 3600000 * 24 * 16) },
+            { direction: 'INBOUND', content: '📸 [Comprobante de Pago Detectado]: Banco: BDV | Ref: 1234', timestamp: new Date(Date.now() - 3600000 * 24 * 17) }
+          ]
+        }
+      ]);
+
+      prisma.knowledgeBundle.findUnique.mockResolvedValue({
+        tenantId: 'tenant-1',
+        systemPrompt: {
+          seguimientos: [{ tiempo: '15 dias', instruccion: 'Reactivar' }]
+        }
+      });
+
+      const report = await service.evaluateFollowUps();
+
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
+      expect(report.skipped).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            conversationId: 'conv-buyer-3',
+            reason: expect.stringContaining('already a verified buyer')
+          })
+        ])
+      );
+    });
   });
 });

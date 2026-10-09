@@ -499,7 +499,8 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 const hasDownloadLink = /(?:https?:\/\/)?(?:docs\.google\.com|drive\.google\.com|mega\.nz|dropbox\.com)\/[^\s]+/i.test(finalContent);
                 if (hasDownloadLink) {
                     const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } });
-                    const isPaid = memory?.leadStatus === 'CLOSED' || (Array.isArray(memory?.tags) && memory.tags.includes('PAGO_CONFIRMADO'));
+                    const isPaid = ['CLOSED', 'CLIENT', 'CLIENTE', 'SALE', 'VENTA', 'PAGADO'].includes((memory?.leadStatus || '').toUpperCase()) ||
+                        (Array.isArray(memory?.tags) && memory.tags.some(t => ['PAGO_CONFIRMADO', 'COMPROBANTE_RECIBIDO', 'PAGADO', 'CLIENTE', 'ACCESO_ENTREGADO'].includes(String(t).toUpperCase())));
                     if (!isPaid) {
                         this.logger.warn(`[Shield] Bloqueada fuga de enlace de producto/descarga para contacto no verificado (${payload.contactId})`);
                         finalContent = finalContent
@@ -514,7 +515,8 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 const claimsPaymentReceived = /(?:ya registramos tu comprobante|hemos recibido tu comprobante|comprobante de pago m[oó]vil|recibir[aá]s tu enlace privado de google drive|mientras verificamos tu pago)/i.test(finalContent);
                 if (claimsPaymentReceived) {
                     const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } });
-                    const isPaid = memory?.leadStatus === 'CLOSED' || (Array.isArray(memory?.tags) && memory.tags.includes('PAGO_CONFIRMADO'));
+                    const isPaid = ['CLOSED', 'CLIENT', 'CLIENTE', 'SALE', 'VENTA', 'PAGADO'].includes((memory?.leadStatus || '').toUpperCase()) ||
+                        (Array.isArray(memory?.tags) && memory.tags.some(t => ['PAGO_CONFIRMADO', 'COMPROBANTE_RECIBIDO', 'PAGADO', 'CLIENTE', 'ACCESO_ENTREGADO'].includes(String(t).toUpperCase())));
                     const hasVoucherInMsg = (payload.content || '').includes('[Comprobante de Pago Detectado]');
                     if (!isPaid && !hasVoucherInMsg) {
                         this.logger.warn(`[Shield] Interceptada felicitación prematura de comprobante por LLM para contacto sin pago verificado (${payload.contactId}). Reemplazando por respuesta cordial de espera.`);

@@ -84,9 +84,26 @@ let FollowUpEngineService = FollowUpEngineService_1 = class FollowUpEngineServic
                 conversationsCount: tenantConvos.length
             });
             for (const convo of tenantConvos) {
-                const leadStatus = (convo.contact.memory?.leadStatus || '').toUpperCase();
-                if (leadStatus === 'CLOSED' || leadStatus === 'PAGADO') {
-                    report.skipped.push({ conversationId: convo.id, contact: convo.contact.phone, reason: `Lead status is ${leadStatus}` });
+                const contactMem = convo.contact.memory;
+                const leadStatus = (contactMem?.leadStatus || '').toUpperCase();
+                const contactTags = Array.isArray(contactMem?.tags)
+                    ? contactMem.tags.map((t) => String(t).toUpperCase())
+                    : [];
+                const isBuyerStatus = ['CLOSED', 'PAGADO', 'CLIENT', 'CLIENTE', 'SALE', 'VENTA'].includes(leadStatus);
+                const hasPaymentTag = contactTags.some((t) => ['PAGO_CONFIRMADO', 'COMPROBANTE_RECIBIDO', 'PAGADO', 'CLIENTE', 'ACCESO_ENTREGADO', 'VENTA_CERRADA'].includes(t));
+                const hasVoucherInHistory = convo.interactions.some((i) => {
+                    const content = i.content || '';
+                    return (content.includes('Comprobante de Pago Detectado') ||
+                        content.includes('Venta manual confirmada') ||
+                        content.includes('Listo profe enviado') ||
+                        content.includes('Ya registramos tu comprobante'));
+                });
+                if (isBuyerStatus || hasPaymentTag || hasVoucherInHistory) {
+                    report.skipped.push({
+                        conversationId: convo.id,
+                        contact: convo.contact.phone,
+                        reason: `Lead is already a verified buyer (leadStatus: ${leadStatus}, tags: [${contactTags.join(', ')}], voucher: ${hasVoucherInHistory})`
+                    });
                     continue;
                 }
                 const lastInteraction = convo.interactions.length > 0 ? convo.interactions[0] : null;

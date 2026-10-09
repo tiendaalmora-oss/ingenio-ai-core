@@ -100,6 +100,7 @@ export class PromptComposerService {
 5. CLIENTES CON COMPRA CONFIRMADA (POST-VENTA VIP Y RECOMPRA):
    - Si el cliente ya completó una compra verificada, trátalo como cliente VIP de la casa.
    - Si consulta dudas sobre sus accesos o soporte de su compra anterior, asístelo amablemente y con empatía.
+   - 🚫 CERO PETICIONES DE COMPROBANTE A CLIENTES QUE YA COMPRARON: Si el cliente ya pagó y tiene su acceso, NUNCA le pidas comprobantes ni capturas para el producto que ya compró. Ante respuestas breves o de cortesía ("Ok en cuenta", "Listo", "Gracias", "Buen día"), responde con un cierre cordial de atención al cliente y deseándole éxito, NUNCA digas "quedo atenta a tu comprobante".
    - Si el cliente consulta por OTRA materia del catálogo, pide información o dice "Quiero", "1", "Pásame los datos" para un nuevo producto: INICIA DE INMEDIATO el flujo comercial para la nueva materia y proporciónale los datos de pago con total normalidad para concretar su nueva compra. La prohibición de cobrar aplica únicamente para no volver a cobrar el producto que ya pagó, NUNCA para compras de nuevos productos o combos.
 
 6. SOLICITUD DE ASESOR HUMANO Y RECHAZO / OPT-OUT:
@@ -337,8 +338,14 @@ ${ruleText}
       h.direction === 'OUTBOUND' || h.role === 'assistant'
     );
 
-    const isPaid = memory?.leadStatus === 'CLOSED' || 
-                   (Array.isArray(memory?.tags) && (memory.tags as string[]).includes('PAGO_CONFIRMADO'));
+    const memStatus = (memory?.leadStatus || '').toUpperCase();
+    const memTags = Array.isArray(memory?.tags)
+      ? (memory.tags as string[]).map(t => String(t).toUpperCase())
+      : [];
+
+    const isPaid = ['CLOSED', 'CLIENT', 'CLIENTE', 'SALE', 'VENTA', 'PAGADO'].includes(memStatus) ||
+                   memTags.some(t => ['PAGO_CONFIRMADO', 'COMPROBANTE_RECIBIDO', 'PAGADO', 'CLIENTE', 'ACCESO_ENTREGADO', 'VENTA_CERRADA'].includes(t)) ||
+                   history.some((h: any) => (h.content || '').includes('Comprobante de Pago Detectado') || (h.content || '').includes('Venta manual confirmada'));
 
     // Señales detectadas en los mensajes OUTBOUND del ciclo activo
     const paso1Done = outbound.some((h: any) => {
@@ -441,7 +448,13 @@ ${ruleText}
 - Si el cliente confirma la compra diciendo "Quiero", "1", "Pásame los datos" o similar: ENTREGA DE INMEDIATO los datos de pago oficiales para su nueva compra con total normalidad.`;
       }
     } else if (isPaid) {
-      instruction = `\n🟢 CLIENTE CONFIRMADO COMO PAGADOR (leadStatus: CLOSED).\n🛑 INSTRUCCIÓN CRÍTICA: Este cliente ya pagó su compra anterior. Trátalo como VIP. Si consulta sobre sus accesos, enlaces o soporte, asístelo amablemente. Si en cambio desea adquirir otra materia o un combo adicional, guíalo en su nueva compra con trato preferencial.`;
+      instruction = `\n🟢 CLIENTE CONFIRMADO COMO PAGADOR / COMPRADOR VERIFICADO.
+🛑 INSTRUCCIÓN CRÍTICA DE POST-VENTA:
+- Este usuario YA compró, pagó y tiene confirmado su material.
+- 🚫 PROHIBICIÓN ABSOLUTA: NUNCA le pidas comprobantes de pago, datos de transferencias ni capturas de pantalla para este producto. NUNCA asumas que tiene un pago pendiente.
+- 🚫 ESTÁ ESTRICTAMENTE PROHIBIDO aplicar la "Situación A" del Paso 5 del embudo comercial (no le digas "quedo atenta a tu comprobante cuando lo tengas listo").
+- Si el cliente envía confirmaciones o cortesías ("Ok en cuenta", "gracias", "listo", "excelente", "bueno"): responde con un cierre cordial de atención al cliente, agradeciendo su confianza y deseándole un feliz día/año escolar.
+- Si consulta sobre sus accesos, enlaces o soporte, asístelo amablemente. Trátalo como VIP. Si en cambio desea adquirir OTRA materia o un combo adicional, guíalo en su nueva compra con trato preferencial.`;
     } else if (paso4Done) {
       instruction = `\n⏳ CLIENTE EN ESPERA DE PAGO — Los datos de pago ya fueron entregados.
 🛑 INSTRUCCIONES CRÍTICAS:

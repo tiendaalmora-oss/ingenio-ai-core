@@ -96,10 +96,35 @@ export class FollowUpEngineService {
       });
 
       for (const convo of tenantConvos) {
-        // No enviar seguimientos si la venta ya está cerrada o pagada
-        const leadStatus = (convo.contact.memory?.leadStatus || '').toUpperCase();
-        if (leadStatus === 'CLOSED' || leadStatus === 'PAGADO') {
-          report.skipped.push({ conversationId: convo.id, contact: convo.contact.phone, reason: `Lead status is ${leadStatus}` });
+        // ── BLINDAJE ANTI-COMPRADORES: NUNCA enviar seguimiento de reactivación comercial a clientes que ya compraron ──
+        const contactMem = convo.contact.memory;
+        const leadStatus = (contactMem?.leadStatus || '').toUpperCase();
+        const contactTags = Array.isArray(contactMem?.tags)
+          ? contactMem.tags.map((t: any) => String(t).toUpperCase())
+          : [];
+
+        const isBuyerStatus = ['CLOSED', 'PAGADO', 'CLIENT', 'CLIENTE', 'SALE', 'VENTA'].includes(leadStatus);
+        const hasPaymentTag = contactTags.some((t: string) =>
+          ['PAGO_CONFIRMADO', 'COMPROBANTE_RECIBIDO', 'PAGADO', 'CLIENTE', 'ACCESO_ENTREGADO', 'VENTA_CERRADA'].includes(t)
+        );
+
+        // También verificar si en el historial de interacciones existe comprobante detectado o entrega
+        const hasVoucherInHistory = convo.interactions.some((i: any) => {
+          const content = i.content || '';
+          return (
+            content.includes('Comprobante de Pago Detectado') ||
+            content.includes('Venta manual confirmada') ||
+            content.includes('Listo profe enviado') ||
+            content.includes('Ya registramos tu comprobante')
+          );
+        });
+
+        if (isBuyerStatus || hasPaymentTag || hasVoucherInHistory) {
+          report.skipped.push({
+            conversationId: convo.id,
+            contact: convo.contact.phone,
+            reason: `Lead is already a verified buyer (leadStatus: ${leadStatus}, tags: [${contactTags.join(', ')}], voucher: ${hasVoucherInHistory})`
+          });
           continue;
         }
 

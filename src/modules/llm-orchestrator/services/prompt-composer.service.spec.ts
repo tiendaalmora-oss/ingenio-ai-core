@@ -138,5 +138,28 @@ describe('PromptComposerService — Recompra y Blindaje de Clientes Pagados', ()
     expect(sysMsg).toContain('ENLACES AUTORIZADOS DEL EMBUDO (REGALOS Y PÁGINAS WEB)');
     expect(sysMsg).toContain('DEBES incluir exactamente el enlace correspondiente tal como está indicado en el guion del embudo');
   });
+
+  it('7. Cliente con leadStatus CLIENT o SALE se reconoce como pagador y prohíbe pedir comprobantes', () => {
+    const memory: any = {
+      leadStatus: 'CLIENT',
+      tags: ['INTERESADO_QUIMICA', 'PAGO_CONFIRMADO'],
+      interests: ['Química'],
+    };
+    const history: any = [
+      { direction: 'INBOUND', role: 'user', content: 'Ok en cuenta' },
+    ];
+
+    const result = service.compose({
+      kosBundle: mockKosBundle,
+      memory,
+      history,
+      currentMessage: 'Ok en cuenta',
+    });
+
+    const sysMsg = result.find((m) => m.role === 'system')?.content;
+    expect(sysMsg).toContain('CLIENTE CONFIRMADO COMO PAGADOR / COMPRADOR VERIFICADO');
+    expect(sysMsg).toContain('NUNCA le pidas comprobantes de pago');
+    expect(sysMsg).toContain('ESTÁ ESTRICTAMENTE PROHIBIDO aplicar la "Situación A"');
+  });
 });
 
