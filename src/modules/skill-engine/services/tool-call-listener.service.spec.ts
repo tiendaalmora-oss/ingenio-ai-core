@@ -23,6 +23,7 @@ describe('ToolCallListenerService', () => {
           useValue: {
             interaction: {
               create: jest.fn().mockResolvedValue({}),
+              findFirst: jest.fn().mockResolvedValue(null),
             },
             conversation: {
               update: jest.fn().mockResolvedValue({}),
@@ -72,6 +73,67 @@ describe('ToolCallListenerService', () => {
         data: expect.objectContaining({
           type: 'TOOL_RESULT',
           content: expect.stringContaining('Business Memory actualizada')
+        })
+      })
+    );
+  });
+
+  it('should demote SALE to HOT and strip PAGO_CONFIRMADO if no verified voucher exists', async () => {
+    const payload = {
+      tenantId: 'tenant-1',
+      contactId: 'contact-1',
+      conversationId: 'conv-1',
+      toolName: 'update_business_memory',
+      toolArguments: { 
+        leadStatus: 'SALE',
+        tags: ['INTERESADO', 'PAGO_CONFIRMADO']
+      },
+      toolCallId: 'call_124'
+    };
+
+    (prismaService.interaction.findFirst as jest.Mock).mockResolvedValue(null);
+
+    await service.handleToolCall(payload as any);
+
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      'memory.updated',
+      expect.objectContaining({
+        contactId: 'contact-1',
+        updates: expect.objectContaining({
+          leadStatus: 'HOT',
+          tags: expect.arrayContaining(['INTERESADO', 'ESPERA_DE_PAGO'])
+        })
+      })
+    );
+  });
+
+  it('should preserve SALE and PAGO_CONFIRMADO if verified voucher exists in conversation', async () => {
+    const payload = {
+      tenantId: 'tenant-1',
+      contactId: 'contact-1',
+      conversationId: 'conv-1',
+      toolName: 'update_business_memory',
+      toolArguments: { 
+        leadStatus: 'SALE',
+        tags: ['PAGO_CONFIRMADO']
+      },
+      toolCallId: 'call_125'
+    };
+
+    (prismaService.interaction.findFirst as jest.Mock).mockResolvedValue({
+      id: 'voucher-1',
+      content: '📸 [Comprobante de Pago Detectado]: Banco: BDV | Referencia: #123456 | Monto: 7.250 Bs'
+    });
+
+    await service.handleToolCall(payload as any);
+
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      'memory.updated',
+      expect.objectContaining({
+        contactId: 'contact-1',
+        updates: expect.objectContaining({
+          leadStatus: 'SALE',
+          tags: ['PAGO_CONFIRMADO']
         })
       })
     );

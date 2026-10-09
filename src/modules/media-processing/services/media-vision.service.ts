@@ -139,9 +139,9 @@ export class MediaVisionService {
 Analiza con máxima precisión la imagen adjunta y clasifícala estrictamente:
 
 INSTRUCCIONES CLAVE:
-1. SI ES UN COMPROBANTE DE PAGO BANCARIO REAL (Captura de pantalla de Pago Móvil, Transferencia bancaria, Zelle, Depósito, Binance, etc.):
-   Extrae con fidelidad los datos visibles en este formato exacto:
-   "📸 [Comprobante de Pago Detectado]: Banco: {Nombre del banco o plataforma} | Referencia: #{Número de referencia} | Monto: {Monto exacto y moneda} | Fecha: {Fecha/Hora}. (Soporte de pago válido)"
+1. SI ES UN COMPROBANTE DE PAGO REAL (Nacional o Internacional: Pago Móvil, Transferencia bancaria en cualquier divisa, Zelle, Binance Pay / USDT, PayPal, Zinli, Bancolombia, Nequi, Daviplata, Pix, Yape, Plin, SPEI, OXXO, etc.):
+   Solo clasifícalo como comprobante si contiene datos bancarios/financieros visibles. Extrae con fidelidad los datos visibles en este formato exacto:
+   "📸 [Comprobante de Pago Detectado]: Banco: {Nombre del banco o plataforma (ej: BDV, Zelle, Binance, Banesco, Bancolombia, Nequi, Zinli, PayPal)} | Referencia: #{Número de referencia, confirmación, hash o ID de transacción} | Monto: {Monto exacto y moneda (ej: 7.250 Bs, $8 USD, 8 USDT, 35.000 COP, etc.)} | Fecha: {Fecha/Hora si es visible}. (Soporte de pago válido)"
 
 2. SI ES UNA FOTO DE UNA PERSONA, ROSTRO, SELFIE, PAISAJE, FOTO PERSONAL O MEME:
    NUNCA digas que es un comprobante de pago. Describe brevemente lo que se ve:

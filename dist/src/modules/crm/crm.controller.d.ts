@@ -148,4 +148,42 @@ export declare class CrmController {
         success: boolean;
         deletedId: string;
     }>;
+    addTag(id: string, body: {
+        tag: string;
+    }, tenantId: string): Promise<{
+        success: boolean;
+        tags: string[];
+    }>;
+    removeTag(id: string, tag: string, tenantId: string): Promise<{
+        success: boolean;
+        tags: string[];
+    }>;
+    registerSale(id: string, body: {
+        productName: string;
+        amount: number;
+        currency?: 'BS' | 'USD';
+        paymentMethod?: string;
+        reference?: string;
+        date?: string;
+    }, tenantId: string): Promise<{
+        success: boolean;
+        leadId: string;
+        kanbanStage: string;
+        leadStatus: string;
+        sale: {
+            productName: string;
+            amount: number;
+            currency: "BS" | "USD";
+            paymentMethod: string;
+            reference: string | null;
+            timestamp: string;
+        };
+    }>;
+    cancelSale(id: string, tenantId: string): Promise<{
+        success: boolean;
+        leadId: string;
+        kanbanStage: string;
+        leadStatus: string;
+        tags: string[];
+    }>;
 }

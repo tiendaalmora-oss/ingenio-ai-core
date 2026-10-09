@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.KnowledgeBundleComposer = void 0;
 const common_1 = require("@nestjs/common");
+const product_tag_util_1 = require("../../shared/utils/product-tag.util");
 let KnowledgeBundleComposer = class KnowledgeBundleComposer {
     compose(rawData) {
         const raw = rawData || {};
@@ -73,6 +74,8 @@ let KnowledgeBundleComposer = class KnowledgeBundleComposer {
                     ? raw.productos.map((p) => ({
                         id: p.id,
                         nombre: p.nombre || p.name || '',
+                        precio: p.precio || p.price || '',
+                        tag: p.tag || (0, product_tag_util_1.normalizeProductTag)(p.nombre || p.name || ''),
                         embudoVenta: p.embudoVenta || p.secuenciaVenta || p.descripcion || p.description || '',
                         baseConocimiento: p.baseConocimiento || p.detallesTecnicos || '',
                         categoria: p.categoria || p.category || '',

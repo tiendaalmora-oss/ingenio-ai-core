@@ -375,7 +375,13 @@ ${ruleText}
             instruction = `\n🟢 CLIENTE CONFIRMADO COMO PAGADOR (leadStatus: CLOSED).\n🛑 INSTRUCCIÓN CRÍTICA: Este cliente ya pagó su compra anterior. Trátalo como VIP. Si consulta sobre sus accesos, enlaces o soporte, asístelo amablemente. Si en cambio desea adquirir otra materia o un combo adicional, guíalo en su nueva compra con trato preferencial.`;
         }
         else if (paso4Done) {
-            instruction = `\n⏳ CLIENTE EN ESPERA DE PAGO — Los datos de pago ya fueron entregados.\n🛑 INSTRUCCIONES CRÍTICAS:\n- Responde ÚNICAMENTE a lo que el cliente preguntó en este mensaje. No re-envíes el pitch ni los datos ya entregados.\n- Si el cliente dice "no me llegó nada": pregúntale qué parte específica no recibió. NO re-envíes todo el catálogo automáticamente.\n- Si el cliente tiene una duda técnica: respóndela directo con tu base de conocimiento.\n- Si el cliente dice "ok", "gracias" o "ahora pago": confirma brevemente con calidez que quedas atento.\n- 🚫 PROHIBIDO: Volver a presentar el producto completo, los beneficios detallados ni el precio si ya fueron enviados.`;
+            instruction = `\n⏳ CLIENTE EN ESPERA DE PAGO — Los datos de pago ya fueron entregados.
+🛑 INSTRUCCIONES CRÍTICAS:
+- Responde ÚNICAMENTE a lo que el cliente preguntó en este mensaje. No re-envíes el pitch ni los datos ya entregados.
+- Si el cliente dice "no me llegó nada": pregúntale qué parte específica no recibió. NO re-envíes todo el catálogo automáticamente.
+- Si el cliente tiene una duda técnica o sobre pasarelas/divisas (Zelle, Binance, PayPal, Zinli, Pago Móvil, Nequi, transferencias): respóndela directo con tu base de conocimiento.
+- Si el cliente dice "ok", "gracias", "ahora pago", "hoy puedo pagarlo", "voy a transferir", "dame chance" o promesas similares a futuro: confirma brevemente con calidez que quedas muy atento a su comprobante cuando realice la transferencia. 🚫 PROHIBICIÓN ABSOLUTA: JAMÁS envíes felicitaciones ni confirmaciones de pago ("Ya registramos tu comprobante...", "En breves minutos te entregamos tu acceso...") ni asumas que ya pagó hasta que el cliente realmente envíe la captura o la referencia bancaria en el chat.
+- 🚫 PROHIBIDO: Volver a presentar el producto completo, los beneficios detallados ni el precio si ya fueron enviados.`;
         }
         else if (paso3Done) {
             instruction = `\n⏳ CLIENTE EN ETAPA DE CIERRE — La oferta y precio ya fueron presentados.\n🛑 INSTRUCCIÓN: Continúa hacia el Paso 4. Si el cliente acepta o pregunta cómo pagar, entrega los datos de pago del producto de su interés.`;
@@ -398,8 +404,8 @@ ${ruleText}
 Tienes acceso a herramientas esenciales que puedes usar para registrar datos en el CRM:
 - update_business_memory: Úsala para registrar intereses del cliente, etiquetas o su nivel de avance en la compra:
   * interests: Agrega el nombre del producto o servicio consultado (ej: ["Plan Premium"], ["Servicio A"]).
-  * leadStatus: Clasifica el estado de venta ("COLD", "WARM", "HOT", "CLOSED").
-  * tags: Etiquetas relevantes (ej: ["INTERESADO_PRODUCTO", "PIDIO_PRECIO", "CONSULTO_PAGO", etc.]).
+  * leadStatus: Clasifica el estado de venta ("COLD", "WARM", "HOT"). 🛑 REGLA INQUEBRANTABLE: NUNCA clasifiques a un lead como "CLOSED" ni uses la etiqueta "PAGO_CONFIRMADO" por promesas futuras de pago ("hoy puedo pagarlo", "mañana transfiero", "voy a pagar"). Si el cliente dice que pagará más tarde, clasifícalo como "HOT" con la etiqueta "ESPERA_DE_PAGO".
+  * tags: Etiquetas relevantes (ej: ["INTERESADO_PRODUCTO", "PIDIO_PRECIO", "ESPERA_DE_PAGO", etc.]).
   * name, company, objections: Datos adicionales relevantes.
 - create_task: Para tareas o recordatorios internos.
 - schedule_meeting: Solo cuando el cliente acepte expresamente una reunión.

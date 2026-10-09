@@ -478,6 +478,73 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
             throw err;
         }
     }
+    async sendFile(tenantId, contactIdOrPhone, fileUrl, caption, filename, mimetype) {
+        const target = await this.resolveTargetChatId(contactIdOrPhone);
+        let chatId = target.chatId;
+        const session = await this.resolveSession(tenantId);
+        const config = this.resolveWahaConfig(tenantId, session);
+        if (!config.apiUrl) {
+            throw new Error('WAHA API URL is not configured');
+        }
+        const headers = {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+        };
+        if (config.apiKey) {
+            headers['X-Api-Key'] = config.apiKey;
+        }
+        if (caption) {
+            this.markOutboundDispatched(chatId, caption);
+            if (contactIdOrPhone && contactIdOrPhone !== chatId) {
+                this.markOutboundDispatched(contactIdOrPhone, caption);
+            }
+        }
+        const inferredFilename = filename || fileUrl.split('/').pop()?.split('?')[0] || 'archivo';
+        const isImage = Boolean(fileUrl.match(/\.(jpeg|jpg|png|webp|gif)($|\?)/i) || (mimetype && mimetype.startsWith('image/')));
+        const payload = {
+            chatId: chatId,
+            file: {
+                url: fileUrl,
+                filename: inferredFilename,
+                mimetype: mimetype || (isImage ? 'image/jpeg' : 'application/pdf'),
+            },
+            caption: caption || '',
+            session: session,
+        };
+        try {
+            let response = await fetch(`${config.apiUrl}/api/sendFile`, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(payload),
+            });
+            if (!response.ok && chatId.endsWith('@c.us')) {
+                const lidChatId = chatId.replace('@c.us', '@lid');
+                chatId = lidChatId;
+                payload.chatId = lidChatId;
+                response = await fetch(`${config.apiUrl}/api/sendFile`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(payload),
+                });
+                if (response.ok && target.contactId) {
+                    await this.healContactExternalId(target.contactId, lidChatId);
+                }
+            }
+            if (!response.ok) {
+                const errText = await response.text().catch(() => '');
+                throw new Error(`WAHA sendFile falló (${response.status}): ${errText}`);
+            }
+            const result = await response.json().catch(() => ({}));
+            const rawId = result?.id?._serialized || result?.id || 'waha-msg-file-ok';
+            const messageId = typeof rawId === 'object' ? (rawId._serialized || rawId.id || 'waha-msg-file-ok') : String(rawId);
+            this.markMessageAsSentBySystem(messageId);
+            return messageId;
+        }
+        catch (err) {
+            this.logger.error(`Excepción enviando archivo vía WAHA para ${chatId}: ${err.message}`);
+            throw err;
+        }
+    }
     async getWahaSessions(target = 'prod') {
         const prodConfig = this.resolveWahaConfig('dba1c54c-89c6-41e9-ae9d-03613377a5b3', 'ferreos');
         const sandboxConfig = this.resolveWahaConfig('subaccount-test', 'sub_sandbox');

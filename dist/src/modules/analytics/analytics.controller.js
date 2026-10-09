@@ -28,6 +28,17 @@ let AnalyticsController = class AnalyticsController {
             throw new common_1.BadRequestException('tenantId is required');
         return this.analyticsService.getSummary(tenantId);
     }
+    async getSales(tenantId, date, startDate, endDate, product, search) {
+        if (!tenantId)
+            throw new common_1.BadRequestException('tenantId is required');
+        return this.analyticsService.getSalesDashboard(tenantId, {
+            date,
+            startDate,
+            endDate,
+            product,
+            search,
+        });
+    }
 };
 exports.AnalyticsController = AnalyticsController;
 __decorate([
@@ -37,6 +48,18 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], AnalyticsController.prototype, "getSummary", null);
+__decorate([
+    (0, common_1.Get)('sales'),
+    __param(0, (0, tenant_id_decorator_1.TenantId)()),
+    __param(1, (0, common_1.Query)('date')),
+    __param(2, (0, common_1.Query)('startDate')),
+    __param(3, (0, common_1.Query)('endDate')),
+    __param(4, (0, common_1.Query)('product')),
+    __param(5, (0, common_1.Query)('search')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String, String, String, String]),
+    __metadata("design:returntype", Promise)
+], AnalyticsController.prototype, "getSales", null);
 exports.AnalyticsController = AnalyticsController = __decorate([
     (0, common_1.Controller)('analytics'),
     (0, common_1.UseGuards)(admin_api_key_guard_1.AdminApiKeyGuard, tenant_guard_1.TenantGuard),

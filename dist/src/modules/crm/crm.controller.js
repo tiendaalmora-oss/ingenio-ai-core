@@ -434,6 +434,226 @@ let CrmController = class CrmController {
         await this.prisma.contact.delete({ where: { id } });
         return { success: true, deletedId: id };
     }
+    async addTag(id, body, tenantId) {
+        if (!tenantId)
+            throw new common_1.BadRequestException('tenantId is required');
+        if (!body.tag || !body.tag.trim())
+            throw new common_1.BadRequestException('tag is required');
+        const contact = await this.prisma.contact.findFirst({
+            where: { id, tenantId },
+            include: { memory: true },
+        });
+        if (!contact)
+            throw new common_1.NotFoundException('Lead not found');
+        const formattedTag = body.tag.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+        const existingTags = contact.memory?.tags || [];
+        if (!existingTags.includes(formattedTag)) {
+            const updatedTags = [...existingTags, formattedTag];
+            await this.prisma.businessMemory.upsert({
+                where: { contactId: id },
+                update: { tags: updatedTags },
+                create: { contactId: id, tags: updatedTags, leadStatus: 'COLD' },
+            });
+            await this.prisma.memoryAuditLog.create({
+                data: {
+                    contactId: id,
+                    tenantId,
+                    field: 'tags',
+                    previousValue: JSON.stringify(existingTags),
+                    newValue: JSON.stringify(updatedTags),
+                    source: 'human',
+                    skill: 'manual_tag_add',
+                },
+            });
+            return { success: true, tags: updatedTags };
+        }
+        return { success: true, tags: existingTags };
+    }
+    async removeTag(id, tag, tenantId) {
+        if (!tenantId)
+            throw new common_1.BadRequestException('tenantId is required');
+        const contact = await this.prisma.contact.findFirst({
+            where: { id, tenantId },
+            include: { memory: true },
+        });
+        if (!contact)
+            throw new common_1.NotFoundException('Lead not found');
+        const existingTags = contact.memory?.tags || [];
+        const tagToRemove = decodeURIComponent(tag).trim().toUpperCase();
+        const updatedTags = existingTags.filter((t) => t.toUpperCase() !== tagToRemove);
+        await this.prisma.businessMemory.upsert({
+            where: { contactId: id },
+            update: { tags: updatedTags },
+            create: { contactId: id, tags: updatedTags, leadStatus: 'COLD' },
+        });
+        await this.prisma.memoryAuditLog.create({
+            data: {
+                contactId: id,
+                tenantId,
+                field: 'tags',
+                previousValue: JSON.stringify(existingTags),
+                newValue: JSON.stringify(updatedTags),
+                source: 'human',
+                skill: 'manual_tag_remove',
+            },
+        });
+        return { success: true, tags: updatedTags };
+    }
+    async registerSale(id, body, tenantId) {
+        if (!tenantId)
+            throw new common_1.BadRequestException('tenantId is required');
+        if (!body.productName || body.amount === undefined || body.amount === null) {
+            throw new common_1.BadRequestException('productName and amount are required');
+        }
+        const contact = await this.prisma.contact.findFirst({
+            where: { id, tenantId },
+            include: {
+                memory: true,
+                conversations: { orderBy: { id: 'desc' }, take: 1 },
+            },
+        });
+        if (!contact)
+            throw new common_1.NotFoundException('Lead not found');
+        const currency = body.currency || 'BS';
+        const numAmount = Number(body.amount);
+        const formattedAmount = currency === 'USD' ? `$${numAmount}` : `${numAmount.toLocaleString('es-VE')} Bs`;
+        const refStr = body.reference ? `#${body.reference.trim()}` : 'MANUAL';
+        const paymentMethod = body.paymentMethod?.trim() || 'Pago Móvil / Transferencia';
+        const saleDate = body.date ? new Date(body.date) : new Date();
+        const existingTags = contact.memory?.tags || [];
+        const tagsToAdd = ['PAGO_CONFIRMADO', 'COMPROBANTE_RECIBIDO'];
+        const updatedTags = Array.from(new Set([...existingTags, ...tagsToAdd]));
+        const existingInterests = contact.memory?.interests || [];
+        const updatedInterests = Array.from(new Set([body.productName.trim(), ...existingInterests]));
+        await this.prisma.businessMemory.upsert({
+            where: { contactId: id },
+            update: {
+                leadStatus: 'CLOSED',
+                tags: updatedTags,
+                interests: updatedInterests,
+                lastInteraction: saleDate,
+            },
+            create: {
+                contactId: id,
+                leadStatus: 'CLOSED',
+                tags: updatedTags,
+                interests: updatedInterests,
+                lastInteraction: saleDate,
+            },
+        });
+        let convId = contact.conversations[0]?.id;
+        if (!convId) {
+            const newConv = await this.prisma.conversation.create({
+                data: { contactId: id, status: 'RESOLVED' },
+            });
+            convId = newConv.id;
+        }
+        const receiptContent = `📸 [Comprobante de Pago Detectado]: Banco: ${paymentMethod} | Referencia: ${refStr} | Monto: ${formattedAmount} | Fecha: ${saleDate.toLocaleDateString('es-ES')}. (Venta manual confirmada por asesor - Producto: ${body.productName})`;
+        await this.prisma.interaction.create({
+            data: {
+                conversationId: convId,
+                direction: 'INBOUND',
+                type: 'IMAGE',
+                content: receiptContent,
+                role: 'assistant',
+                timestamp: saleDate,
+            },
+        });
+        await this.prisma.pendingOutboundMessage.deleteMany({
+            where: {
+                conversationId: convId,
+                status: 'PENDING',
+            },
+        });
+        await this.prisma.memoryAuditLog.create({
+            data: {
+                contactId: id,
+                tenantId,
+                field: 'leadStatus',
+                previousValue: JSON.stringify(contact.memory?.leadStatus || 'WARM'),
+                newValue: JSON.stringify('CLOSED'),
+                source: 'human',
+                skill: 'manual_sale_register',
+                conversationId: convId,
+            },
+        });
+        return {
+            success: true,
+            leadId: id,
+            kanbanStage: 'Venta',
+            leadStatus: 'CLOSED',
+            sale: {
+                productName: body.productName,
+                amount: numAmount,
+                currency,
+                paymentMethod,
+                reference: body.reference || null,
+                timestamp: saleDate.toISOString(),
+            },
+        };
+    }
+    async cancelSale(id, tenantId) {
+        if (!tenantId)
+            throw new common_1.BadRequestException('tenantId is required');
+        const contact = await this.prisma.contact.findFirst({
+            where: { id, tenantId },
+            include: {
+                memory: true,
+                conversations: { orderBy: { id: 'desc' }, take: 1 },
+            },
+        });
+        if (!contact)
+            throw new common_1.NotFoundException('Lead not found');
+        const existingTags = contact.memory?.tags || [];
+        const updatedTags = existingTags.filter((t) => t !== 'PAGO_CONFIRMADO' && t !== 'COMPROBANTE_RECIBIDO');
+        if (!updatedTags.includes('VENTA_ANULADA')) {
+            updatedTags.push('VENTA_ANULADA');
+        }
+        await this.prisma.businessMemory.upsert({
+            where: { contactId: id },
+            update: {
+                leadStatus: 'WARM',
+                tags: updatedTags,
+            },
+            create: {
+                contactId: id,
+                leadStatus: 'WARM',
+                tags: updatedTags,
+            },
+        });
+        const convId = contact.conversations[0]?.id;
+        if (convId) {
+            await this.prisma.interaction.create({
+                data: {
+                    conversationId: convId,
+                    direction: 'OUTBOUND',
+                    type: 'TEXT',
+                    content: '⚠️ [Venta Anulada por Asesor]: Se ha anulado la venta de este contacto. El lead fue retornado a etapa Interesado (Warm).',
+                    role: 'assistant',
+                    timestamp: new Date(),
+                },
+            });
+        }
+        await this.prisma.memoryAuditLog.create({
+            data: {
+                contactId: id,
+                tenantId,
+                field: 'leadStatus',
+                previousValue: JSON.stringify(contact.memory?.leadStatus || 'CLOSED'),
+                newValue: JSON.stringify('WARM'),
+                source: 'human',
+                skill: 'manual_sale_cancel',
+                conversationId: convId,
+            },
+        });
+        return {
+            success: true,
+            leadId: id,
+            kanbanStage: 'Interesado',
+            leadStatus: 'WARM',
+            tags: updatedTags,
+        };
+    }
 };
 exports.CrmController = CrmController;
 __decorate([
@@ -496,6 +716,41 @@ __decorate([
     __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", Promise)
 ], CrmController.prototype, "deleteLead", null);
+__decorate([
+    (0, common_1.Post)('leads/:id/tags'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, tenant_id_decorator_1.TenantId)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, String]),
+    __metadata("design:returntype", Promise)
+], CrmController.prototype, "addTag", null);
+__decorate([
+    (0, common_1.Delete)('leads/:id/tags/:tag'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Param)('tag')),
+    __param(2, (0, tenant_id_decorator_1.TenantId)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String]),
+    __metadata("design:returntype", Promise)
+], CrmController.prototype, "removeTag", null);
+__decorate([
+    (0, common_1.Post)('leads/:id/sale'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, tenant_id_decorator_1.TenantId)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, String]),
+    __metadata("design:returntype", Promise)
+], CrmController.prototype, "registerSale", null);
+__decorate([
+    (0, common_1.Post)('leads/:id/cancel-sale'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, tenant_id_decorator_1.TenantId)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], CrmController.prototype, "cancelSale", null);
 exports.CrmController = CrmController = __decorate([
     (0, common_1.Controller)('crm'),
     (0, common_1.UseGuards)(admin_api_key_guard_1.AdminApiKeyGuard, tenant_guard_1.TenantGuard),

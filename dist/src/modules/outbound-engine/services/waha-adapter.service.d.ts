@@ -29,5 +29,6 @@ export declare class WahaAdapterService {
     startTyping(tenantId: string, contactIdOrPhone: string): Promise<void>;
     stopTyping(tenantId: string, contactIdOrPhone: string): Promise<void>;
     sendMessage(tenantId: string, contactIdOrPhone: string, content: string): Promise<string>;
+    sendFile(tenantId: string, contactIdOrPhone: string, fileUrl: string, caption?: string, filename?: string, mimetype?: string): Promise<string>;
     getWahaSessions(target?: 'prod' | 'sandbox' | 'all'): Promise<any>;
 }

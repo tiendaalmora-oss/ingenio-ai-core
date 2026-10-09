@@ -134,10 +134,10 @@ function parseReceiptDetails(content: string) {
     currency = 'USD';
   }
 
-  const bankMatch = content.match(/Banco:\s*([^|\n]+)/i);
+  const bankMatch = content.match(/(?:Banco\/Plataforma|Banco|Plataforma):\s*([^|\n]+)/i);
   if (bankMatch) bank = bankMatch[1].trim();
 
-  const refMatch = content.match(/Referencia:\s*#?([0-9a-zA-Z]+)/i);
+  const refMatch = content.match(/(?:Referencia|Ref|TxID|Hash|ID Transacci[oó]n|Comprobante):\s*#?([0-9a-zA-Z]+)/i);
   if (refMatch) reference = refMatch[1].trim();
 
   const amountMatch = content.match(/Monto:\s*([0-9.,]+)\s*([a-zA-Z$]+)?/i);

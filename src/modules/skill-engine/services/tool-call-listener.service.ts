@@ -24,11 +24,47 @@ export class ToolCallListenerService {
     try {
       switch (payload.toolName) {
         case 'update_business_memory':
-          this.logger.log(`Actualizando memoria de ${payload.contactId} con: ${JSON.stringify(payload.toolArguments)}`);
+          const toolArgs = { ...(payload.toolArguments || {}) };
+
+          // ── GUARDRAIL DE PAGOS: Solo permitir 'SALE' / 'CLOSED' / 'PAGADO' o 'PAGO_CONFIRMADO' si existe un comprobante real ──
+          const requestedStatus = (toolArgs.leadStatus || '').toUpperCase();
+          const requestedTags = Array.isArray(toolArgs.tags) ? [...toolArgs.tags] : [];
+          const hasPaymentTag = requestedTags.some(t => {
+            const up = String(t).toUpperCase();
+            return up === 'PAGO_CONFIRMADO' || up === 'COMPROBANTE_RECIBIDO' || up === 'PAGADO';
+          });
+
+          if (requestedStatus === 'SALE' || requestedStatus === 'CLOSED' || requestedStatus === 'PAGADO' || hasPaymentTag) {
+            const hasVerifiedVoucher = typeof this.prisma?.interaction?.findFirst === 'function'
+              ? await this.prisma.interaction.findFirst({
+                  where: {
+                    conversationId: payload.conversationId,
+                    OR: [
+                      { content: { contains: 'Comprobante de Pago Detectado' } },
+                      { content: { contains: 'Venta manual confirmada' } },
+                    ],
+                  },
+                })
+              : null;
+
+            if (!hasVerifiedVoucher) {
+              this.logger.warn(`[Guardrail Shield] Interceptado intento de LLM de asignar estado de venta sin comprobante bancario para contacto ${payload.contactId}. Degradando a HOT / ESPERA_DE_PAGO.`);
+              toolArgs.leadStatus = 'HOT';
+              toolArgs.tags = requestedTags.filter(t => {
+                const up = String(t).toUpperCase();
+                return up !== 'PAGO_CONFIRMADO' && up !== 'COMPROBANTE_RECIBIDO' && up !== 'PAGADO';
+              });
+              if (!toolArgs.tags.includes('ESPERA_DE_PAGO')) {
+                toolArgs.tags.push('ESPERA_DE_PAGO');
+              }
+            }
+          }
+
+          this.logger.log(`Actualizando memoria de ${payload.contactId} con: ${JSON.stringify(toolArgs)}`);
           this.logger.debug(`Emitting memory.updated for contactId=${payload.contactId}`);
           this.eventEmitter.emit(
             'memory.updated',
-            new MemoryUpdatedEvent(payload.tenantId, payload.contactId, payload.toolArguments)
+            new MemoryUpdatedEvent(payload.tenantId, payload.contactId, toolArgs)
           );
           toolResultStr = JSON.stringify({ status: 'success', message: 'Business Memory actualizada en CRM.' });
           break;

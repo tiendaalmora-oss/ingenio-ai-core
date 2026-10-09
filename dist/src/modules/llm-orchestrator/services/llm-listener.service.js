@@ -301,31 +301,20 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
             let nextStatus = currentStatus;
             const currentTags = memory?.tags || [];
             const newTags = new Set(currentTags);
-            const hasImageVoucher = (payload.content || '').includes('[Comprobante de Pago');
-            const isExplicitPaymentProof = textNorm.includes('ya transferi') ||
-                textNorm.includes('ya pague') ||
-                textNorm.includes('ya realice el pago') ||
-                textNorm.includes('listo el pago') ||
-                textNorm.includes('pago listo') ||
-                textNorm.includes('te envie el pago') ||
-                textNorm.includes('aqui esta el capture') ||
-                textNorm.includes('aqui esta el comprobante') ||
-                textNorm.includes('adjunto el capture') ||
-                textNorm.includes('adjunto el comprobante') ||
-                textNorm.includes('adjunto capture') ||
-                textNorm.includes('adjunto comprobante') ||
-                /(ref|referencia|nro comprobante|operacion)[\s#:]*\d{4,}/i.test(textNorm);
-            const isQuestionOrInquiry = textNorm.includes('?') ||
-                textNorm.includes('donde') ||
-                textNorm.includes('como') ||
-                textNorm.includes('cuando') ||
-                textNorm.includes('si pago') ||
-                textNorm.includes('para pagar') ||
-                textNorm.includes('puedo pagar') ||
-                textNorm.includes('cuanto tarda');
-            const isPaymentMsg = hasImageVoucher || (isExplicitPaymentProof && !isQuestionOrInquiry);
-            const isHotMsg = textNorm.includes('precio') || textNorm.includes('costo') || textNorm.includes('cuanto vale') || textNorm.includes('como pago') || textNorm.includes('datos de pago') || textNorm.includes('metodo de pago') || textNorm.includes('transferencia') || textNorm.includes('tarjeta') || textNorm.includes('pago movil') || textNorm.includes('quiero comprar') || textNorm.includes('comprar') || textNorm.includes('cuenta') || textNorm.includes('link de pago');
+            const hasImageVoucher = (payload.content || '').includes('[Comprobante de Pago Detectado]');
+            const hasFinancialRef = /(?:ref|referencia|nro|numero|comprobante|operacion|aprobacion|txid|hash|recibo|folio|autorizacion)[\s#:]*([a-zA-Z0-9]{4,})/i.test(textNorm);
+            const hasPlatformOrBank = /(?:pago\s*movil|transferencia|zelle|binance|usdt|paypal|zinli|wally|wise|stripe|payoneer|airtm|reserve|nequi|daviplata|bancolombia|pse|yape|plin|bcp|interbank|pix|nubank|spei|oxxo|bbva|santander|banamex|banesco|bdv|mercantil|provincial|bancaribe|bnc|bancamiga|banplus)/i.test(textNorm);
+            const hasCurrencyOrAmount = /(?:\d+[\s.,]*\d*\s*(?:bs|bolivares|usd|\$|dolares|usdt|eur|€|cop|pesos|mxn|pen|soles|brl|reales))/i.test(textNorm);
+            const isFutureOrDelay = /(?:puedo|hoy puedo|voy a|manana|dame chance|cuando cobre|cuando me paguen|despues|mas tarde|en un rato|en la tarde|en la noche|si pago|para pagar|puedo pagar|como pago|donde pago|cuanto tarda|\?)/i.test(textNorm);
+            const isExplicitPaymentProof = hasFinancialRef && (hasPlatformOrBank || hasCurrencyOrAmount) && !isFutureOrDelay;
+            const isPaymentMsg = hasImageVoucher || isExplicitPaymentProof;
+            const isPromiseToPay = /(?:hoy puedo pagar|puedo pagar|voy a pagar|pago en la tarde|pago manana|cuando cobre|cuando me paguen|dame chance|te transfiero mas tarde)/i.test(textNorm);
+            const isHotMsg = isPromiseToPay || textNorm.includes('precio') || textNorm.includes('costo') || textNorm.includes('cuanto vale') || textNorm.includes('como pago') || textNorm.includes('datos de pago') || textNorm.includes('metodo de pago') || textNorm.includes('transferencia') || textNorm.includes('tarjeta') || textNorm.includes('pago movil') || textNorm.includes('quiero comprar') || textNorm.includes('comprar') || textNorm.includes('cuenta') || textNorm.includes('link de pago');
             const isWarmMsg = textNorm.includes('me interesa') || textNorm.includes('informacion') || textNorm.includes('tienen') || textNorm.includes('disponible') || textNorm.includes('catalogo') || textNorm.includes('opciones') || textNorm.includes('servicio') || textNorm.includes('producto');
+            if (isPromiseToPay) {
+                newTags.add('ESPERA_DE_PAGO');
+                newTags.add('PIDIO_DATOS_PAGO');
+            }
             if (isPaymentMsg && reglasBot.autoPausePayment !== false) {
                 this.logger.log(`[Reglas Bot / Pagos] Detectado comprobante de pago ("${payload.content}"). Pausando bot permanentemente para atención humana y entrega.`);
                 await this.prisma.conversation.update({
@@ -520,6 +509,16 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                         if (!finalContent || finalContent.length < 10) {
                             finalContent = '¡Con gusto! En cuanto confirmemos tu comprobante de pago o número de referencia, te facilitaremos el acceso de inmediato. ¡Quedamos muy atentos! 😊';
                         }
+                    }
+                }
+                const claimsPaymentReceived = /(?:ya registramos tu comprobante|hemos recibido tu comprobante|comprobante de pago m[oó]vil|recibir[aá]s tu enlace privado de google drive|mientras verificamos tu pago)/i.test(finalContent);
+                if (claimsPaymentReceived) {
+                    const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } });
+                    const isPaid = memory?.leadStatus === 'CLOSED' || (Array.isArray(memory?.tags) && memory.tags.includes('PAGO_CONFIRMADO'));
+                    const hasVoucherInMsg = (payload.content || '').includes('[Comprobante de Pago Detectado]');
+                    if (!isPaid && !hasVoucherInMsg) {
+                        this.logger.warn(`[Shield] Interceptada felicitación prematura de comprobante por LLM para contacto sin pago verificado (${payload.contactId}). Reemplazando por respuesta cordial de espera.`);
+                        finalContent = '¡Excelente! Quedo muy atento. En cuanto realices la transferencia o pago, envíame por aquí la captura del comprobante o el número de referencia para confirmarlo de inmediato con el banco y entregarte tu acceso. 🙌✨';
                     }
                 }
             }
