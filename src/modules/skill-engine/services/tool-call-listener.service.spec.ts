@@ -160,7 +160,7 @@ describe('ToolCallListenerService', () => {
     );
   });
 
-  it('should handle handoff_to_human and emit handoff.requested', async () => {
+  it('should handle deprecated handoff_to_human without pausing or emitting handoff.requested', async () => {
     const payload = {
       tenantId: 'tenant-1',
       contactId: 'contact-1',
@@ -172,12 +172,9 @@ describe('ToolCallListenerService', () => {
 
     await service.handleToolCall(payload as any);
 
-    expect(eventEmitter.emit).toHaveBeenCalledWith(
+    expect(eventEmitter.emit).not.toHaveBeenCalledWith(
       'handoff.requested',
-      expect.objectContaining({
-        conversationId: 'conv-1',
-        reason: 'Cliente enojado'
-      })
+      expect.anything()
     );
   });
 

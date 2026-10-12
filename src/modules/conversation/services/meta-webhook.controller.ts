@@ -241,7 +241,7 @@ export class MetaWebhookController {
               conv = await this.prisma.conversation.create({
                 data: {
                   contactId: contact.id,
-                  status: 'HANDOFF',
+                  status: 'ACTIVE',
                 }
               }).catch(() => null);
             }

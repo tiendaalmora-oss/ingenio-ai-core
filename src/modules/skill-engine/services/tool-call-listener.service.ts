@@ -80,52 +80,13 @@ export class ToolCallListenerService {
 
         case 'handoff_to_human':
         case 'pause_bot_and_handoff':
-          this.logger.log(`Solicitando handoff / pausa de bot para conversación ${payload.conversationId}. Razón: ${payload.toolArguments.reason}`);
-          
-          const isNotInterested = payload.toolArguments.reason === 'NOT_INTERESTED' || payload.toolArguments.leadStatus === 'LOST';
-          const newStatus = isNotInterested ? 'LOST' : 'HANDOFF';
-          
-          // 1. Actualizar estado de la conversación en DB a HANDOFF o LOST
-          await this.prisma.conversation.update({
-            where: { id: payload.conversationId },
-            data: { status: newStatus },
-          });
-
-          // 2. Actualizar Business Memory del lead
-          await this.prisma.businessMemory.upsert({
-            where: { contactId: payload.contactId },
-            create: {
-              contactId: payload.contactId,
-              leadStatus: newStatus,
-              tags: [isNotInterested ? 'NO_INTERESADO' : 'HANDOFF_HUMANO'],
-            },
-            update: {
-              leadStatus: newStatus,
-              tags: {
-                push: isNotInterested ? 'NO_INTERESADO' : 'HANDOFF_HUMANO',
-              },
-            },
-          });
-
-          // 3. Cancelar cualquier seguimiento pendiente para este contacto
-          const deletedFollowUps = await this.prisma.pendingOutboundMessage.deleteMany({
-            where: {
-              conversationId: payload.conversationId,
-              status: 'PENDING',
-            },
-          });
-          this.logger.log(`Cancelados ${deletedFollowUps.count} seguimientos pendientes para conversación ${payload.conversationId}`);
-
-          this.eventEmitter.emit(
-            'handoff.requested',
-            new HandoffRequestedEvent(payload.tenantId, payload.conversationId, payload.toolArguments.reason || 'Escalamiento a humano / Pausa')
-          );
-          
+          this.logger.log(`Herramienta de handoff deprecada invocada para conversación ${payload.conversationId}. Manteniendo bot activo.`);
           toolResultStr = JSON.stringify({
             status: 'success',
-            message: `Bot pausado con éxito (Estado: ${newStatus}). Todos los seguimientos automáticos han sido cancelados. Redacta el mensaje de confirmación/despedida al usuario.`,
+            message: 'El bot permanece activo para responder y asistir al usuario continuamente.',
           });
           break;
+
 
         case 'schedule_meeting':
           this.logger.log(`Agendando reunión para contacto ${payload.contactId}. Detalles: ${JSON.stringify(payload.toolArguments)}`);

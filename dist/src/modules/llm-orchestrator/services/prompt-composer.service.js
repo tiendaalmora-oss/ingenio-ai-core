@@ -421,9 +421,8 @@ Tienes acceso a herramientas esenciales que puedes usar para registrar datos en 
   * name, company, objections: Datos adicionales relevantes.
 - create_task: Para tareas o recordatorios internos.
 - schedule_meeting: Solo cuando el cliente acepte expresamente una reunión.
-- handoff_to_human: Cuando el usuario pida explícitamente ser atendido por un asesor humano.
 
-REGLA OBLIGATORIA: Siempre debes responder de forma amable, profesional y persuasiva al mensaje del usuario en lenguaje natural. Nunca dejes al usuario sin respuesta.`;
+REGLA OBLIGATORIA: Siempre debes responder de forma amable, profesional y persuasiva al mensaje del usuario en lenguaje natural. Nunca te pauses ni te despidas diciendo que transferirás a un asesor por saludos o preguntas de anuncios ("¿Hay alguien con quien pueda chatear?", "Quiero más información", etc.). Atiende al usuario de inmediato y llévalo a través del proceso de venta. Nunca dejes al usuario sin respuesta.`;
     }
     buildHistory(history) {
         const messages = [];

@@ -63,10 +63,12 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
             : {
                 autoPauseOptOut: true,
                 optOutMessage: 'Entendido perfectamente. Agradecemos mucho tu tiempo y honestidad. ¡Que tengas un excelente día!',
-                autoPauseHandoff: true,
+                autoPauseHandoff: false,
                 handoffMessage: 'Con gusto. En breve un asesor humano de nuestro equipo continuará la conversación contigo por acá.',
-                enableMessageLimit: true,
-                maxBotMessages: 10,
+                autoPausePayment: true,
+                paymentReceivedMessage: '¡Muchas gracias! 🎉 Hemos recibido tu comprobante de pago. En breve un asesor de nuestro equipo verificará los datos de la transferencia y te entregará el acceso a tu material por este medio. ¡Quedamos a tu completa orden!',
+                enableMessageLimit: false,
+                maxBotMessages: 50,
                 respondLastMessageBeforePause: true,
                 autoResetAfterTime: false,
                 resetHours: 24,
@@ -78,61 +80,24 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
             where: { id: payload.conversationId },
         });
         if (conversation && (conversation.status === 'HANDOFF' || conversation.status === 'PAUSED' || conversation.status === 'LOST' || conversation.status === 'RESOLVED')) {
-            const isAutoResetEnabled = Boolean(reglasBot.autoResetAfterTime);
-            const isCampaignTrigger = textNorm.startsWith('hola') && (textNorm.includes('quiero mas informacion') ||
-                textNorm.includes('quiero informacion') ||
-                textNorm.includes('kit de') ||
-                textNorm.includes('mega kit') ||
-                textNorm.includes('mas informacion'));
-            if (isCampaignTrigger && (conversation.status === 'HANDOFF' || conversation.status === 'PAUSED')) {
-                const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } });
-                const tags = memory?.tags || [];
-                const isExplicitHumanRequest = tags.includes('ASESOR_SOLICITADO') || tags.includes('HANDOFF_HUMANO');
-                if (!isExplicitHumanRequest) {
-                    this.logger.log(`[Campaign Auto-Wake] Conversación ${payload.conversationId} reactivada automáticamente en ACTIVE por nuevo trigger de campaña: "${payload.content}".`);
-                    await this.prisma.conversation.update({
-                        where: { id: payload.conversationId },
-                        data: { status: 'ACTIVE' }
-                    });
-                    conversation.status = 'ACTIVE';
-                }
-                else {
-                    this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en HANDOFF por solicitud explícita de humano previa. Manteniendo bot en pausa.`);
-                    return;
-                }
-            }
-            else if (isAutoResetEnabled) {
-                const resetHours = Number(reglasBot.resetHours) || 24;
-                const resetMs = resetHours * 3600 * 1000;
-                const previousInteraction = this.prisma?.interaction?.findFirst
-                    ? await this.prisma.interaction.findFirst({
-                        where: {
-                            conversationId: payload.conversationId,
-                            id: { not: payload.interactionId }
-                        },
-                        orderBy: { timestamp: 'desc' }
-                    })
-                    : null;
-                const previousTime = previousInteraction?.timestamp ? new Date(previousInteraction.timestamp).getTime() : 0;
-                const elapsed = previousTime > 0 ? (Date.now() - previousTime) : Infinity;
-                const elapsedHours = elapsed / 3600000;
-                if (elapsed >= resetMs || (isCampaignTrigger && elapsedHours >= 2)) {
-                    this.logger.log(`[Reglas Bot] Reactivando bot automáticamente para conversación ${payload.conversationId}. Inactividad previa: ${elapsedHours.toFixed(1)}h (límite: ${resetHours}h, campaña: ${isCampaignTrigger}).`);
-                    await this.prisma.conversation.update({
-                        where: { id: payload.conversationId },
-                        data: { status: 'ACTIVE' }
-                    });
-                    conversation.status = 'ACTIVE';
-                }
-                else {
-                    this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}' (inactividad previa: ${elapsedHours.toFixed(1)}h < ${resetHours}h). Bot en pausa.`);
-                    return;
-                }
-            }
-            else {
-                this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}'. Bot en pausa para permitir atención humana manual.`);
+            const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } });
+            const tags = memory?.tags || [];
+            const isPaymentConfirmed = tags.includes('PAGO_CONFIRMADO') || tags.includes('COMPROBANTE_RECIBIDO');
+            if (isPaymentConfirmed) {
+                this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}' por recepción de comprobante de pago verificado. Manteniendo bot silenciado para atención humana.`);
                 return;
             }
+            const isExplicitLost = tags.includes('NO_INTERESADO') || tags.includes('OPT_OUT');
+            if (isExplicitLost && conversation.status === 'LOST' && !textNorm.includes('precio') && !textNorm.includes('comprar') && !textNorm.includes('hola')) {
+                this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado LOST por opt-out previo. Manteniendo bot en silencio.`);
+                return;
+            }
+            this.logger.log(`[Universal Auto-Wake] Reactivando conversación ${payload.conversationId} de '${conversation.status}' a 'ACTIVE' por mensaje entrante: "${payload.content}".`);
+            await this.prisma.conversation.update({
+                where: { id: payload.conversationId },
+                data: { status: 'ACTIVE' }
+            });
+            conversation.status = 'ACTIVE';
         }
         if (reglasBot.autoPauseOptOut !== false) {
             const optOutPatterns = [
@@ -197,101 +162,6 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                     }
                 });
                 this.eventEmitter.emit('response.generated', new response_generated_event_1.ResponseGeneratedEvent(payload.tenantId, payload.conversationId, farewell));
-                return;
-            }
-        }
-        if (reglasBot.autoPauseHandoff !== false) {
-            const handoffPatterns = [
-                'hablar con un humano',
-                'hablar con una persona',
-                'persona real',
-                'un asesor',
-                'asesor humano',
-                'atencion humana',
-                'atencion con persona',
-                'pasame con un asesor',
-                'pasame con alguien',
-                'quiero una persona',
-                'quiero un asesor',
-                'quiero un humano',
-                'comunicarme con una persona',
-                'comunicarme con un asesor',
-                'asesor por favor',
-                'humano por favor'
-            ];
-            const isHandoff = handoffPatterns.some(p => textNorm.includes(p));
-            if (isHandoff) {
-                this.logger.log(`[Reglas Bot] Solicitud de asesor humano ("${payload.content}"). Traspasando a HANDOFF y cancelando seguimientos.`);
-                await this.prisma.conversation.update({
-                    where: { id: payload.conversationId },
-                    data: { status: 'HANDOFF' }
-                });
-                const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } });
-                const currentTags = memory?.tags || [];
-                const updatedTags = Array.from(new Set([...currentTags, 'HANDOFF_HUMANO', 'ASESOR_SOLICITADO']));
-                await this.prisma.businessMemory.upsert({
-                    where: { contactId: payload.contactId },
-                    create: {
-                        contactId: payload.contactId,
-                        leadStatus: 'HANDOFF',
-                        tags: updatedTags
-                    },
-                    update: {
-                        leadStatus: 'HANDOFF',
-                        tags: updatedTags
-                    }
-                });
-                await this.prisma.pendingOutboundMessage.deleteMany({
-                    where: { conversationId: payload.conversationId }
-                });
-                const handoffMsg = reglasBot.handoffMessage || 'Con gusto. En breve un asesor humano de nuestro equipo continuará la conversación contigo por acá.';
-                await this.prisma.interaction.create({
-                    data: {
-                        conversationId: payload.conversationId,
-                        direction: 'OUTBOUND',
-                        type: 'TEXT',
-                        content: handoffMsg,
-                        role: 'assistant'
-                    }
-                });
-                this.eventEmitter.emit('response.generated', new response_generated_event_1.ResponseGeneratedEvent(payload.tenantId, payload.conversationId, handoffMsg));
-                return;
-            }
-        }
-        if (reglasBot.enableMessageLimit !== false) {
-            const maxMessages = Number(reglasBot.maxBotMessages) || 25;
-            const botMessageCount = this.prisma?.interaction?.count
-                ? await this.prisma.interaction.count({
-                    where: {
-                        conversationId: payload.conversationId,
-                        direction: 'OUTBOUND',
-                        role: 'assistant',
-                        type: 'TEXT'
-                    }
-                })
-                : 0;
-            if (botMessageCount >= maxMessages) {
-                this.logger.log(`[Reglas Bot] Conversación ${payload.conversationId} ya alcanzó el límite de ${maxMessages} mensajes del bot (${botMessageCount} enviados). Pausando bot silenciosamente.`);
-                await this.prisma.conversation.update({
-                    where: { id: payload.conversationId },
-                    data: { status: 'HANDOFF' }
-                });
-                await this.prisma.pendingOutboundMessage.deleteMany({
-                    where: { conversationId: payload.conversationId }
-                });
-                const limitMsg = (reglasBot.limitReachedMessage || '').trim();
-                if (limitMsg) {
-                    await this.prisma.interaction.create({
-                        data: {
-                            conversationId: payload.conversationId,
-                            direction: 'OUTBOUND',
-                            type: 'TEXT',
-                            content: limitMsg,
-                            role: 'assistant'
-                        }
-                    });
-                    this.eventEmitter.emit('response.generated', new response_generated_event_1.ResponseGeneratedEvent(payload.tenantId, payload.conversationId, limitMsg));
-                }
                 return;
             }
         }

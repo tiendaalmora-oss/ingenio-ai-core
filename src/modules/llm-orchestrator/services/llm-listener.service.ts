@@ -96,10 +96,12 @@ export class LlmListenerService {
       : {
           autoPauseOptOut: true,
           optOutMessage: 'Entendido perfectamente. Agradecemos mucho tu tiempo y honestidad. ¡Que tengas un excelente día!',
-          autoPauseHandoff: true,
+          autoPauseHandoff: false,
           handoffMessage: 'Con gusto. En breve un asesor humano de nuestro equipo continuará la conversación contigo por acá.',
-          enableMessageLimit: true,
-          maxBotMessages: 10,
+          autoPausePayment: true,
+          paymentReceivedMessage: '¡Muchas gracias! 🎉 Hemos recibido tu comprobante de pago. En breve un asesor de nuestro equipo verificará los datos de la transferencia y te entregará el acceso a tu material por este medio. ¡Quedamos a tu completa orden!',
+          enableMessageLimit: false,
+          maxBotMessages: 50,
           respondLastMessageBeforePause: true,
           autoResetAfterTime: false,
           resetHours: 24,
@@ -109,75 +111,37 @@ export class LlmListenerService {
 
     const textNorm = (payload.content || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
-    // ── Check if conversation is paused / handed off to human (with Auto-Reset support) ──
+    // ── Check if conversation is paused / handed off (Universal Auto-Wake preserving Payment Vouchers) ──
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: payload.conversationId },
     });
 
     if (conversation && (conversation.status === 'HANDOFF' || conversation.status === 'PAUSED' || conversation.status === 'LOST' || conversation.status === 'RESOLVED')) {
-      const isAutoResetEnabled = Boolean(reglasBot.autoResetAfterTime);
-      const isCampaignTrigger = textNorm.startsWith('hola') && (
-        textNorm.includes('quiero mas informacion') ||
-        textNorm.includes('quiero informacion') ||
-        textNorm.includes('kit de') ||
-        textNorm.includes('mega kit') ||
-        textNorm.includes('mas informacion')
-      );
+      // 1. Verificación estricta: ¿La conversación fue pausada por comprobante de pago auditado?
+      const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } });
+      const tags = (memory?.tags as string[]) || [];
+      const isPaymentConfirmed = tags.includes('PAGO_CONFIRMADO') || tags.includes('COMPROBANTE_RECIBIDO');
 
-      // 1. Si el cliente envía un disparador explícito de campaña de ventas (ej: "¡Hola! Quiero más información sobre el Kit de...")
-      // y no hubo una solicitud explícita de asesor humano (ASESOR_SOLICITADO / HANDOFF_HUMANO),
-      // reactivar automáticamente el bot para no perder la venta por falsos positivos de saludos del móvil.
-      if (isCampaignTrigger && (conversation.status === 'HANDOFF' || conversation.status === 'PAUSED')) {
-        const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } });
-        const tags = (memory?.tags as string[]) || [];
-        const isExplicitHumanRequest = tags.includes('ASESOR_SOLICITADO') || tags.includes('HANDOFF_HUMANO');
-
-        if (!isExplicitHumanRequest) {
-          this.logger.log(`[Campaign Auto-Wake] Conversación ${payload.conversationId} reactivada automáticamente en ACTIVE por nuevo trigger de campaña: "${payload.content}".`);
-          await this.prisma.conversation.update({
-            where: { id: payload.conversationId },
-            data: { status: 'ACTIVE' }
-          });
-          conversation.status = 'ACTIVE';
-        } else {
-          this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en HANDOFF por solicitud explícita de humano previa. Manteniendo bot en pausa.`);
-          return;
-        }
-      } else if (isAutoResetEnabled) {
-        const resetHours = Number(reglasBot.resetHours) || 24;
-        const resetMs = resetHours * 3600 * 1000;
-        
-        // Buscar la última interacción PREVIA al mensaje entrante actual (ignorar payload.interactionId)
-        const previousInteraction = this.prisma?.interaction?.findFirst
-          ? await this.prisma.interaction.findFirst({
-              where: {
-                conversationId: payload.conversationId,
-                id: { not: payload.interactionId }
-              },
-              orderBy: { timestamp: 'desc' }
-            })
-          : null;
-
-        const previousTime = previousInteraction?.timestamp ? new Date(previousInteraction.timestamp).getTime() : 0;
-        const elapsed = previousTime > 0 ? (Date.now() - previousTime) : Infinity;
-        const elapsedHours = elapsed / 3600000;
-
-        // Reactivar si ha transcurrido el tiempo configurado o si es un nuevo mensaje de campaña tras al menos 2 horas
-        if (elapsed >= resetMs || (isCampaignTrigger && elapsedHours >= 2)) {
-          this.logger.log(`[Reglas Bot] Reactivando bot automáticamente para conversación ${payload.conversationId}. Inactividad previa: ${elapsedHours.toFixed(1)}h (límite: ${resetHours}h, campaña: ${isCampaignTrigger}).`);
-          await this.prisma.conversation.update({
-            where: { id: payload.conversationId },
-            data: { status: 'ACTIVE' }
-          });
-          conversation.status = 'ACTIVE';
-        } else {
-          this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}' (inactividad previa: ${elapsedHours.toFixed(1)}h < ${resetHours}h). Bot en pausa.`);
-          return;
-        }
-      } else {
-        this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}'. Bot en pausa para permitir atención humana manual.`);
+      if (isPaymentConfirmed) {
+        this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}' por recepción de comprobante de pago verificado. Manteniendo bot silenciado para atención humana.`);
         return;
       }
+
+      // 2. Si el estado es LOST por desinterés explícito (Opt-Out) y no es un nuevo intento de compra, respetar
+      const isExplicitLost = tags.includes('NO_INTERESADO') || tags.includes('OPT_OUT');
+      if (isExplicitLost && conversation.status === 'LOST' && !textNorm.includes('precio') && !textNorm.includes('comprar') && !textNorm.includes('hola')) {
+        this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado LOST por opt-out previo. Manteniendo bot en silencio.`);
+        return;
+      }
+
+      // 3. UNIVERSAL AUTO-WAKE: Para cualquier conversación en HANDOFF o PAUSED (ej: de Meta Ads, saludos o estados previos),
+      // reactivar automáticamente a ACTIVE para responder al cliente de inmediato y jamás perder la venta.
+      this.logger.log(`[Universal Auto-Wake] Reactivando conversación ${payload.conversationId} de '${conversation.status}' a 'ACTIVE' por mensaje entrante: "${payload.content}".`);
+      await this.prisma.conversation.update({
+        where: { id: payload.conversationId },
+        data: { status: 'ACTIVE' }
+      });
+      conversation.status = 'ACTIVE';
     }
 
     // 1. REGLA: Auto-Pausa por Rechazo / Desinterés (Opt-Out)
@@ -259,125 +223,7 @@ export class LlmListenerService {
       }
     }
 
-    // 2. REGLA: Auto-Pausa y Traspaso por Solicitud de Humano (Handoff)
-    if (reglasBot.autoPauseHandoff !== false) {
-      const handoffPatterns = [
-        'hablar con un humano',
-        'hablar con una persona',
-        'persona real',
-        'un asesor',
-        'asesor humano',
-        'atencion humana',
-        'atencion con persona',
-        'pasame con un asesor',
-        'pasame con alguien',
-        'quiero una persona',
-        'quiero un asesor',
-        'quiero un humano',
-        'comunicarme con una persona',
-        'comunicarme con un asesor',
-        'asesor por favor',
-        'humano por favor'
-      ];
 
-      const isHandoff = handoffPatterns.some(p => textNorm.includes(p));
-      if (isHandoff) {
-        this.logger.log(`[Reglas Bot] Solicitud de asesor humano ("${payload.content}"). Traspasando a HANDOFF y cancelando seguimientos.`);
-        
-        await this.prisma.conversation.update({
-          where: { id: payload.conversationId },
-          data: { status: 'HANDOFF' }
-        });
-
-        const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } });
-        const currentTags = (memory?.tags as string[]) || [];
-        const updatedTags = Array.from(new Set([...currentTags, 'HANDOFF_HUMANO', 'ASESOR_SOLICITADO']));
-        await this.prisma.businessMemory.upsert({
-          where: { contactId: payload.contactId },
-          create: {
-            contactId: payload.contactId,
-            leadStatus: 'HANDOFF',
-            tags: updatedTags
-          },
-          update: {
-            leadStatus: 'HANDOFF',
-            tags: updatedTags
-          }
-        });
-
-        await this.prisma.pendingOutboundMessage.deleteMany({
-          where: { conversationId: payload.conversationId }
-        });
-
-        const handoffMsg = reglasBot.handoffMessage || 'Con gusto. En breve un asesor humano de nuestro equipo continuará la conversación contigo por acá.';
-        
-        await this.prisma.interaction.create({
-          data: {
-            conversationId: payload.conversationId,
-            direction: 'OUTBOUND',
-            type: 'TEXT',
-            content: handoffMsg,
-            role: 'assistant'
-          }
-        });
-
-        this.eventEmitter.emit('response.generated', new ResponseGeneratedEvent(
-          payload.tenantId,
-          payload.conversationId,
-          handoffMsg
-        ));
-        return;
-      }
-    }
-
-    // 3. REGLA: Límite Máximo de Mensajes del Bot (Ahorro de Tokens y Guardrail)
-    if (reglasBot.enableMessageLimit !== false) {
-      const maxMessages = Number(reglasBot.maxBotMessages) || 25;
-      // FIX: Contar solo interacciones de tipo TEXT (no TOOL_CALL) para un conteo real de mensajes visibles
-      const botMessageCount = this.prisma?.interaction?.count
-        ? await this.prisma.interaction.count({
-            where: {
-              conversationId: payload.conversationId,
-              direction: 'OUTBOUND',
-              role: 'assistant',
-              type: 'TEXT'
-            }
-          })
-        : 0;
-
-      if (botMessageCount >= maxMessages) {
-        this.logger.log(`[Reglas Bot] Conversación ${payload.conversationId} ya alcanzó el límite de ${maxMessages} mensajes del bot (${botMessageCount} enviados). Pausando bot silenciosamente.`);
-        
-        await this.prisma.conversation.update({
-          where: { id: payload.conversationId },
-          data: { status: 'HANDOFF' }
-        });
-
-        await this.prisma.pendingOutboundMessage.deleteMany({
-          where: { conversationId: payload.conversationId }
-        });
-
-        const limitMsg = (reglasBot.limitReachedMessage || '').trim();
-        if (limitMsg) {
-          await this.prisma.interaction.create({
-            data: {
-              conversationId: payload.conversationId,
-              direction: 'OUTBOUND',
-              type: 'TEXT',
-              content: limitMsg,
-              role: 'assistant'
-            }
-          });
-
-          this.eventEmitter.emit('response.generated', new ResponseGeneratedEvent(
-            payload.tenantId,
-            payload.conversationId,
-            limitMsg
-          ));
-        }
-        return;
-      }
-    }
 
     // ── Auto-Asignación Proactiva de Temperatura del Lead en CRM (COLD -> WARM -> HOT -> CLOSED) ──
     try {
