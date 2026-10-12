@@ -72,8 +72,9 @@ export class PromptComposerService {
    - Tras responder la duda técnica puntual, retoma de inmediato el paso activo del embudo.
 
 [REGLAS ESTRICTAS DE PROGRESIÓN COMERCIAL Y CIERRE]:
-1. NUNCA REPETIR MENSAJES YA ENVIADOS:
-   - Revisa el historial de la conversación. Si un regalo, enlace o paso ya fue entregado previamente, NUNCA lo vuelvas a repetir.
+1. NUNCA REPETIR MENSAJES YA ENVIADOS Y RUPTURA DE BUCLES (LOOP BREAKER):
+   - Revisa minuciosamente el historial de la conversación. Si un saludo, presentación, regalo, enlace, desglose de beneficios o pregunta de cierre ya fue enviado previamente, ESTÁ TERMINANTEMENTE PROHIBIDO volver a enviarlo de la misma forma o con las mismas palabras.
+   - RUPTURA DE BUCLE: Si el cliente repite su respuesta anterior (ej. vuelve a decir "en casa", "gym", "info", "ok"), NO repitas la pregunta ni el paso anterior. Interpreta que el cliente reafirma su interés, reconoce su respuesta brevemente y AVANZA DE INMEDIATO al siguiente paso del embudo (por ejemplo, si ya le presentaste el producto y le preguntaste si quería conocer el precio, y vuelve a decir "en casa" o "sí", NO repitas el producto: pasa directamente a darle el precio promocional, la oferta y los métodos de pago).
    - En las etapas iniciales de prospección (Paso 1 y Paso 2), ante respuestas cortas o afirmativas (ej: "Si gracias", "Ok", "Cuéntame más", "Me interesa", "Dale"), avanza fluidamente hacia la presentación del valor y la oferta.
 
 2. 🛑 GESTIÓN INTELIGENTE DE DUDAS POST-OFERTA Y ESPERA DE PAGO (CERO RESPUESTAS ENLATADAS):
@@ -121,6 +122,17 @@ export class PromptComposerService {
     if (mode === PromptMode.FOLLOW_UP) {
       const followUpContext = `\n[MODO: SEGUIMIENTO AUTOMÁTICO ACTIVO (FOLLOW_UP)]\nEstás enviando un mensaje de reactivación proactivo porque el cliente no ha respondido recientemente.\nRegla de seguimiento aplicada: ${JSON.stringify(followUpRule)}\n\n🛑 PROHIBICIÓN ABSOLUTA DE OFRECER MATERIALES, MUESTRAS O ARCHIVOS:\n- NUNCA preguntes ni ofrezcas: "¿Quieres que te envíe el material?", "¿Te paso material?", "¿Quieres ver una muestra?", "¿Te gustaría que te comparta algo?".\n- El bot NO envía material antes de la compra ni ofrece descargas previas.\n- Si ofreces enviar material y el cliente responde "sí, envíamelo", se rompe el flujo comercial porque el material solo se entrega tras confirmar el pago.\n- El objetivo del seguimiento es reactivar el interés con preguntas sencillas de baja fricción (dudas sobre la propuesta, necesidad puntual, tiempo para revisar la información o método de pago), SIN ofrecer enviar nada.\n`;
       finalSystemContent += followUpContext;
+    }
+
+    // Extraer los últimos mensajes que envió el bot para el escudo anti-repetición universal en todos los modos
+    const pastBotMessages = history
+      .filter((h: any) => h.role === 'assistant' || h.direction === 'OUTBOUND')
+      .filter((h: any) => h.content && h.content.trim() !== '')
+      .slice(-4)
+      .map((h: any) => `"${(h.content || '').replace(/\n/g, ' ').substring(0, 160).trim()}..."`);
+
+    if (pastBotMessages.length > 0) {
+      finalSystemContent += `\n[ESCUDO ANTI-REPETICIÓN Y RUPTURA DE BUCLES (LOOP BREAKER)]:\nÚLTIMOS MENSAJES YA ENVIADOS POR EL ASISTENTE EN ESTA CONVERSACIÓN:\n${pastBotMessages.join('\n')}\n\n🛑 REGLAS INQUEBRANTABLES DE FLUIDEZ Y NO REPETICIÓN:\n1. ESTÁ TERMINANTEMENTE PROHIBIDO repetir el mismo mensaje, saludo, listado de viñetas, características o pregunta de cierre que ya enviaste previamente.\n2. RUPTURA DE BUCLE (LOOP BREAKER): Si el usuario repite su respuesta, da una respuesta corta o insiste con la misma opción (ej: vuelve a decir "en casa", "gym", "info", "ok"): NO vuelvas a enviar la presentación ni el filtro. Reconoce brevemente lo que dijo con entusiasmo y AVANZA DE INMEDIATO al siguiente paso del embudo comercial (presenta el precio promocional o pasa a los datos de pago).\n3. Si ya preguntaste en tu turno anterior si quería conocer el precio o la oferta y el usuario vuelve a responder, NO repitas la pregunta: dale directamente el precio promocional y las facilidades de pago.\n4. Cada intervención debe sentirse fresca, natural, humana y orientada a hacer progresar la venta hacia el cierre.\n`;
     }
 
     const messages: any[] = [{
@@ -496,12 +508,16 @@ REGLA OBLIGATORIA: Siempre debes responder de forma amable, profesional y persua
     const messages: any[] = [];
     for (const msg of history) {
       if (msg.role === 'tool') {
-        messages.push({ role: 'tool', content: msg.content, tool_call_id: msg.toolCallId });
+        messages.push({
+          role: 'tool',
+          content: msg.content,
+          tool_call_id: msg.toolCallId || 'tool_call_default'
+        });
       } else if (msg.role === 'assistant' && msg.toolCalls) {
         const toolCallsArr = Array.isArray(msg.toolCalls) ? msg.toolCalls : [];
         messages.push({
           role: 'assistant',
-          content: null,
+          content: msg.content || null,
           tool_calls: toolCallsArr.map((tc: any) => ({
             id: tc.id,
             type: 'function',

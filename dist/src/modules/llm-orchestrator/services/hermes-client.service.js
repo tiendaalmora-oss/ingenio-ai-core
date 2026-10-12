@@ -78,7 +78,7 @@ let HermesClientService = HermesClientService_1 = class HermesClientService {
     async generateResponse(messages, enableTools = true, toolChoice = 'auto') {
         try {
             const options = {
-                temperature: 0.4,
+                temperature: 0.5,
             };
             if (enableTools) {
                 options.tools = HERMES_TOOLS;

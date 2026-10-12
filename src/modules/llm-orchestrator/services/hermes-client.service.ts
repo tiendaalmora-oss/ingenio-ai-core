@@ -76,7 +76,7 @@ export class HermesClientService {
   async generateResponse(messages: AiMessage[], enableTools = true, toolChoice: 'auto' | 'none' = 'auto'): Promise<LLMResponse> {
     try {
       const options: any = {
-        temperature: 0.4,
+        temperature: 0.5,
       };
       if (enableTools) {
         options.tools = HERMES_TOOLS;
