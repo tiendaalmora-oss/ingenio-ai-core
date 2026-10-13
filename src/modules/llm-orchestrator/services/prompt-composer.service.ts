@@ -360,35 +360,46 @@ ${ruleText}
                    history.some((h: any) => (h.content || '').includes('Comprobante de Pago Detectado') || (h.content || '').includes('Venta manual confirmada'));
 
     // Señales detectadas en los mensajes OUTBOUND del ciclo activo
-    const paso1Done = outbound.some((h: any) => {
+    // Paso 1 está COMPLETADO si el bot ya envió al menos un mensaje en este ciclo activo
+    // (el micro-filtro / saludo inicial) o si contiene preguntas de filtro o saludo
+    const paso1Done = outbound.length >= 1 || outbound.some((h: any) => {
       const c = (h.content || '').toLowerCase();
-      return c.includes('qué año') || c.includes('que año') || c.includes('qué años') || 
-             c.includes('que materia') || c.includes('qué materia') || c.includes('cuéntame') ||
-             c.includes('cuentame') || c.includes('atiende actualmente') || c.includes('bachillerato');
+      return c.includes('?') || c.includes('¿') || c.includes('hola') || c.includes('saludarte') ||
+             c.includes('qué año') || c.includes('que año') || c.includes('que materia') || 
+             c.includes('cuéntame') || c.includes('entrenas') || c.includes('atiende');
     });
     
+    // Paso 2 (Presentación del kit, rutinas, módulos, contenido o beneficios de cualquier producto)
     const paso2Done = outbound.some((h: any) => {
       const c = (h.content || '').toLowerCase();
       return c.includes('todo lo que recibes') || c.includes('evaluaciones') || 
              c.includes('planificaciones') || c.includes('mega kit') || 
              c.includes('kit docente') || c.includes('beneficios') ||
-             c.includes('regalos exclusivos') || c.includes('te gustaría ver');
+             c.includes('regalos exclusivos') || c.includes('te gustaría ver') ||
+             c.includes('mega pack') || c.includes('rutinas') || c.includes('módulos') ||
+             c.includes('modulos') || c.includes('acceso de por vida') ||
+             c.includes('organizado en') || c.includes('drive') || c.includes('incluye') ||
+             c.includes('ingeniodigital.shop') || c.includes('gifs');
     });
     
+    // Paso 3 (Oferta irresistible, precio, costo o inversión comercial)
     const paso3Done = outbound.some((h: any) => {
       const c = (h.content || '').toLowerCase();
       return c.includes('precio') || c.includes('hoy:') || c.includes('pago único') || 
-             c.includes('bs.') || c.includes('usd') || c.includes('binance') || 
-             c.includes('zinli') || c.includes('garantía') || c.includes('garantia') ||
-             c.includes('lanzamiento');
+             c.includes('pago unico') || c.includes('bs.') || c.includes('usd') || 
+             c.includes('binance') || c.includes('zinli') || c.includes('garantía') || 
+             c.includes('garantia') || c.includes('lanzamiento') || c.includes('inversión') ||
+             c.includes('inversion') || c.includes('costo') || c.includes('oferta');
     });
     
+    // Paso 4 (Datos de pago, cuentas bancarias o billeteras entregadas)
     const paso4Done = outbound.some((h: any) => {
       const c = (h.content || '').toLowerCase();
       return c.includes('datos de pago') || c.includes('banco') || c.includes('pago móvil') ||
              c.includes('pago movil') || c.includes('transferencia') || c.includes('cédula') ||
              c.includes('cedula') || c.includes('titular') || c.includes('cuenta') ||
-             c.includes('escribe quiero') || c.includes('escribe "quiero"');
+             c.includes('escribe quiero') || c.includes('escribe "quiero"') ||
+             c.includes('0102') || c.includes('usdt');
     });
 
     // Detectar si un cliente pagador está consultando soporte o en proceso de RECOMPRA / VENTA CRUZADA
@@ -524,6 +535,20 @@ REGLA OBLIGATORIA: Siempre debes responder de forma amable, profesional y persua
             function: { name: tc.name, arguments: JSON.stringify(tc.arguments ?? {}) }
           }))
         });
+
+        // Especificación estricta de OpenAI / Gemini / OpenRouter:
+        // Todo mensaje assistant con tool_calls debe ir seguido de mensajes con role 'tool'.
+        // Si en la base de datos no hay un registro de TOOL_RESULT posterior, sintetizamos el resultado.
+        const nextMsg = history[history.indexOf(msg) + 1];
+        if (!nextMsg || nextMsg.role !== 'tool') {
+          for (const tc of (toolCallsArr as any[])) {
+            messages.push({
+              role: 'tool',
+              content: '{"status":"ok"}',
+              tool_call_id: tc?.id || 'tool_call_default'
+            });
+          }
+        }
       } else {
         messages.push({
           role: msg.role || (msg.direction === 'INBOUND' ? 'user' : 'assistant'),

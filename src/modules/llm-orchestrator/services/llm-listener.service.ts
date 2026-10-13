@@ -513,10 +513,12 @@ export class LlmListenerService {
         }
       }
 
-      // Fallback de seguridad: Si la IA no generó texto o hubo error, generar saludo cordial de contingencia
+      // Silencio de seguridad: Si la IA no generó texto o hubo error de proveedor (OpenRouter sin saldo, rate limit, timeout o fallo),
+      // NO enviar saludos genéricos ni respuestas incoherentes repetitivas ("¡Hola! Qué gusto saludarte...").
+      // Guardar silencio para que el CRM solo responda cuando tenga una respuesta coherente y contextual para el cliente.
       if (!finalContent || finalContent.trim() === '') {
-        this.logger.warn(`[Executive Loop] LLM no generó texto válido. Generando saludo cordial de contingencia...`);
-        finalContent = '¡Hola! Qué gusto saludarte. 👋 ¿En qué podemos ayudarte el día de hoy?';
+        this.logger.warn(`[Executive Loop] LLM no generó texto válido o proveedor no disponible. Permaneciendo en silencio para evitar respuestas repetitivas o incoherentes.`);
+        return;
       }
 
       if (finalContent) {
