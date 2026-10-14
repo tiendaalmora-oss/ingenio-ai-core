@@ -409,15 +409,17 @@ export class LlmListenerService {
           ));
         }
 
-        if (response.content && response.content.trim() !== '') {
+        const cleanedCompanion = response.content ? sanitizeUserFacingResponse(response.content) : '';
+
+        if (cleanedCompanion && cleanedCompanion.trim() !== '') {
           // El texto ya está guardado en el TOOL_CALL record.
-          // Lo emitimos a WhatsApp pero NO lo guardamos de nuevo como TEXT para evitar duplicado.
-          finalContent = response.content;
+          // Lo emitimos a WhatsApp limpio pero NO lo guardamos de nuevo como TEXT para evitar duplicado.
+          finalContent = cleanedCompanion;
           skipTextInteraction = true;
-          this.logger.log(`[Executive Loop] Tool call + texto en mismo turno. Emitiendo texto sin duplicar registro en DB.`);
+          this.logger.log(`[Executive Loop] Tool call + texto conversacional válido en mismo turno. Emitiendo texto limpio.`);
         } else {
-          // El LLM solo hizo el tool call sin texto → pedimos la respuesta conversacional por separado
-          this.logger.log(`[Executive Loop] Herramienta ejecutada sin texto. Solicitando respuesta de texto conversacional para el usuario...`);
+          // El LLM solo hizo el tool call (o produjo solo monólogo en inglés/código python) → pedimos la respuesta conversacional limpia por separado
+          this.logger.log(`[Executive Loop] Herramienta ejecutada sin texto conversacional válido. Solicitando respuesta de texto conversacional para el usuario...`);
           const textPrompt = await this.contextBuilder.buildContext(
             payload.tenantId,
             payload.contactId,
@@ -438,8 +440,11 @@ export class LlmListenerService {
           }
         }
       } else if (response.content) {
-        // Blindaje contra fugas de sintaxis de tool interna (ej: call:update_business_memory{...})
+        // Blindaje contra fugas de sintaxis de tool interna JSON (ej: call:update_business_memory{...})
+        // O sintaxis de ejecución de código Python alucinado por Gemini (ej: tool_code print(default_api.update_business_memory(...)))
         const pseudoToolMatch = response.content.match(/(?:^|\n)\s*call:(\w+)\{([\s\S]*)/i);
+        const pythonToolMatch = response.content.match(/(?:tool_code\s+)?(?:print\()?default_api\.(\w+)\(([\s\S]*?)\)\)?/i);
+
         if (pseudoToolMatch) {
           const toolName = pseudoToolMatch[1];
           const rawArgs = pseudoToolMatch[2];
@@ -492,6 +497,53 @@ export class LlmListenerService {
           if (textResponse.content) {
             finalContent = textResponse.content;
           }
+        } else if (pythonToolMatch) {
+          const toolName = pythonToolMatch[1];
+          const rawArgs = pythonToolMatch[2];
+          this.logger.warn(`[Executive Loop] Detectada llamada Python alucinada en texto: ${toolName}. Interceptando y ejecutando...`);
+
+          const parsedArgs: any = {};
+          const interestsMatch = rawArgs.match(/interests\s*=\s*\[([^\]]+)\]/i);
+          const leadStatusMatch = rawArgs.match(/leadStatus\s*=\s*['"]([^'"]+)['"]/i);
+          const tagsMatch = rawArgs.match(/tags\s*=\s*\[([^\]]+)\]/i);
+
+          if (interestsMatch) {
+            parsedArgs.interests = interestsMatch[1].split(',').map((s: string) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+          }
+          if (leadStatusMatch) {
+            parsedArgs.leadStatus = leadStatusMatch[1];
+          }
+          if (tagsMatch) {
+            parsedArgs.tags = tagsMatch[1].split(',').map((s: string) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+          }
+
+          await this.eventEmitter.emitAsync('tool.called', new ToolCalledEvent(
+            payload.tenantId,
+            payload.conversationId,
+            payload.contactId,
+            `rescued_py_${Date.now()}`,
+            toolName,
+            parsedArgs
+          ));
+
+          this.logger.log(`[Executive Loop] Herramienta Python rescatada ejecutada en CRM. Solicitando respuesta conversacional...`);
+          const textPrompt = await this.contextBuilder.buildContext(
+            payload.tenantId,
+            payload.contactId,
+            payload.conversationId,
+            payload.content,
+            null
+          );
+
+          textPrompt.push({
+            role: 'user',
+            content: `[SISTEMA]: La memoria del CRM ya fue actualizada con éxito. Redacta ahora tu respuesta conversacional completa para el usuario respondiendo a su mensaje: "${payload.content}". Sé persuasivo, amable y continúa el embudo de ventas.`
+          });
+
+          const textResponse = await this.hermesClient.generateResponse(textPrompt, false);
+          if (textResponse.content) {
+            finalContent = textResponse.content;
+          }
         } else {
           finalContent = response.content;
         }
@@ -506,9 +558,11 @@ export class LlmListenerService {
           lower.includes('error calling') ||
           lower.includes('failed to process') ||
           lower.startsWith('call:') ||
-          /call:\w+\{/i.test(finalContent)
+          /call:\w+\{/i.test(finalContent) ||
+          lower.includes('tool_code') ||
+          lower.includes('default_api.')
         ) {
-          this.logger.warn(`[Executive Loop Shield] Detectado mensaje técnico o tool leak residual. Reemplazando por respuesta segura.`);
+          this.logger.warn(`[Executive Loop Shield] Detectado mensaje técnico o tool leak residual. Suprimiendo contenido técnico.`);
           finalContent = '';
         }
       }

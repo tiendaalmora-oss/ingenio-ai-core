@@ -84,4 +84,46 @@ Excelente! Para continuar, por favor, indícame tu nombre completo y correo elec
     expect(cleaned).toContain('✅ Evaluaciones de 3°, 4° y 5° Año');
     expect(cleaned).toContain('✅ Planificaciones MPPE');
   });
+
+  it('should completely strip English reasoning monologue with clipped start and glued Spanish greeting (Freddy Veliz case)', () => {
+    const raw = `s asking for information about the "Kit de Matemática".
+This request falls under the "PRODUCTO #1: MEGA KIT DOCENTE DE MATEMÁTICA - BACHILLERATO VENEZUELA" in the KOS.
+The current state of the funnel for this product is "Estado Paso 1: PENDIENTE (Calificación inicial)".
+Therefore, I need to start the sales funnel from Step 1, which involves greeting the user and asking a qualifying question.
+The script for Step 1 of the "MEGA KIT DOCENTE DE MATEMÁTICA" funnel is:
+"¡Hola, profe! Qué bueno saludarte. 👋📐🇻🇪
+
+Cuéntame una sola cosita para saber exactamente qué enviarte:
+¿Das clases en liceo público o en colegio privado, y qué años tienes a tu cargo? 🏫📚
+
+(Así te oriento con el material adaptado a tu institución) 👇"
+
+I will use this script to respond to the user.
+I also need to update the business memory. The user is interested in 'Kit de Matemática', so I should add "Matemática" to the \`interests\` and set \`leadStatus\` to 'WARM' as they are actively inquiring. I should also set the \`tags\` to "INTERESADO_PRODUCTO".¡Hola, profe! Qué bueno saludarte. 👋📐🇻🇪
+
+Cuéntame una sola cosita para saber exactamente qué enviarte:
+¿Das clases en liceo público o en colegio privado, y qué años tienes a tu cargo? 🏫📚
+
+(Así te oriento con el material adaptado a tu institución) 👇`;
+
+    const cleaned = sanitizeUserFacingResponse(raw);
+    expect(cleaned).not.toContain('s asking for information');
+    expect(cleaned).not.toContain('This request falls under');
+    expect(cleaned).not.toContain('The current state of the funnel');
+    expect(cleaned).not.toContain('Therefore, I need to start');
+    expect(cleaned).not.toContain('The script for Step 1');
+    expect(cleaned).not.toContain('I will use this script');
+    expect(cleaned).not.toContain('I also need to update');
+    expect(cleaned).not.toContain('INTERESADO_PRODUCTO');
+    expect(cleaned).toContain('¡Hola, profe! Qué bueno saludarte. 👋📐🇻🇪');
+    expect(cleaned).toContain('¿Das clases en liceo público o en colegio privado');
+  });
+
+  it('should clean Python tool call leaks (Cesar case)', () => {
+    const raw = `tool_code
+print(default_api.update_business_memory(interests=['Física'], leadStatus='WARM', tags=['INTERESADO_PRODUCTO']))`;
+
+    const cleaned = sanitizeUserFacingResponse(raw);
+    expect(cleaned).toBe('');
+  });
 });

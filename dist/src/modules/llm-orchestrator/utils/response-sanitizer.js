@@ -16,20 +16,41 @@ function sanitizeUserFacingResponse(rawContent) {
     text = text.replace(/^[ \t]*(?:✅|⏳|\u2705|\u23f3)?\s*(?:Estado\s+)?Paso\s+\d+[:\s—\-]*(?:COMPLETADO|PENDIENTE)[^\n]*(?:\r?\n|$)/gim, '');
     text = text.replace(/^[ \t]*(?:⏳|🟢)?\s*CLIENTE\s+(?:CALIFICADO|EN ETAPA|CONFIRMADO|EN ESPERA|REGISTRADO)[^\n]*(?:\r?\n|$)/gim, '');
     text = text.replace(/^[ \t]*🛑\s*(?:INSTRUCCI[OÓ]N|CONTROL INTERNO|CONFIDENCIAL|PROHIBIDO)(?:\s+CR[IÍ]TICA)?:?[^\n]*(?:\r?\n|$)/gim, '');
-    const quotedMessageMatch = text.match(/(?:The (?:first|next|welcome) message (?:in this funnel )?is:?|Response:?)\s*["“]([¡¿A-ZÁÉÍÓÚ][\s\S]+?)["”]/i);
-    if (quotedMessageMatch && quotedMessageMatch[1]) {
-        text = quotedMessageMatch[1].trim();
+    text = text.replace(/tool_code\s*[\r\n]+(?:print\([^)]*\)\s*)*[^\n]*/gi, '');
+    text = text.replace(/tool_code/gi, '');
+    text = text.replace(/print\(default_api\.[^)]*\)/gi, '');
+    text = text.replace(/default_api\.\w+\([^)]*\)/gi, '');
+    const englishPhrases = [
+        /(?:The user i|I)?s asking for[^\n.]*/gi,
+        /This request falls under[^\n.]*/gi,
+        /The current state of the funnel[^\n.]*/gi,
+        /Therefore, I need to[^\n.]*/gi,
+        /I will use this script[^\n.]*/gi,
+        /I (?:also )?need to (?:start|update)[^\n.]*/gi,
+        /The user is interested[^\n.]*/gi,
+        /so I should add[^\n.]*/gi,
+        /I should also (?:set|update)[^\n.]*/gi,
+        /Initialize a new conversation[^\n.]*/gi,
+        /According to the provided[^\n.]*/gi,
+        /Based on the sales funnel[^\n.]*/gi,
+        /As an AI assistant[^\n.]*/gi,
+        /Note: I (?:should|will)[^\n.]*/gi,
+        /I need to update the memory[^\n.]*/gi,
+    ];
+    const hasScriptCitation = /The script for (?:Step|Paso)\s*\d+[^:]*is:\s*["“]([¡¿A-ZÁÉÍÓÚ][\s\S]+?)["”]/i.exec(text);
+    for (const pattern of englishPhrases) {
+        text = text.replace(pattern, '');
     }
-    text = text.replace(/^(?:Initialize a new conversation[\s\S]*?(?=[¡¿A-ZÁÉÍÓÚ\n]))/i, '');
-    text = text.replace(/^(?:The user has expressed interest[\s\S]*?(?=[¡¿A-ZÁÉÍÓÚ\n]))/i, '');
-    text = text.replace(/^(?:According to the provided knowledge base[\s\S]*?(?=[¡¿A-ZÁÉÍÓÚ\n]))/i, '');
-    text = text.replace(/^(?:Based on the sales funnel[\s\S]*?(?=[¡¿A-ZÁÉÍÓÚ\n]))/i, '');
-    text = text.replace(/^(?:I will now respond[\s\S]*?(?=[¡¿A-ZÁÉÍÓÚ\n]))/i, '');
-    text = text.replace(/^(?:As an AI assistant[\s\S]*?(?=[¡¿A-ZÁÉÍÓÚ\n]))/i, '');
-    text = text.replace(/\s*(?:I should also update[\s\S]*$)/i, '');
-    text = text.replace(/\s*(?:I will also update[\s\S]*$)/i, '');
-    text = text.replace(/\s*(?:I need to update the memory[\s\S]*$)/i, '');
-    text = text.replace(/\s*(?:Note: I (?:should|will)[\s\S]*$)/i, '');
+    text = text.replace(/The script for (?:Step|Paso)\s*\d+[^:]*is:\s*/gi, '');
+    text = text.replace(/(?:The (?:first|next|welcome) message (?:in this funnel )?is:?|Response:?)\s*/gi, '');
+    if (hasScriptCitation && hasScriptCitation[1]) {
+        const quotedContent = hasScriptCitation[1].trim();
+        const firstOccur = text.indexOf(quotedContent);
+        const lastOccur = text.lastIndexOf(quotedContent);
+        if (firstOccur !== -1 && lastOccur !== -1 && firstOccur !== lastOccur) {
+            text = text.substring(lastOccur).trim();
+        }
+    }
     text = text.replace(/call:\w+\{[\s\S]*?(?:\}|$)/gi, '');
     text = text.replace(/call:\w+[\s\S]*$/gi, '');
     text = text.replace(/<ctrl\d+>/gi, '');

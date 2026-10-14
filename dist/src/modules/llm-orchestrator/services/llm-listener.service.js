@@ -290,13 +290,14 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 for (const call of response.toolCalls) {
                     await this.eventEmitter.emitAsync('tool.called', new tool_called_event_1.ToolCalledEvent(payload.tenantId, payload.conversationId, payload.contactId, call.id, call.name, call.arguments));
                 }
-                if (response.content && response.content.trim() !== '') {
-                    finalContent = response.content;
+                const cleanedCompanion = response.content ? (0, response_sanitizer_1.sanitizeUserFacingResponse)(response.content) : '';
+                if (cleanedCompanion && cleanedCompanion.trim() !== '') {
+                    finalContent = cleanedCompanion;
                     skipTextInteraction = true;
-                    this.logger.log(`[Executive Loop] Tool call + texto en mismo turno. Emitiendo texto sin duplicar registro en DB.`);
+                    this.logger.log(`[Executive Loop] Tool call + texto conversacional válido en mismo turno. Emitiendo texto limpio.`);
                 }
                 else {
-                    this.logger.log(`[Executive Loop] Herramienta ejecutada sin texto. Solicitando respuesta de texto conversacional para el usuario...`);
+                    this.logger.log(`[Executive Loop] Herramienta ejecutada sin texto conversacional válido. Solicitando respuesta de texto conversacional para el usuario...`);
                     const textPrompt = await this.contextBuilder.buildContext(payload.tenantId, payload.contactId, payload.conversationId, payload.content, null);
                     textPrompt.push({
                         role: 'user',
@@ -310,6 +311,7 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
             }
             else if (response.content) {
                 const pseudoToolMatch = response.content.match(/(?:^|\n)\s*call:(\w+)\{([\s\S]*)/i);
+                const pythonToolMatch = response.content.match(/(?:tool_code\s+)?(?:print\()?default_api\.(\w+)\(([\s\S]*?)\)\)?/i);
                 if (pseudoToolMatch) {
                     const toolName = pseudoToolMatch[1];
                     const rawArgs = pseudoToolMatch[2];
@@ -344,6 +346,35 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                         finalContent = textResponse.content;
                     }
                 }
+                else if (pythonToolMatch) {
+                    const toolName = pythonToolMatch[1];
+                    const rawArgs = pythonToolMatch[2];
+                    this.logger.warn(`[Executive Loop] Detectada llamada Python alucinada en texto: ${toolName}. Interceptando y ejecutando...`);
+                    const parsedArgs = {};
+                    const interestsMatch = rawArgs.match(/interests\s*=\s*\[([^\]]+)\]/i);
+                    const leadStatusMatch = rawArgs.match(/leadStatus\s*=\s*['"]([^'"]+)['"]/i);
+                    const tagsMatch = rawArgs.match(/tags\s*=\s*\[([^\]]+)\]/i);
+                    if (interestsMatch) {
+                        parsedArgs.interests = interestsMatch[1].split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+                    }
+                    if (leadStatusMatch) {
+                        parsedArgs.leadStatus = leadStatusMatch[1];
+                    }
+                    if (tagsMatch) {
+                        parsedArgs.tags = tagsMatch[1].split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+                    }
+                    await this.eventEmitter.emitAsync('tool.called', new tool_called_event_1.ToolCalledEvent(payload.tenantId, payload.conversationId, payload.contactId, `rescued_py_${Date.now()}`, toolName, parsedArgs));
+                    this.logger.log(`[Executive Loop] Herramienta Python rescatada ejecutada en CRM. Solicitando respuesta conversacional...`);
+                    const textPrompt = await this.contextBuilder.buildContext(payload.tenantId, payload.contactId, payload.conversationId, payload.content, null);
+                    textPrompt.push({
+                        role: 'user',
+                        content: `[SISTEMA]: La memoria del CRM ya fue actualizada con éxito. Redacta ahora tu respuesta conversacional completa para el usuario respondiendo a su mensaje: "${payload.content}". Sé persuasivo, amable y continúa el embudo de ventas.`
+                    });
+                    const textResponse = await this.hermesClient.generateResponse(textPrompt, false);
+                    if (textResponse.content) {
+                        finalContent = textResponse.content;
+                    }
+                }
                 else {
                     finalContent = response.content;
                 }
@@ -355,14 +386,16 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                     lower.includes('error calling') ||
                     lower.includes('failed to process') ||
                     lower.startsWith('call:') ||
-                    /call:\w+\{/i.test(finalContent)) {
-                    this.logger.warn(`[Executive Loop Shield] Detectado mensaje técnico o tool leak residual. Reemplazando por respuesta segura.`);
+                    /call:\w+\{/i.test(finalContent) ||
+                    lower.includes('tool_code') ||
+                    lower.includes('default_api.')) {
+                    this.logger.warn(`[Executive Loop Shield] Detectado mensaje técnico o tool leak residual. Suprimiendo contenido técnico.`);
                     finalContent = '';
                 }
             }
             if (!finalContent || finalContent.trim() === '') {
-                this.logger.warn(`[Executive Loop] LLM no generó texto válido. Generando saludo cordial de contingencia...`);
-                finalContent = '¡Hola! Qué gusto saludarte. 👋 ¿En qué podemos ayudarte el día de hoy?';
+                this.logger.warn(`[Executive Loop] LLM no generó texto válido o proveedor no disponible. Permaneciendo en silencio para evitar respuestas repetitivas o incoherentes.`);
+                return;
             }
             if (finalContent) {
                 finalContent = (0, response_sanitizer_1.sanitizeUserFacingResponse)(finalContent);

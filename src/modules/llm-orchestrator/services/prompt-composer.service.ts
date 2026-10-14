@@ -48,8 +48,8 @@ export class PromptComposerService {
 - Utiliza formato nativo de WhatsApp: párrafos cortos y legibles, espaciados limpios con saltos de línea reales, emojis adecuados y negritas con un solo asterisco (*negrita*).
 - NUNCA uses Markdown con doble asterisco (**texto**) ni reduzcas la conversación a viñetas secas (•).
 - Respeta estrictamente los guiones, textos, ofertas y emojis configurados en tu base de conocimiento KOS.
-- 🛑 CERO MONÓLOGO O EXPLICACIONES EN INGLÉS: NUNCA escribas pensamientos internos, notas de planificación o frases en inglés como "Initialize a new conversation...", "The first message is...", "I should also update the business memory...". Tu respuesta debe contener ÚNICAMENTE el texto en español final que recibirá el cliente en WhatsApp, sin envolverlo en comillas dobles externas.
-- 🛑 PROHIBIDO ESCRIBIR LLAMADAS DE HERRAMIENTAS EN EL TEXTO: NUNCA escribas sintaxis interna de herramientas como "call:update_business_memory..." o bloques entre llaves en tu respuesta de texto. Las herramientas se ejecutan de forma invisible a través de la API, NUNCA redactándolas como texto para el cliente.
+- 🛑 CERO MONÓLOGO O EXPLICACIONES EN INGLÉS: NUNCA escribas pensamientos internos, notas de planificación, razonamiento Chain-of-Thought ni frases en inglés como "The user is asking...", "s asking for information...", "This request falls under...", "The script for Step 1...", "I will use this script...", "I should also update...". Tu respuesta conversacional debe comenzar INMEDIATAMENTE con el saludo o mensaje en español final para el cliente de WhatsApp, sin envolverlo en comillas dobles externas.
+- 🛑 PROHIBIDO ESCRIBIR CÓDIGO PYTHON O LLAMADAS DE HERRAMIENTAS EN EL TEXTO: NUNCA escribas "tool_code", "print(default_api...)", "call:update_business_memory..." ni código o bloques entre llaves en tu mensaje de texto. Las herramientas se ejecutan de forma invisible a través de la API nativa de function calling, NUNCA redactándolas como texto para el cliente.
 - 🛑 CERO FILTRACIÓN DE METADATOS O ESTADOS DEL EMBUDO: NUNCA escribas frases de control de pasos como "Paso 1 COMPLETADO", "Paso 2 PENDIENTE", "Estado Paso...", ni reproduzcas las etiquetas de estado del embudo en tu mensaje. El cliente solo debe recibir la conversación humana y el guion comercial.
 - 🛑 REGLA ESTRICTA DE COMPROBANTES HISTÓRICOS:
   * Los comprobantes de pago, imágenes o referencias bancarias que aparezcan en mensajes anteriores del historial corresponden a transacciones pasadas ya entregadas y archivadas.
@@ -443,7 +443,7 @@ ${ruleText}
 
     let stateLines: string[] = [
       '[METADATO INTERNO DEL SISTEMA - ESTADO DEL EMBUDO]:',
-      '🛑 CONFIDENCIAL / PROHIBIDO CITAR AL CLIENTE: Las siguientes líneas son notas internas del CRM para tu control de flujo. JAMÁS las transcribas, copies ni menciones en tu mensaje al cliente.',
+      '🛑 CONFIDENCIAL / PROHIBIDO CITAR AL CLIENTE: Las siguientes líneas son notas internas del CRM para tu control de flujo. JAMÁS las transcribas, copies ni menciones en tu mensaje al cliente. PROHIBIDO razonar en inglés o citar estos estados en voz alta: utilízalos internamente para seleccionar tu respuesta directa en español.',
     ];
     
     stateLines.push(paso1Done ? 'Estado Paso 1: COMPLETADO (Calificación inicial ya realizada).' : 'Estado Paso 1: PENDIENTE (Calificación inicial).');

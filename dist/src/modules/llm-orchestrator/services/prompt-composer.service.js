@@ -29,8 +29,8 @@ let PromptComposerService = class PromptComposerService {
 - Utiliza formato nativo de WhatsApp: párrafos cortos y legibles, espaciados limpios con saltos de línea reales, emojis adecuados y negritas con un solo asterisco (*negrita*).
 - NUNCA uses Markdown con doble asterisco (**texto**) ni reduzcas la conversación a viñetas secas (•).
 - Respeta estrictamente los guiones, textos, ofertas y emojis configurados en tu base de conocimiento KOS.
-- 🛑 CERO MONÓLOGO O EXPLICACIONES EN INGLÉS: NUNCA escribas pensamientos internos, notas de planificación o frases en inglés como "Initialize a new conversation...", "The first message is...", "I should also update the business memory...". Tu respuesta debe contener ÚNICAMENTE el texto en español final que recibirá el cliente en WhatsApp, sin envolverlo en comillas dobles externas.
-- 🛑 PROHIBIDO ESCRIBIR LLAMADAS DE HERRAMIENTAS EN EL TEXTO: NUNCA escribas sintaxis interna de herramientas como "call:update_business_memory..." o bloques entre llaves en tu respuesta de texto. Las herramientas se ejecutan de forma invisible a través de la API, NUNCA redactándolas como texto para el cliente.
+- 🛑 CERO MONÓLOGO O EXPLICACIONES EN INGLÉS: NUNCA escribas pensamientos internos, notas de planificación, razonamiento Chain-of-Thought ni frases en inglés como "The user is asking...", "s asking for information...", "This request falls under...", "The script for Step 1...", "I will use this script...", "I should also update...". Tu respuesta conversacional debe comenzar INMEDIATAMENTE con el saludo o mensaje en español final para el cliente de WhatsApp, sin envolverlo en comillas dobles externas.
+- 🛑 PROHIBIDO ESCRIBIR CÓDIGO PYTHON O LLAMADAS DE HERRAMIENTAS EN EL TEXTO: NUNCA escribas "tool_code", "print(default_api...)", "call:update_business_memory..." ni código o bloques entre llaves en tu mensaje de texto. Las herramientas se ejecutan de forma invisible a través de la API nativa de function calling, NUNCA redactándolas como texto para el cliente.
 - 🛑 CERO FILTRACIÓN DE METADATOS O ESTADOS DEL EMBUDO: NUNCA escribas frases de control de pasos como "Paso 1 COMPLETADO", "Paso 2 PENDIENTE", "Estado Paso...", ni reproduzcas las etiquetas de estado del embudo en tu mensaje. El cliente solo debe recibir la conversación humana y el guion comercial.
 - 🛑 REGLA ESTRICTA DE COMPROBANTES HISTÓRICOS:
   * Los comprobantes de pago, imágenes o referencias bancarias que aparezcan en mensajes anteriores del historial corresponden a transacciones pasadas ya entregadas y archivadas.
@@ -298,32 +298,38 @@ ${ruleText}
         const isPaid = ['CLOSED', 'CLIENT', 'CLIENTE', 'SALE', 'VENTA', 'PAGADO'].includes(memStatus) ||
             memTags.some(t => ['PAGO_CONFIRMADO', 'COMPROBANTE_RECIBIDO', 'PAGADO', 'CLIENTE', 'ACCESO_ENTREGADO', 'VENTA_CERRADA'].includes(t)) ||
             history.some((h) => (h.content || '').includes('Comprobante de Pago Detectado') || (h.content || '').includes('Venta manual confirmada'));
-        const paso1Done = outbound.some((h) => {
+        const paso1Done = outbound.length >= 1 || outbound.some((h) => {
             const c = (h.content || '').toLowerCase();
-            return c.includes('qué año') || c.includes('que año') || c.includes('qué años') ||
-                c.includes('que materia') || c.includes('qué materia') || c.includes('cuéntame') ||
-                c.includes('cuentame') || c.includes('atiende actualmente') || c.includes('bachillerato');
+            return c.includes('?') || c.includes('¿') || c.includes('hola') || c.includes('saludarte') ||
+                c.includes('qué año') || c.includes('que año') || c.includes('que materia') ||
+                c.includes('cuéntame') || c.includes('entrenas') || c.includes('atiende');
         });
         const paso2Done = outbound.some((h) => {
             const c = (h.content || '').toLowerCase();
             return c.includes('todo lo que recibes') || c.includes('evaluaciones') ||
                 c.includes('planificaciones') || c.includes('mega kit') ||
                 c.includes('kit docente') || c.includes('beneficios') ||
-                c.includes('regalos exclusivos') || c.includes('te gustaría ver');
+                c.includes('regalos exclusivos') || c.includes('te gustaría ver') ||
+                c.includes('mega pack') || c.includes('rutinas') || c.includes('módulos') ||
+                c.includes('modulos') || c.includes('acceso de por vida') ||
+                c.includes('organizado en') || c.includes('drive') || c.includes('incluye') ||
+                c.includes('ingeniodigital.shop') || c.includes('gifs');
         });
         const paso3Done = outbound.some((h) => {
             const c = (h.content || '').toLowerCase();
             return c.includes('precio') || c.includes('hoy:') || c.includes('pago único') ||
-                c.includes('bs.') || c.includes('usd') || c.includes('binance') ||
-                c.includes('zinli') || c.includes('garantía') || c.includes('garantia') ||
-                c.includes('lanzamiento');
+                c.includes('pago unico') || c.includes('bs.') || c.includes('usd') ||
+                c.includes('binance') || c.includes('zinli') || c.includes('garantía') ||
+                c.includes('garantia') || c.includes('lanzamiento') || c.includes('inversión') ||
+                c.includes('inversion') || c.includes('costo') || c.includes('oferta');
         });
         const paso4Done = outbound.some((h) => {
             const c = (h.content || '').toLowerCase();
             return c.includes('datos de pago') || c.includes('banco') || c.includes('pago móvil') ||
                 c.includes('pago movil') || c.includes('transferencia') || c.includes('cédula') ||
                 c.includes('cedula') || c.includes('titular') || c.includes('cuenta') ||
-                c.includes('escribe quiero') || c.includes('escribe "quiero"');
+                c.includes('escribe quiero') || c.includes('escribe "quiero"') ||
+                c.includes('0102') || c.includes('usdt');
         });
         const recentInboundText = [
             ...activeHistory.filter((h) => h.direction === 'INBOUND' || h.role === 'user').map((h) => h.content || ''),
@@ -359,7 +365,7 @@ ${ruleText}
         const isRepurchaseOrNewInquiry = isPaid && hasBuyOrProductIntent && !isSupportInquiry;
         let stateLines = [
             '[METADATO INTERNO DEL SISTEMA - ESTADO DEL EMBUDO]:',
-            '🛑 CONFIDENCIAL / PROHIBIDO CITAR AL CLIENTE: Las siguientes líneas son notas internas del CRM para tu control de flujo. JAMÁS las transcribas, copies ni menciones en tu mensaje al cliente.',
+            '🛑 CONFIDENCIAL / PROHIBIDO CITAR AL CLIENTE: Las siguientes líneas son notas internas del CRM para tu control de flujo. JAMÁS las transcribas, copies ni menciones en tu mensaje al cliente. PROHIBIDO razonar en inglés o citar estos estados en voz alta: utilízalos internamente para seleccionar tu respuesta directa en español.',
         ];
         stateLines.push(paso1Done ? 'Estado Paso 1: COMPLETADO (Calificación inicial ya realizada).' : 'Estado Paso 1: PENDIENTE (Calificación inicial).');
         stateLines.push(paso2Done ? 'Estado Paso 2: COMPLETADO (Presentación del producto ya enviada).' : 'Estado Paso 2: PENDIENTE (Presentación del producto).');
@@ -454,6 +460,16 @@ REGLA OBLIGATORIA: Siempre debes responder de forma amable, profesional y persua
                         function: { name: tc.name, arguments: JSON.stringify(tc.arguments ?? {}) }
                     }))
                 });
+                const nextMsg = history[history.indexOf(msg) + 1];
+                if (!nextMsg || nextMsg.role !== 'tool') {
+                    for (const tc of toolCallsArr) {
+                        messages.push({
+                            role: 'tool',
+                            content: '{"status":"ok"}',
+                            tool_call_id: tc?.id || 'tool_call_default'
+                        });
+                    }
+                }
             }
             else {
                 messages.push({
