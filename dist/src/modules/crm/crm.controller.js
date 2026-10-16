@@ -605,7 +605,7 @@ let CrmController = class CrmController {
         if (!contact)
             throw new common_1.NotFoundException('Lead not found');
         const existingTags = contact.memory?.tags || [];
-        const updatedTags = existingTags.filter((t) => t !== 'PAGO_CONFIRMADO' && t !== 'COMPROBANTE_RECIBIDO');
+        const updatedTags = existingTags.filter((t) => t !== 'PAGO_CONFIRMADO' && t !== 'COMPROBANTE_RECIBIDO' && t !== 'POST_VENTA_ENVIADA');
         if (!updatedTags.includes('VENTA_ANULADA')) {
             updatedTags.push('VENTA_ANULADA');
         }
@@ -623,12 +623,15 @@ let CrmController = class CrmController {
         });
         const convId = contact.conversations[0]?.id;
         if (convId) {
+            await this.prisma.pendingOutboundMessage.deleteMany({
+                where: { conversationId: convId }
+            });
             await this.prisma.interaction.create({
                 data: {
                     conversationId: convId,
                     direction: 'OUTBOUND',
                     type: 'TEXT',
-                    content: '⚠️ [Venta Anulada por Asesor]: Se ha anulado la venta de este contacto. El lead fue retornado a etapa Interesado (Warm).',
+                    content: '⚠️ [Venta Anulada por Asesor]: Se ha anulado la venta de este contacto. El lead fue retornado a etapa Interesado (Warm) y las automatizaciones post-venta fueron canceladas.',
                     role: 'assistant',
                     timestamp: new Date(),
                 },

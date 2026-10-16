@@ -11,4 +11,5 @@ export declare class FollowUpEngineService {
     private extractFollowUpRules;
     private isWithinAllowedWindow;
     private parseDelayMs;
+    evaluatePostSaleUpsells(now: Date): Promise<void>;
 }

@@ -40,6 +40,9 @@ export class FollowUpEngineService {
       return report;
     }
 
+    // 1b. Evaluar ofertas post-venta programadas (Upsell 50% OFF tras ventana de seguridad)
+    await this.evaluatePostSaleUpsells(now);
+
     // 2. Buscar todas las conversaciones activas
     const activeConversations = await this.prisma.conversation.findMany({
       where: {
@@ -332,5 +335,141 @@ export class FollowUpEngineService {
     }
 
     return 5 * 60 * 1000; // 5 minutos por defecto
+  }
+
+  /**
+   * Evalúa y despacha ofertas automáticas post-venta (Upsell 50% OFF)
+   * para clientes que enviaron comprobante de pago tras cumplirse la ventana de seguridad (ej: 45 min),
+   * siempre que la venta no haya sido anulada por el operador.
+   */
+  async evaluatePostSaleUpsells(now: Date) {
+    try {
+      const bundles = await this.prisma.knowledgeBundle.findMany();
+      for (const bundle of bundles) {
+        const tenantId = bundle.tenantId;
+        const systemPrompt: any = bundle.systemPrompt || {};
+        const rawData: any = typeof systemPrompt === 'string' ? JSON.parse(systemPrompt) : (systemPrompt['_raw'] || systemPrompt);
+        const rawReglas = rawData.reglasBot || systemPrompt.reglasBot || systemPrompt.botRules || {};
+        const reglasBot = (rawReglas.data && typeof rawReglas.data === 'object') ? { ...rawReglas.data, ...rawReglas } : rawReglas;
+
+        const isPostSaleEnabled = reglasBot.enablePostSaleUpsell !== false && Boolean(reglasBot.postSaleMessage && String(reglasBot.postSaleMessage).trim());
+        if (!isPostSaleEnabled) {
+          continue;
+        }
+
+        const delayMinutes = Number(reglasBot.postSaleDelayMinutes) || 45;
+        const postSaleMessage = String(reglasBot.postSaleMessage).trim();
+
+        // Buscar contactos con compras confirmadas que no tengan etiquetas de anulación ni envío previo
+        const candidateContacts = await this.prisma.contact.findMany({
+          where: {
+            tenantId,
+            memory: {
+              OR: [
+                { leadStatus: { in: ['CLOSED', 'PAGADO', 'CLIENT', 'CLIENTE', 'SALE', 'VENTA'] } },
+                { tags: { hasSome: ['PAGO_CONFIRMADO', 'COMPROBANTE_RECIBIDO', 'PAGADO'] } }
+              ]
+            }
+          },
+          include: {
+            memory: true,
+            conversations: {
+              orderBy: { id: 'desc' },
+              take: 1,
+              include: {
+                interactions: {
+                  orderBy: { timestamp: 'desc' },
+                  take: 15
+                }
+              }
+            }
+          }
+        });
+
+        for (const contact of candidateContacts) {
+          const currentTags = Array.isArray(contact.memory?.tags)
+            ? contact.memory.tags.map((t: any) => String(t).toUpperCase())
+            : [];
+
+          // ── BLINDAJE 1: Si fue anulado o ya recibió la post-venta, ignorar de inmediato ──
+          if (
+            currentTags.includes('VENTA_ANULADA') ||
+            currentTags.includes('PAGO_FALSO') ||
+            currentTags.includes('PAGO_RECHAZADO') ||
+            currentTags.includes('POST_VENTA_ENVIADA') ||
+            currentTags.includes('POST_SALE_SENT')
+          ) {
+            continue;
+          }
+
+          const conv = contact.conversations[0];
+          if (!conv) continue;
+
+          // ── BLINDAJE 2: Verificar si ya existe un mensaje encolado o enviado para esta oferta ──
+          const alreadyQueued = await this.prisma.pendingOutboundMessage.findFirst({
+            where: {
+              conversationId: conv.id,
+              followUpId: 'post-sale-upsell'
+            }
+          });
+          if (alreadyQueued) continue;
+
+          // ── CALCULAR TIEMPO DE LA VENTANA DE SEGURIDAD ──
+          // Buscar el momento en que se recibió el comprobante o se cerró la venta
+          const voucherInteraction = conv.interactions.find((i: any) => {
+            const content = i.content || '';
+            return (
+              (i.direction === 'INBOUND' && (i.type === 'IMAGE' || content.toLowerCase().includes('comprobante') || content.toLowerCase().includes('referencia') || content.toLowerCase().includes('pago'))) ||
+              (i.direction === 'OUTBOUND' && (content.includes('Comprobante de Pago Detectado') || content.includes('Ya registramos tu comprobante') || content.includes('recibido tu comprobante')))
+            );
+          });
+
+          const paymentTime = voucherInteraction?.timestamp || contact.memory?.updatedAt || (conv.interactions[conv.interactions.length - 1]?.timestamp) || new Date();
+          const elapsedMinutes = Math.floor((now.getTime() - new Date(paymentTime).getTime()) / 60000);
+
+          // Si aún no se cumple el tiempo de espera recomendado, dejar en espera para que el operador verifique
+          if (elapsedMinutes < delayMinutes) {
+            continue;
+          }
+
+          // ── PERSONALIZAR Y ENCOLAR EL MENSAJE DE OFERTA 50% OFF ──
+          const personalizedMsg = postSaleMessage.replace(/\{nombre\}/gi, contact.name || 'profe');
+
+          await this.prisma.pendingOutboundMessage.create({
+            data: {
+              tenantId,
+              conversationId: conv.id,
+              contactId: contact.id,
+              message: personalizedMsg,
+              followUpId: 'post-sale-upsell',
+              status: 'PENDING'
+            }
+          });
+
+          // Marcar al contacto para que nunca se repita la oferta
+          const newTags = Array.from(new Set([...(contact.memory?.tags || []), 'POST_VENTA_ENVIADA']));
+          await this.prisma.businessMemory.update({
+            where: { contactId: contact.id },
+            data: { tags: newTags }
+          });
+
+          // Registrar interacción en el historial para auditoría del operador
+          await this.prisma.interaction.create({
+            data: {
+              conversationId: conv.id,
+              direction: 'OUTBOUND',
+              type: 'TEXT',
+              content: `🎁 [Automatización Post-Venta 50% OFF]: Disparada automáticamente tras cumplirse la ventana de seguridad (${elapsedMinutes} min transcurridos vs ${delayMinutes} min configurados).`,
+              role: 'assistant',
+              timestamp: new Date()
+            }
+          });
+
+          this.logger.log(`[PostSaleEngine] 🚀 Encolada oferta post-venta 50% OFF para ${contact.name || contact.phone || contact.id} (${elapsedMinutes} min tras comprobante)`);
+        }
+      }
+    } catch (e: any) {
+      this.logger.error(`[PostSaleEngine] Error evaluando ofertas post-venta: ${e.message}`, e.stack);
+    }
   }
 }

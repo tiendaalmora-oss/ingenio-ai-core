@@ -302,6 +302,18 @@ export class MetaWebhookController {
                 return;
               }
 
+              // Soporte para comandos explícitos de anulación de comprobante / pago erróneo desde WhatsApp
+              const isExplicitCancelSaleCommand = (
+                textNorm === '#anular' ||
+                textNorm === '#falso' ||
+                textNorm === '#rechazar' ||
+                textNorm === '#error' ||
+                textNorm === '#cancelar' ||
+                textNorm === '#falsopago' ||
+                textNorm === '#anularpago' ||
+                textNorm === '#anularventa'
+              );
+
               // Soporte para comandos explícitos de pausa/asesor desde WhatsApp (#stop, #pausa, #humano, #asesor)
               const isExplicitPauseCommand = (
                 textNorm === '#stop' ||
@@ -322,7 +334,73 @@ export class MetaWebhookController {
                 }
               });
 
-              if (isExplicitPauseCommand) {
+              if (isExplicitCancelSaleCommand) {
+                this.logger.log(`[Mobile Operator Intercept] ⚠️ Comando explícito de anulación de venta/comprobante recibido desde WhatsApp ("${textNorm}") para ${toRaw}. Anulando venta y purgando mensajes.`);
+
+                // Mantener en HANDOFF para que el asesor pueda gestionar al cliente si lo desea
+                await this.prisma.conversation.update({
+                  where: { id: conv.id },
+                  data: { status: 'HANDOFF' }
+                });
+
+                // Cancelar y purgar de inmediato cualquier automatización o seguimiento pendiente
+                const deletedOutbounds = await this.prisma.pendingOutboundMessage.deleteMany({
+                  where: { conversationId: conv.id }
+                });
+                if (deletedOutbounds.count > 0) {
+                  this.logger.log(`[Mobile Sync] Purgados ${deletedOutbounds.count} mensajes pendientes para conversación ${conv.id}`);
+                }
+
+                // Revertir Business Memory: remover etiquetas de pago, agregar VENTA_ANULADA y volver a WARM
+                try {
+                  const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: contact.id } });
+                  const currentTags = (memory?.tags as string[]) || [];
+                  const updatedTags = currentTags.filter(
+                    (t) => t !== 'PAGO_CONFIRMADO' && t !== 'COMPROBANTE_RECIBIDO' && t !== 'POST_VENTA_ENVIADA'
+                  );
+                  if (!updatedTags.includes('VENTA_ANULADA')) {
+                    updatedTags.push('VENTA_ANULADA');
+                  }
+                  await this.prisma.businessMemory.upsert({
+                    where: { contactId: contact.id },
+                    create: {
+                      contactId: contact.id,
+                      leadStatus: 'WARM',
+                      tags: updatedTags,
+                    },
+                    update: {
+                      leadStatus: 'WARM',
+                      tags: updatedTags,
+                    }
+                  });
+
+                  await this.prisma.memoryAuditLog.create({
+                    data: {
+                      contactId: contact.id,
+                      tenantId,
+                      field: 'leadStatus',
+                      previousValue: JSON.stringify(memory?.leadStatus || 'CLOSED'),
+                      newValue: JSON.stringify('WARM'),
+                      source: 'human',
+                      skill: 'whatsapp_operator_cancel_sale',
+                      conversationId: conv.id,
+                    }
+                  });
+
+                  await this.prisma.interaction.create({
+                    data: {
+                      conversationId: conv.id,
+                      direction: 'OUTBOUND',
+                      type: 'TEXT',
+                      content: `⚠️ [Comprobante Anulado por Asesor]: Se anuló la venta mediante comando de WhatsApp ("${textNorm}"). Se cancelaron todas las automatizaciones post-venta y el lead volvió a etapa Interesado (Warm).`,
+                      role: 'assistant',
+                      timestamp: new Date(),
+                    }
+                  });
+                } catch (memErr: any) {
+                  this.logger.warn(`Error actualizando memoria en anulación por WhatsApp: ${memErr.message}`);
+                }
+              } else if (isExplicitPauseCommand) {
                 this.logger.log(`[Mobile Operator Intercept] Comando explícito de pausa recibido desde WhatsApp ("${textNorm}") para ${toRaw}. Pausando bot en HANDOFF.`);
 
                 // Pausar la conversación inmediatamente en HANDOFF
