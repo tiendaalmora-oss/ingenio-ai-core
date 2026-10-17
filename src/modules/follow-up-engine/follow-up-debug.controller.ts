@@ -1,9 +1,11 @@
-import { Controller, Get, Post, Body, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Body, Logger, UseGuards } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { FollowUpEngineService } from './services/follow-up-engine.service';
 import { WahaAdapterService } from '../outbound-engine/services/waha-adapter.service';
+import { AdminApiKeyGuard } from '../../shared/guards/admin-api-key.guard';
 
 @Controller('debug/follow-up')
+@UseGuards(AdminApiKeyGuard)
 export class FollowUpDebugController {
   private readonly logger = new Logger(FollowUpDebugController.name);
 
@@ -45,11 +47,13 @@ export class FollowUpDebugController {
       });
     }
 
-    // 3. Conversaciones activas y tiempo transcurrido
+    // 3. Conversaciones activas recientes y tiempo transcurrido (limitado a 50 para proteger RAM)
     const activeConversations = await this.prisma.conversation.findMany({
       where: {
         status: { in: ['NEW', 'ACTIVE'] },
       },
+      orderBy: { id: 'desc' },
+      take: 50,
       include: {
         contact: {
           include: { memory: true },

@@ -95,17 +95,24 @@ export class TenantGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Record<string, any>>();
     let tenantId: string | undefined = request.headers?.['x-tenant-id'];
 
-    // 2.1 Si el usuario autenticado es un cliente de subcuenta, forzar su tenantId
+    // 2.1 Si el usuario autenticado es un cliente de subcuenta, forzar estrictamente el tenantId de su token firmado.
+    // Esto garantiza 100% de aislamiento (un cliente jamás puede ver otra subcuenta) y evita caídas de sesión
+    // si su navegador tenía guardado un tenant_id antiguo en localStorage.
     if (request.user?.role === 'client') {
       const allowedTenantId = request.user.tenantId;
+      if (!allowedTenantId) {
+        throw new ForbiddenException('Tu cuenta de cliente no tiene una subcuenta asignada');
+      }
       if (tenantId && tenantId !== 'default' && tenantId !== allowedTenantId) {
         this.logger.warn(
-          `[TenantGuard] Cliente intentó acceder a subcuenta ajena: tokenTenant=${allowedTenantId}, reqTenant=${tenantId}`,
+          `[TenantGuard] Header x-tenant-id (${tenantId}) corregido automáticamente al tenant del token (${allowedTenantId}) para usuario client`,
         );
-        throw new ForbiddenException('No tienes permisos para acceder a esta subcuenta');
       }
       tenantId = allowedTenantId;
       request.tenantId = tenantId;
+      if (request.headers) {
+        request.headers['x-tenant-id'] = tenantId;
+      }
       return true;
     }
 

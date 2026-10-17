@@ -33,7 +33,7 @@ api.interceptors.request.use((config) => {
   }
 
   const isBrowser = typeof window !== 'undefined';
-  const token = (isBrowser ? localStorage.getItem('admin_api_key') : null) || process.env.NEXT_PUBLIC_ADMIN_API_KEY || 'admin-dev-secret';
+  const token = (isBrowser ? localStorage.getItem('admin_api_key') : null) || process.env.NEXT_PUBLIC_ADMIN_API_KEY || null;
   const tenantId = isBrowser ? localStorage.getItem('tenant_id') : null;
 
   if (token) {
@@ -42,8 +42,23 @@ api.interceptors.request.use((config) => {
   if (tenantId) {
     config.headers['x-tenant-id'] = tenantId;
   }
-  
+
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (typeof window !== 'undefined' && error?.response?.status === 401) {
+      const reqUrl = String(error?.config?.url || '');
+      if (!reqUrl.includes('/auth/login') && !reqUrl.includes('/auth/magic')) {
+        localStorage.removeItem('crm_authenticated');
+        localStorage.removeItem('admin_api_key');
+        window.dispatchEvent(new Event('crm:session-expired'));
+      }
+    }
+    return Promise.reject(error);
+  },
+);
 
 export default api;

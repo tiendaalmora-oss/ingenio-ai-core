@@ -1,8 +1,10 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { TenantResolverService } from './services/tenant-resolver.service';
+import { AdminApiKeyGuard } from '../../shared/guards/admin-api-key.guard';
 
 @Controller('debug/tenant')
+@UseGuards(AdminApiKeyGuard)
 export class DebugTenantController {
   constructor(
     private readonly prisma: PrismaService,

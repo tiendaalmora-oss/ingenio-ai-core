@@ -15,13 +15,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { sidebarOpen } = useUiStore();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
-  // 1. Check initial auth state from localStorage
+  // 1. Check initial auth state from localStorage and listen for session expiration
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const isAuth = localStorage.getItem('crm_authenticated') === 'true';
+      const hasToken = Boolean(localStorage.getItem('admin_api_key'));
+      const isAuth = localStorage.getItem('crm_authenticated') === 'true' && hasToken;
+      if (!isAuth) {
+        localStorage.removeItem('crm_authenticated');
+      }
       setIsAuthenticated(isAuth);
+
+      const handleSessionExpired = () => {
+        setError(null as any);
+        setIsAuthenticated(false);
+      };
+      window.addEventListener('crm:session-expired', handleSessionExpired);
+      return () => window.removeEventListener('crm:session-expired', handleSessionExpired);
     }
-  }, []);
+  }, [setError]);
 
   // 2. Fetch Bootstrap data
   const loadBootstrap = useCallback(() => {

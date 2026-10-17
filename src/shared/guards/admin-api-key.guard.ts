@@ -45,10 +45,10 @@ export class AdminApiKeyGuard implements CanActivate {
       if (payload) {
         request.user = payload;
 
-        // Si la ruta es del panel de agencia (/agency), exigir rol agency_admin
+        // Si la ruta es del panel de agencia (/agency) o de diagnóstico (/debug), exigir rol agency_admin
         const url = request.raw?.url || request.url || '';
-        if (url.includes('/agency') && payload.role !== 'agency_admin') {
-          this.logger.warn(`Intento no autorizado de cliente a ruta de agencia: ${url}`);
+        if ((url.includes('/agency') || url.includes('/debug')) && payload.role !== 'agency_admin') {
+          this.logger.warn(`Intento no autorizado de cliente a ruta protegida: ${url}`);
           throw new ForbiddenException('Acceso restringido a administradores de agencia');
         }
 

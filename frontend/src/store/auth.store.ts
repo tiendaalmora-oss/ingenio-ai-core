@@ -1,8 +1,5 @@
 import { create } from 'zustand';
 
-const DEFAULT_TENANT = 'dba1c54c-89c6-41e9-ae9d-03613377a5b3';
-const DEFAULT_API_KEY = 'admin-dev-secret';
-
 interface AuthState {
   tenantId: string | null;
   adminApiKey: string | null;
@@ -21,9 +18,9 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set) => {
   const isBrowser = typeof window !== 'undefined';
-  const storedTenant = isBrowser ? localStorage.getItem('tenant_id') || DEFAULT_TENANT : DEFAULT_TENANT;
-  const storedKey = isBrowser ? localStorage.getItem('admin_api_key') || DEFAULT_API_KEY : DEFAULT_API_KEY;
-  const storedRole = isBrowser ? (localStorage.getItem('user_role') as any) || 'agency_admin' : 'agency_admin';
+  const storedTenant = isBrowser ? localStorage.getItem('tenant_id') : null;
+  const storedKey = isBrowser ? localStorage.getItem('admin_api_key') : null;
+  const storedRole = isBrowser ? (localStorage.getItem('user_role') as any) : null;
   const storedTenantName = isBrowser ? localStorage.getItem('tenant_name') : null;
   const storedName = isBrowser ? localStorage.getItem('user_name') : null;
 
