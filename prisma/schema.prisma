@@ -98,6 +98,9 @@ model Contact {
   campaignItems    CampaignItem[]
 
   @@unique([tenantId, phoneNormalized])
+  @@index([tenantId])
+  @@index([tenantId, phone])
+  @@index([tenantId, externalId])
 }
 
 model Conversation {
@@ -107,6 +110,10 @@ model Conversation {
   status       String        // NEW, ACTIVE, RESOLVED
   interactions Interaction[]
   activeFunnel ActiveFunnel?
+
+  @@index([contactId])
+  @@index([status])
+  @@index([contactId, status])
 }
 
 model Interaction {
@@ -120,6 +127,9 @@ model Interaction {
   toolCalls      Json?
   toolCallId     String?
   timestamp      DateTime     @default(now())
+
+  @@index([conversationId, timestamp(sort: Desc)])
+  @@index([timestamp(sort: Desc)])
 }
 
 model BusinessMemory {
@@ -135,6 +145,10 @@ model BusinessMemory {
   tags            String[]
   updatedAt       DateTime         @updatedAt
   auditLogs       MemoryAuditLog[]
+
+  @@index([lastInteraction(sort: Desc)])
+  @@index([leadStatus])
+  @@index([updatedAt(sort: Desc)])
 }
 
 model MemoryAuditLog {
@@ -150,6 +164,9 @@ model MemoryAuditLog {
   conversationId String?
   createdAt      DateTime @default(now())
   memory         BusinessMemory @relation(fields: [contactId], references: [contactId])
+
+  @@index([contactId])
+  @@index([tenantId, createdAt(sort: Desc)])
 }
 
 model Task {
@@ -160,6 +177,8 @@ model Task {
   status    String   @default("PENDING")
   dueDate   DateTime?
   createdAt DateTime @default(now())
+
+  @@index([contactId, status])
 }
 
 model KnowledgeBundle {
@@ -183,6 +202,8 @@ model Funnel {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([tenantId, isActive])
 }
 
 model ActiveFunnel {
@@ -209,6 +230,11 @@ model PendingOutboundMessage {
   providerResponse String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+
+  @@index([status, createdAt])
+  @@index([tenantId, status, sentAt])
+  @@index([conversationId, followUpId, status])
+  @@index([contactId])
 }
 
 model IncomingMessageFailure {
@@ -239,6 +265,9 @@ model Campaign {
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
   items               CampaignItem[]
+
+  @@index([tenantId, status])
+  @@index([status])
 }
 
 model CampaignItem {

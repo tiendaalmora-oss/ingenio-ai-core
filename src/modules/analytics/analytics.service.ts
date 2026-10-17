@@ -269,17 +269,22 @@ export class AnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getSummary(tenantId: string): Promise<AnalyticsSummary> {
-    // 1. Obtener todos los contactos del tenant con sus memorias y conversaciones
+    // 1. Obtener resumen ultraligero de contactos del tenant sin cargar interacciones completas en RAM
     const contacts = await this.prisma.contact.findMany({
       where: { tenantId },
-      include: {
-        memory: true,
+      select: {
+        id: true,
+        memory: {
+          select: {
+            leadStatus: true,
+            tags: true,
+            objections: true,
+            interests: true,
+          },
+        },
         conversations: {
-          include: {
-            interactions: {
-              orderBy: { timestamp: 'desc' },
-              take: 1,
-            },
+          select: {
+            status: true,
           },
         },
       },

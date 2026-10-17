@@ -9,6 +9,7 @@ import { TenantId } from '../../shared/decorators/tenant-id.decorator';
 @UseGuards(AdminApiKeyGuard, TenantGuard)
 export class ConversationHubController {
   private readonly logger = new Logger(ConversationHubController.name);
+  private readonly lastConsolidationByTenant = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -17,7 +18,7 @@ export class ConversationHubController {
 
   /**
    * GET /conversations
-   * Lista conversaciones del tenant agrupadas por contacto único, con ordenamiento por último mensaje y paginación.
+   * Lista conversaciones del tenant agrupadas por contacto único, con ordenamiento por último mensaje y paginación en SQL.
    */
   @Get()
   async listConversations(
@@ -29,17 +30,20 @@ export class ConversationHubController {
   ) {
     if (!tenantId) throw new BadRequestException('tenantId is required');
 
-    // 1. Auto-consolidar conversaciones duplicadas por contacto si existen
+    // 1. Auto-consolidar conversaciones duplicadas con cooldown de 30 min por tenant (sin escanear toda la tabla en cada request)
     await this.consolidateDuplicateConversations(tenantId);
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const take = parseInt(limit);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const take = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+    const skip = (pageNum - 1) * take;
 
     const where: any = {};
     if (status) where.status = status;
 
-    if (search && search.trim()) {
-      const searchRaw = search.trim();
+    const hasSearch = Boolean(search && search.trim());
+
+    if (hasSearch) {
+      const searchRaw = search!.trim();
       const searchDigits = searchRaw.replace(/\D/g, '');
       const searchWithoutZero = searchDigits.startsWith('0') ? searchDigits.replace(/^0+/, '') : searchDigits;
       const searchWith58 = searchDigits.startsWith('58') ? searchDigits : (searchWithoutZero ? `58${searchWithoutZero}` : '');
@@ -84,37 +88,99 @@ export class ConversationHubController {
       where.contact = { tenantId };
     }
 
-    const [total, rawConversations] = await Promise.all([
-      this.prisma.conversation.count({ where }),
-      this.prisma.conversation.findMany({
-        where,
-        include: {
-          contact: {
-            include: { memory: true },
-          },
-          interactions: {
-            where: { type: { notIn: ['TOOL_RESULT'] } },
-            orderBy: { timestamp: 'desc' },
-            take: 1,
-          },
-          _count: { select: { interactions: true } },
-        },
-      }),
-    ]);
+    let total = 0;
+    let pageIds: string[] = [];
 
-    // Ordenamiento estricto idéntico a WhatsApp: Los chats con interacción más reciente van primero
-    const sortedConvs = rawConversations.sort((a, b) => {
+    if (!hasSearch) {
+      // Ruta ultra-rápida (99% de las cargas de bandeja): Ordenamiento y paginación directamente en PostgreSQL
+      const countPromise = this.prisma.conversation.count({ where });
+      const rowsPromise = status
+        ? this.prisma.$queryRaw<Array<{ id: string }>>`
+            SELECT c.id
+            FROM "Conversation" c
+            INNER JOIN "Contact" ct ON ct.id = c."contactId"
+            WHERE ct."tenantId" = ${tenantId} AND c.status = ${status}
+            ORDER BY (
+              SELECT MAX(i."timestamp")
+              FROM "Interaction" i
+              WHERE i."conversationId" = c.id AND i."type" <> 'TOOL_RESULT'
+            ) DESC NULLS LAST
+            LIMIT ${take} OFFSET ${skip}
+          `
+        : this.prisma.$queryRaw<Array<{ id: string }>>`
+            SELECT c.id
+            FROM "Conversation" c
+            INNER JOIN "Contact" ct ON ct.id = c."contactId"
+            WHERE ct."tenantId" = ${tenantId}
+            ORDER BY (
+              SELECT MAX(i."timestamp")
+              FROM "Interaction" i
+              WHERE i."conversationId" = c.id AND i."type" <> 'TOOL_RESULT'
+            ) DESC NULLS LAST
+            LIMIT ${take} OFFSET ${skip}
+          `;
+
+      const [totalCount, idRows] = await Promise.all([countPromise, rowsPromise]);
+      total = totalCount;
+      pageIds = idRows.map((r) => r.id);
+    } else {
+      // Ruta con búsqueda de texto: Selección ultraligera solo de IDs y timestamp antes de hidratar los 50 resultados
+      const [totalCount, lightweightMatches] = await Promise.all([
+        this.prisma.conversation.count({ where }),
+        this.prisma.conversation.findMany({
+          where,
+          select: {
+            id: true,
+            interactions: {
+              where: { type: { notIn: ['TOOL_RESULT'] } },
+              orderBy: { timestamp: 'desc' },
+              take: 1,
+              select: { timestamp: true },
+            },
+          },
+        }),
+      ]);
+
+      total = totalCount;
+      pageIds = lightweightMatches
+        .sort((a, b) => {
+          const timeA = a.interactions[0]?.timestamp ? new Date(a.interactions[0].timestamp).getTime() : 0;
+          const timeB = b.interactions[0]?.timestamp ? new Date(b.interactions[0].timestamp).getTime() : 0;
+          return timeB - timeA;
+        })
+        .slice(skip, skip + take)
+        .map((c) => c.id);
+    }
+
+    // Hidratar ÚNICAMENTE las conversaciones de la página actual (máx. 50 en vez de 6,924)
+    const hydratedConvs = pageIds.length > 0
+      ? await this.prisma.conversation.findMany({
+          where: { id: { in: pageIds } },
+          include: {
+            contact: {
+              include: { memory: true },
+            },
+            interactions: {
+              where: { type: { notIn: ['TOOL_RESULT'] } },
+              orderBy: { timestamp: 'desc' },
+              take: 1,
+            },
+            _count: { select: { interactions: true } },
+          },
+        })
+      : [];
+
+    // Ordenamiento estricto idéntico a WhatsApp sobre las 50 conversaciones de la página
+    const paginatedConvs = hydratedConvs.sort((a, b) => {
       const timeA = a.interactions[0]?.timestamp ? new Date(a.interactions[0].timestamp).getTime() : 0;
       const timeB = b.interactions[0]?.timestamp ? new Date(b.interactions[0].timestamp).getTime() : 0;
       return timeB - timeA;
     });
 
-    const paginatedConvs = sortedConvs.slice(skip, skip + take);
-
     const responseData = {
       total,
-      page: parseInt(page),
-      limit: parseInt(limit),
+      page: pageNum,
+      limit: take,
       data: paginatedConvs.map((c) => ({
         id: c.id,
         status: c.status,
@@ -139,10 +205,30 @@ export class ConversationHubController {
   }
 
   private async consolidateDuplicateConversations(tenantId: string) {
+    const now = Date.now();
+    const lastRun = this.lastConsolidationByTenant.get(tenantId) || 0;
+    // Ejecutar como máximo una vez cada 30 minutos por tenant
+    if (now - lastRun < 30 * 60 * 1000) {
+      return;
+    }
+    this.lastConsolidationByTenant.set(tenantId, now);
+
     try {
-      // Buscar contactos que tengan más de 1 conversación
+      // Buscar en SQL únicamente contactIds que realmente tengan más de 1 conversación (0 filas en operación normal)
+      const duplicateGroups = await this.prisma.conversation.groupBy({
+        by: ['contactId'],
+        where: { contact: { tenantId } },
+        _count: { id: true },
+        having: {
+          id: { _count: { gt: 1 } },
+        },
+      });
+
+      if (duplicateGroups.length === 0) return;
+
+      const duplicateContactIds = duplicateGroups.map((g) => g.contactId);
       const contactsWithMultipleConvs = await this.prisma.contact.findMany({
-        where: { tenantId },
+        where: { id: { in: duplicateContactIds }, tenantId },
         select: {
           id: true,
           conversations: {

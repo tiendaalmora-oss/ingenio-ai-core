@@ -43,40 +43,16 @@ export class FollowUpEngineService {
     // 1b. Evaluar ofertas post-venta programadas (Upsell 50% OFF tras ventana de seguridad)
     await this.evaluatePostSaleUpsells(now);
 
-    // 2. Buscar todas las conversaciones activas
-    const activeConversations = await this.prisma.conversation.findMany({
-      where: {
-        status: { in: ['NEW', 'ACTIVE'] }
-      },
-      include: {
-        contact: {
-          include: { memory: true }
-        },
-        interactions: {
-          orderBy: { timestamp: 'desc' },
-          take: 20
-        }
-      }
-    });
-
-    report.activeConversationsFound = activeConversations.length;
-
-    if (!activeConversations.length) {
+    // 2. Consultar primero los KnowledgeBundles por tenant (evita cargar miles de conversaciones si no hay reglas activas)
+    const bundles = await this.prisma.knowledgeBundle.findMany();
+    if (!bundles.length) {
       return report;
     }
 
-    const tenantIds = [...new Set(activeConversations.map(c => c.contact.tenantId))];
+    const MAX_FRESHNESS_WINDOW_MS = 90 * 60 * 1000;
 
-    for (const tenantId of tenantIds) {
-      const bundle = await this.prisma.knowledgeBundle.findUnique({
-        where: { tenantId }
-      });
-
-      if (!bundle) {
-        report.skipped.push({ tenantId, reason: 'No KnowledgeBundle found' });
-        continue;
-      }
-      
+    for (const bundle of bundles) {
+      const tenantId = bundle.tenantId;
       const systemPrompt: any = bundle.systemPrompt || {};
       const rawData: any = typeof systemPrompt === 'string' ? JSON.parse(systemPrompt) : (systemPrompt['_raw'] || systemPrompt);
       const rawSeguimientos = rawData['seguimientos'] || rawData['followups'] || systemPrompt['followups'] || systemPrompt['seguimientos'] || rawData['scriptsComerciales'];
@@ -90,8 +66,34 @@ export class FollowUpEngineService {
 
       // Ordenar reglas por tiempo de menor a mayor (ej: 5 min antes de 1 hora)
       const sortedRules = [...rules].sort((a, b) => this.parseDelayMs(a) - this.parseDelayMs(b));
+      const maxRuleDelayMs = Math.max(...sortedRules.map(r => this.parseDelayMs(r)));
 
-      const tenantConvos = activeConversations.filter(c => c.contact.tenantId === tenantId);
+      // Filtro SQL de frescura: solo traer conversaciones con actividad dentro de la ventana máxima de la regla + 90 min + 60 min margen
+      const sqlLookbackMs = maxRuleDelayMs + MAX_FRESHNESS_WINDOW_MS + (60 * 60 * 1000);
+      const cutoffDate = new Date(now.getTime() - sqlLookbackMs);
+
+      const tenantConvos = await this.prisma.conversation.findMany({
+        where: {
+          status: { in: ['NEW', 'ACTIVE'] },
+          contact: { tenantId },
+          interactions: {
+            some: {
+              timestamp: { gte: cutoffDate }
+            }
+          }
+        },
+        include: {
+          contact: {
+            include: { memory: true }
+          },
+          interactions: {
+            orderBy: { timestamp: 'desc' },
+            take: 20
+          }
+        }
+      });
+
+      report.activeConversationsFound += tenantConvos.length;
       report.evaluatedTenants.push({
         tenantId,
         rulesCount: sortedRules.length,
