@@ -55,6 +55,9 @@ interface ReglasBotData {
   handoffMessage: string;
   autoPausePayment: boolean;
   paymentReceivedMessage: string;
+  enablePostSaleUpsell: boolean;
+  postSaleDelayMinutes: number;
+  postSaleMessage: string;
   enableMessageLimit: boolean;
   maxBotMessages: number;
   respondLastMessageBeforePause: boolean;
@@ -74,6 +77,9 @@ const DEFAULT_REGLAS_BOT: ReglasBotData = {
   handoffMessage: 'Con gusto. En breve un asesor humano de nuestro equipo continuará la conversación contigo por acá.',
   autoPausePayment: true,
   paymentReceivedMessage: '¡Muchas gracias! 🎉 Hemos recibido tu comprobante de pago. En breve un asesor de nuestro equipo verificará los datos de la transferencia y te entregará el acceso a tu material por este medio. ¡Quedamos a tu completa orden!',
+  enablePostSaleUpsell: false,
+  postSaleDelayMinutes: 45,
+  postSaleMessage: '',
   enableMessageLimit: false,
   maxBotMessages: 50,
   respondLastMessageBeforePause: true,
@@ -102,6 +108,9 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
       handoffMessage: d.handoffMessage || DEFAULT_REGLAS_BOT.handoffMessage,
       autoPausePayment: d.autoPausePayment !== undefined ? Boolean(d.autoPausePayment) : true,
       paymentReceivedMessage: d.paymentReceivedMessage || DEFAULT_REGLAS_BOT.paymentReceivedMessage,
+      enablePostSaleUpsell: d.enablePostSaleUpsell === true,
+      postSaleDelayMinutes: Math.max(5, Number(d.postSaleDelayMinutes) || 45),
+      postSaleMessage: d.postSaleMessage || '',
       enableMessageLimit: d.enableMessageLimit !== undefined ? Boolean(d.enableMessageLimit) : true,
       maxBotMessages: Number(d.maxBotMessages) || 10,
       respondLastMessageBeforePause: d.respondLastMessageBeforePause !== undefined ? Boolean(d.respondLastMessageBeforePause) : true,
@@ -389,6 +398,98 @@ export default function KnowledgeEditor({ sectionKey, initialData, editable }: K
                   }}
                   className="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none"
                 />
+              </div>
+            )}
+          </div>
+
+          {/* Card 3B: Post-Sale Upsell Automation (New Buyers Only) */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-gray-900">
+                    🎁 Automatización Post-Venta (Oferta / 2da Compra)
+                  </h4>
+                  <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-full">
+                    Solo Clientes Nuevos
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Programa un mensaje automático después de que un cliente nuevo envíe su comprobante de pago. Jamás se envía a clientes antiguos.
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={reglasData.enablePostSaleUpsell}
+                  onChange={(e) => {
+                    setReglasData({ ...reglasData, enablePostSaleUpsell: e.target.checked });
+                    setIsDirty(true);
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+              </label>
+            </div>
+
+            {reglasData.enablePostSaleUpsell && (
+              <div className="space-y-4 pt-2 border-t border-gray-100">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-gray-50 rounded-xl">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-800">
+                      Tiempo de espera recomendado antes de enviar (minutos):
+                    </label>
+                    <p className="text-[11px] text-gray-500">
+                      Margen de seguridad para verificar el pago en el banco y entregar el acceso. Si el comprobante es erróneo, escribe <code className="font-bold text-red-600">#anular</code> en WhatsApp para cancelarlo.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {[15, 30, 45, 60].map((mins) => (
+                      <button
+                        key={mins}
+                        type="button"
+                        onClick={() => {
+                          setReglasData({ ...reglasData, postSaleDelayMinutes: mins });
+                          setIsDirty(true);
+                        }}
+                        className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                          reglasData.postSaleDelayMinutes === mins
+                            ? 'bg-emerald-600 text-white border-emerald-600'
+                            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
+                        }`}
+                      >
+                        {mins}m
+                      </button>
+                    ))}
+                    <input
+                      type="number"
+                      min={5}
+                      max={1440}
+                      value={reglasData.postSaleDelayMinutes}
+                      onChange={(e) => {
+                        setReglasData({ ...reglasData, postSaleDelayMinutes: Math.max(5, Number(e.target.value) || 45) });
+                        setIsDirty(true);
+                      }}
+                      className="w-16 p-1.5 text-xs text-center font-bold bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    Mensaje de oferta post-venta escrito por el operador (puedes usar {'{nombre}'}):
+                  </label>
+                  <textarea
+                    rows={4}
+                    placeholder="Escribe aquí el mensaje con el descuento o producto complementario real que deseas ofrecer..."
+                    value={reglasData.postSaleMessage}
+                    onChange={(e) => {
+                      setReglasData({ ...reglasData, postSaleMessage: e.target.value });
+                      setIsDirty(true);
+                    }}
+                    className="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none"
+                  />
+                </div>
               </div>
             )}
           </div>

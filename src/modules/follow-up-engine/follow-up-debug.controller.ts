@@ -180,4 +180,58 @@ export class FollowUpDebugController {
       };
     }
   }
+
+  /**
+   * POST /debug/follow-up/cleanup-retroactive-postsale
+   * Limpia las interacciones generadas retroactivamente hoy por el lote post-venta y restaura el orden del inbox.
+   */
+  @Post('cleanup-retroactive-postsale')
+  async cleanupRetroactivePostSale() {
+    this.logger.warn('Ejecutando limpieza de interacciones post-venta retroactivas y restaurando bandeja de entrada...');
+
+    // 1. Cancelar cualquier mensaje en cola
+    const purgedQueue = await this.prisma.pendingOutboundMessage.updateMany({
+      where: { status: { in: ['PENDING', 'PROCESSING'] } },
+      data: { status: 'FAILED', providerResponse: JSON.stringify({ reason: 'CLEANUP_RETROACTIVE' }) },
+    });
+
+    // 2. Eliminar las interacciones del lote post-venta de hoy para devolver las conversaciones a su orden cronológico real
+    const deletedInteractions = await this.prisma.interaction.deleteMany({
+      where: {
+        direction: 'OUTBOUND',
+        OR: [
+          { content: { startsWith: '🎁 [Automatización Post-Venta 50% OFF]:' } },
+          { content: { startsWith: '¡Hola, profe! Espero que ya estés revisando tu material' } },
+          { content: { startsWith: '¡Hola, campeón! 💪 Espero que ya tengas descargada tu guía' } },
+        ],
+      },
+    });
+
+    // 3. Limpiar etiquetas POST_VENTA_ENVIADA y POST_VENTA_PENDIENTE de memorias afectadas
+    const affectedMemories = await this.prisma.businessMemory.findMany({
+      where: {
+        tags: { hasSome: ['POST_VENTA_ENVIADA', 'POST_VENTA_PENDIENTE'] },
+      },
+      select: { id: true, tags: true },
+    });
+
+    let cleanedMemoriesCount = 0;
+    for (const mem of affectedMemories) {
+      const cleanTags = (mem.tags || []).filter(
+        t => t !== 'POST_VENTA_ENVIADA' && t !== 'POST_VENTA_PENDIENTE'
+      );
+      await this.prisma.businessMemory.update({
+        where: { id: mem.id },
+        data: { tags: cleanTags },
+      });
+      cleanedMemoriesCount++;
+    }
+
+    return {
+      status: 'SUCCESS',
+      purgedQueueCount: purgedQueue.count,
+      deletedInteractionsCount: deletedInteractions.count,
+      cleanedMemoriesCount,
+    };
+  }
 }

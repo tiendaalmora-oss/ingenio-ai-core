@@ -52,7 +52,7 @@ let OutboundDispatcherService = OutboundDispatcherService_1 = class OutboundDisp
         const pendingIds = await this.prisma.pendingOutboundMessage.findMany({
             where: { status: 'PENDING' },
             orderBy: { createdAt: 'asc' },
-            take: 5,
+            take: 1,
             select: { id: true }
         });
         if (!pendingIds.length) {
@@ -81,10 +81,24 @@ let OutboundDispatcherService = OutboundDispatcherService_1 = class OutboundDisp
         this.metrics.pending += messagesToProcess.length;
         for (let i = 0; i < messagesToProcess.length; i++) {
             const msg = messagesToProcess[i];
-            if (i > 0) {
-                const jitterMs = Math.floor(Math.random() * (12000 - 5000 + 1)) + 5000;
-                await new Promise(resolve => setTimeout(resolve, jitterMs));
+            const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+            const sentLastHour = await this.prisma.pendingOutboundMessage.count({
+                where: {
+                    tenantId: msg.tenantId,
+                    status: 'SENT',
+                    sentAt: { gte: oneHourAgo }
+                }
+            });
+            if (sentLastHour >= 12) {
+                await this.prisma.pendingOutboundMessage.update({
+                    where: { id: msg.id },
+                    data: { status: 'PENDING' }
+                });
+                this.logger.warn(`[Anti-Ban Shield] Tope de 12 envíos automáticos/hora alcanzado para tenant ${msg.tenantId}. Mensaje pospuesto para proteger la línea.`);
+                continue;
             }
+            const jitterMs = Math.floor(Math.random() * (10000 - 4000 + 1)) + 4000;
+            await new Promise(resolve => setTimeout(resolve, jitterMs));
             const startTime = Date.now();
             try {
                 const result = await this.wahaAdapter.sendMessage(msg.tenantId, msg.contactId, msg.message);
@@ -165,7 +179,7 @@ let OutboundDispatcherService = OutboundDispatcherService_1 = class OutboundDisp
 };
 exports.OutboundDispatcherService = OutboundDispatcherService;
 __decorate([
-    (0, schedule_1.Cron)('*/30 * * * * *'),
+    (0, schedule_1.Cron)('0 * * * * *'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)

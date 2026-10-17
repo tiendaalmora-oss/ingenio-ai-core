@@ -159,6 +159,44 @@ let FollowUpDebugController = FollowUpDebugController_1 = class FollowUpDebugCon
             };
         }
     }
+    async cleanupRetroactivePostSale() {
+        this.logger.warn('Ejecutando limpieza de interacciones post-venta retroactivas y restaurando bandeja de entrada...');
+        const purgedQueue = await this.prisma.pendingOutboundMessage.updateMany({
+            where: { status: { in: ['PENDING', 'PROCESSING'] } },
+            data: { status: 'FAILED', providerResponse: JSON.stringify({ reason: 'CLEANUP_RETROACTIVE' }) },
+        });
+        const deletedInteractions = await this.prisma.interaction.deleteMany({
+            where: {
+                direction: 'OUTBOUND',
+                OR: [
+                    { content: { startsWith: '🎁 [Automatización Post-Venta 50% OFF]:' } },
+                    { content: { startsWith: '¡Hola, profe! Espero que ya estés revisando tu material' } },
+                    { content: { startsWith: '¡Hola, campeón! 💪 Espero que ya tengas descargada tu guía' } },
+                ],
+            },
+        });
+        const affectedMemories = await this.prisma.businessMemory.findMany({
+            where: {
+                tags: { hasSome: ['POST_VENTA_ENVIADA', 'POST_VENTA_PENDIENTE'] },
+            },
+            select: { id: true, tags: true },
+        });
+        let cleanedMemoriesCount = 0;
+        for (const mem of affectedMemories) {
+            const cleanTags = (mem.tags || []).filter(t => t !== 'POST_VENTA_ENVIADA' && t !== 'POST_VENTA_PENDIENTE');
+            await this.prisma.businessMemory.update({
+                where: { id: mem.id },
+                data: { tags: cleanTags },
+            });
+            cleanedMemoriesCount++;
+        }
+        return {
+            status: 'SUCCESS',
+            purgedQueueCount: purgedQueue.count,
+            deletedInteractionsCount: deletedInteractions.count,
+            cleanedMemoriesCount,
+        };
+    }
 };
 exports.FollowUpDebugController = FollowUpDebugController;
 __decorate([
@@ -186,6 +224,12 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], FollowUpDebugController.prototype, "sendTestMessage", null);
+__decorate([
+    (0, common_1.Post)('cleanup-retroactive-postsale'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], FollowUpDebugController.prototype, "cleanupRetroactivePostSale", null);
 exports.FollowUpDebugController = FollowUpDebugController = FollowUpDebugController_1 = __decorate([
     (0, common_1.Controller)('debug/follow-up'),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,

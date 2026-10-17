@@ -127,15 +127,16 @@ let FollowUpEngineService = FollowUpEngineService_1 = class FollowUpEngineServic
                 const timeSinceSilence = Date.now() - silenceStart.getTime();
                 const elapsedMinutes = Math.round(timeSinceSilence / 60000);
                 const elapsedDays = Math.floor(timeSinceSilence / (24 * 60 * 60 * 1000));
+                const MAX_FRESHNESS_WINDOW_MS = 90 * 60 * 1000;
                 for (const rule of sortedRules) {
                     const delayMs = this.parseDelayMs(rule);
-                    if (timeSinceSilence >= delayMs) {
+                    if (timeSinceSilence >= delayMs && timeSinceSilence <= delayMs + MAX_FRESHNESS_WINDOW_MS) {
                         const ruleIdentifier = rule.id || `rule-${(rule.tiempo || 'default').replace(/\s+/g, '')}-${delayMs}`;
                         const alreadyDispatched = await this.prisma.pendingOutboundMessage.findFirst({
                             where: {
                                 conversationId: convo.id,
                                 followUpId: ruleIdentifier,
-                                status: { in: ['PENDING', 'PROCESSING', 'SENT'] },
+                                status: { in: ['PENDING', 'PROCESSING', 'SENT', 'FAILED'] },
                                 ...(lastInbound ? { createdAt: { gte: lastInbound.timestamp } } : {})
                             }
                         });
@@ -276,20 +277,17 @@ let FollowUpEngineService = FollowUpEngineService_1 = class FollowUpEngineServic
                 const rawData = typeof systemPrompt === 'string' ? JSON.parse(systemPrompt) : (systemPrompt['_raw'] || systemPrompt);
                 const rawReglas = rawData.reglasBot || systemPrompt.reglasBot || systemPrompt.botRules || {};
                 const reglasBot = (rawReglas.data && typeof rawReglas.data === 'object') ? { ...rawReglas.data, ...rawReglas } : rawReglas;
-                const isPostSaleEnabled = reglasBot.enablePostSaleUpsell !== false && Boolean(reglasBot.postSaleMessage && String(reglasBot.postSaleMessage).trim());
+                const isPostSaleEnabled = reglasBot.enablePostSaleUpsell === true && Boolean(reglasBot.postSaleMessage && String(reglasBot.postSaleMessage).trim());
                 if (!isPostSaleEnabled) {
                     continue;
                 }
-                const delayMinutes = Number(reglasBot.postSaleDelayMinutes) || 45;
+                const delayMinutes = Math.max(5, Number(reglasBot.postSaleDelayMinutes) || 45);
                 const postSaleMessage = String(reglasBot.postSaleMessage).trim();
                 const candidateContacts = await this.prisma.contact.findMany({
                     where: {
                         tenantId,
                         memory: {
-                            OR: [
-                                { leadStatus: { in: ['CLOSED', 'PAGADO', 'CLIENT', 'CLIENTE', 'SALE', 'VENTA'] } },
-                                { tags: { hasSome: ['PAGO_CONFIRMADO', 'COMPROBANTE_RECIBIDO', 'PAGADO'] } }
-                            ]
+                            tags: { has: 'POST_VENTA_PENDIENTE' }
                         }
                     },
                     include: {
@@ -300,21 +298,24 @@ let FollowUpEngineService = FollowUpEngineService_1 = class FollowUpEngineServic
                             include: {
                                 interactions: {
                                     orderBy: { timestamp: 'desc' },
-                                    take: 15
+                                    take: 10
                                 }
                             }
                         }
                     }
                 });
                 for (const contact of candidateContacts) {
-                    const currentTags = Array.isArray(contact.memory?.tags)
-                        ? contact.memory.tags.map((t) => String(t).toUpperCase())
-                        : [];
+                    const rawTags = Array.isArray(contact.memory?.tags) ? contact.memory.tags : [];
+                    const currentTags = rawTags.map((t) => String(t).toUpperCase());
                     if (currentTags.includes('VENTA_ANULADA') ||
                         currentTags.includes('PAGO_FALSO') ||
                         currentTags.includes('PAGO_RECHAZADO') ||
                         currentTags.includes('POST_VENTA_ENVIADA') ||
                         currentTags.includes('POST_SALE_SENT')) {
+                        await this.prisma.businessMemory.update({
+                            where: { contactId: contact.id },
+                            data: { tags: rawTags.filter(t => t !== 'POST_VENTA_PENDIENTE') }
+                        });
                         continue;
                     }
                     const conv = contact.conversations[0];
@@ -326,19 +327,35 @@ let FollowUpEngineService = FollowUpEngineService_1 = class FollowUpEngineServic
                             followUpId: 'post-sale-upsell'
                         }
                     });
-                    if (alreadyQueued)
+                    if (alreadyQueued) {
+                        await this.prisma.businessMemory.update({
+                            where: { contactId: contact.id },
+                            data: { tags: rawTags.filter(t => t !== 'POST_VENTA_PENDIENTE') }
+                        });
                         continue;
-                    const voucherInteraction = conv.interactions.find((i) => {
-                        const content = i.content || '';
-                        return ((i.direction === 'INBOUND' && (i.type === 'IMAGE' || content.toLowerCase().includes('comprobante') || content.toLowerCase().includes('referencia') || content.toLowerCase().includes('pago'))) ||
-                            (i.direction === 'OUTBOUND' && (content.includes('Comprobante de Pago Detectado') || content.includes('Ya registramos tu comprobante') || content.includes('recibido tu comprobante'))));
-                    });
-                    const paymentTime = voucherInteraction?.timestamp || contact.memory?.updatedAt || (conv.interactions[conv.interactions.length - 1]?.timestamp) || new Date();
+                    }
+                    const paymentTime = contact.memory?.updatedAt || conv.interactions[0]?.timestamp || new Date();
                     const elapsedMinutes = Math.floor((now.getTime() - new Date(paymentTime).getTime()) / 60000);
                     if (elapsedMinutes < delayMinutes) {
                         continue;
                     }
-                    const personalizedMsg = postSaleMessage.replace(/\{nombre\}/gi, contact.name || 'profe');
+                    if (elapsedMinutes > delayMinutes + 90) {
+                        this.logger.warn(`[PostSaleEngine] Oferta expirada por antigüedad (${elapsedMinutes} min) para ${contact.id}. Limpiando POST_VENTA_PENDIENTE.`);
+                        await this.prisma.businessMemory.update({
+                            where: { contactId: contact.id },
+                            data: { tags: rawTags.filter(t => t !== 'POST_VENTA_PENDIENTE') }
+                        });
+                        continue;
+                    }
+                    const personalizedMsg = postSaleMessage.replace(/\{nombre\}/gi, contact.name || 'hola');
+                    const newTags = Array.from(new Set([
+                        ...rawTags.filter(t => t !== 'POST_VENTA_PENDIENTE'),
+                        'POST_VENTA_ENVIADA'
+                    ]));
+                    await this.prisma.businessMemory.update({
+                        where: { contactId: contact.id },
+                        data: { tags: newTags }
+                    });
                     await this.prisma.pendingOutboundMessage.create({
                         data: {
                             tenantId,
@@ -349,22 +366,7 @@ let FollowUpEngineService = FollowUpEngineService_1 = class FollowUpEngineServic
                             status: 'PENDING'
                         }
                     });
-                    const newTags = Array.from(new Set([...(contact.memory?.tags || []), 'POST_VENTA_ENVIADA']));
-                    await this.prisma.businessMemory.update({
-                        where: { contactId: contact.id },
-                        data: { tags: newTags }
-                    });
-                    await this.prisma.interaction.create({
-                        data: {
-                            conversationId: conv.id,
-                            direction: 'OUTBOUND',
-                            type: 'TEXT',
-                            content: `🎁 [Automatización Post-Venta 50% OFF]: Disparada automáticamente tras cumplirse la ventana de seguridad (${elapsedMinutes} min transcurridos vs ${delayMinutes} min configurados).`,
-                            role: 'assistant',
-                            timestamp: new Date()
-                        }
-                    });
-                    this.logger.log(`[PostSaleEngine] 🚀 Encolada oferta post-venta 50% OFF para ${contact.name || contact.phone || contact.id} (${elapsedMinutes} min tras comprobante)`);
+                    this.logger.log(`[PostSaleEngine] 🚀 Encolada oferta post-venta para cliente nuevo ${contact.name || contact.phone || contact.id} (${elapsedMinutes} min tras comprobante)`);
                 }
             }
         }

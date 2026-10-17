@@ -74,4 +74,10 @@ export declare class FollowUpDebugController {
         message?: undefined;
         wahaMessageId?: undefined;
     }>;
+    cleanupRetroactivePostSale(): Promise<{
+        status: string;
+        purgedQueueCount: number;
+        deletedInteractionsCount: number;
+        cleanedMemoriesCount: number;
+    }>;
 }

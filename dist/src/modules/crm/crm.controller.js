@@ -522,7 +522,17 @@ let CrmController = class CrmController {
         const saleDate = body.date ? new Date(body.date) : new Date();
         const existingTags = contact.memory?.tags || [];
         const tagsToAdd = ['PAGO_CONFIRMADO', 'COMPROBANTE_RECIBIDO'];
-        const updatedTags = Array.from(new Set([...existingTags, ...tagsToAdd]));
+        try {
+            const bundle = await this.prisma.knowledgeBundle.findUnique({ where: { tenantId } });
+            const sp = bundle?.systemPrompt || {};
+            const rawData = sp['_raw'] || sp;
+            const reglasBot = rawData.reglasBot || sp.reglasBot || {};
+            if (reglasBot.enablePostSaleUpsell === true && String(reglasBot.postSaleMessage || '').trim().length > 0 && !existingTags.includes('POST_VENTA_ENVIADA')) {
+                tagsToAdd.push('POST_VENTA_PENDIENTE');
+            }
+        }
+        catch (_) { }
+        const updatedTags = Array.from(new Set([...existingTags.filter(t => t !== 'VENTA_ANULADA'), ...tagsToAdd]));
         const existingInterests = contact.memory?.interests || [];
         const updatedInterests = Array.from(new Set([body.productName.trim(), ...existingInterests]));
         await this.prisma.businessMemory.upsert({
@@ -605,7 +615,7 @@ let CrmController = class CrmController {
         if (!contact)
             throw new common_1.NotFoundException('Lead not found');
         const existingTags = contact.memory?.tags || [];
-        const updatedTags = existingTags.filter((t) => t !== 'PAGO_CONFIRMADO' && t !== 'COMPROBANTE_RECIBIDO' && t !== 'POST_VENTA_ENVIADA');
+        const updatedTags = existingTags.filter((t) => t !== 'PAGO_CONFIRMADO' && t !== 'COMPROBANTE_RECIBIDO' && t !== 'POST_VENTA_ENVIADA' && t !== 'POST_VENTA_PENDIENTE');
         if (!updatedTags.includes('VENTA_ANULADA')) {
             updatedTags.push('VENTA_ANULADA');
         }

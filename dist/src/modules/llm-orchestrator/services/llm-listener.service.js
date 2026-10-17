@@ -193,6 +193,9 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 });
                 newTags.add('PAGO_CONFIRMADO');
                 newTags.add('COMPROBANTE_RECIBIDO');
+                if (reglasBot.enablePostSaleUpsell === true && String(reglasBot.postSaleMessage || '').trim().length > 0 && !newTags.has('POST_VENTA_ENVIADA')) {
+                    newTags.add('POST_VENTA_PENDIENTE');
+                }
                 await this.prisma.businessMemory.upsert({
                     where: { contactId: payload.contactId },
                     create: {
@@ -226,6 +229,9 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 nextStatus = 'CLOSED';
                 newTags.add('PAGO_CONFIRMADO');
                 newTags.add('COMPROBANTE_RECIBIDO');
+                if (reglasBot.enablePostSaleUpsell === true && String(reglasBot.postSaleMessage || '').trim().length > 0 && !newTags.has('POST_VENTA_ENVIADA')) {
+                    newTags.add('POST_VENTA_PENDIENTE');
+                }
             }
             else if (isHotMsg && currentStatus !== 'CLOSED') {
                 nextStatus = 'HOT';

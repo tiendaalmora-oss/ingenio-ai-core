@@ -356,7 +356,7 @@ export class MetaWebhookController {
                   const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: contact.id } });
                   const currentTags = (memory?.tags as string[]) || [];
                   const updatedTags = currentTags.filter(
-                    (t) => t !== 'PAGO_CONFIRMADO' && t !== 'COMPROBANTE_RECIBIDO' && t !== 'POST_VENTA_ENVIADA'
+                    (t) => t !== 'PAGO_CONFIRMADO' && t !== 'COMPROBANTE_RECIBIDO' && t !== 'POST_VENTA_ENVIADA' && t !== 'POST_VENTA_PENDIENTE'
                   );
                   if (!updatedTags.includes('VENTA_ANULADA')) {
                     updatedTags.push('VENTA_ANULADA');
