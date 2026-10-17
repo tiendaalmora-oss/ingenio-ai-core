@@ -123,20 +123,16 @@ export class CampaignsService {
   }
 
   /**
-   * Obtiene la lista de etiquetas y productos disponibles para crear filtros.
+   * Obtiene la lista de etiquetas y productos disponibles para crear filtros (optimizado en RAM).
    */
   async getAvailableFilterOptions(tenantId: string) {
-    const [bundle, contacts] = await Promise.all([
+    const [bundle, memories] = await Promise.all([
       this.prisma.knowledgeBundle.findUnique({ where: { tenantId } }),
-      this.prisma.contact.findMany({
-        where: { tenantId },
+      this.prisma.businessMemory.findMany({
+        where: { contact: { tenantId } },
         select: {
-          memory: {
-            select: {
-              tags: true,
-              interests: true,
-            },
-          },
+          tags: true,
+          interests: true,
         },
       }),
     ]);
@@ -151,9 +147,9 @@ export class CampaignsService {
     });
 
     const tagsSet = new Set<string>();
-    contacts.forEach((c) => {
-      (c.memory?.tags || []).forEach((t) => tagsSet.add(t));
-      (c.memory?.interests || []).forEach((i) => productsSet.add(i));
+    memories.forEach((m) => {
+      (m.tags || []).forEach((t) => tagsSet.add(t));
+      (m.interests || []).forEach((i) => productsSet.add(i));
     });
 
     return {
@@ -198,7 +194,10 @@ export class CampaignsService {
 
     const channel = dto.channel || 'WHATSAPP';
     const status = dto.autoStart !== false ? 'RUNNING' : 'DRAFT';
-    const dripIntervalSeconds = Math.max(15, dto.dripIntervalSeconds || 30);
+    // Blindaje Anti-Ban: Para WhatsApp el intervalo mínimo seguro es 45 segundos (60s por defecto)
+    const minSafeInterval = channel === 'EMAIL' ? 15 : 45;
+    const defaultInterval = channel === 'EMAIL' ? 30 : 60;
+    const dripIntervalSeconds = Math.max(minSafeInterval, dto.dripIntervalSeconds || defaultInterval);
 
     // Crear registro de la campaña
     const campaign = await this.prisma.campaign.create({

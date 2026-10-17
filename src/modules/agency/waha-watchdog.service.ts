@@ -24,11 +24,12 @@ export class WahaWatchdogService implements OnApplicationBootstrap {
   }
 
   /**
-   * Ejecuta cada 60 segundos la supervisión proactiva de sesiones WAHA:
-   * 1. Reconstruye automáticamente la sesión de producción 'ferreos' si el contenedor reinició (404/NOT_CONFIGURED).
-   * 2. Limpia procesos Chromium abandonados en Sandbox para proteger la memoria RAM del VPS.
+   * Ejecuta cada 2 minutos la supervisión inteligente de sesiones WAHA Multi-Tenant:
+   * 1. Auto-recupera sesiones de cualquier subcuenta activa que hayan caído en estado FAILED o ERROR por micro-cortes.
+   * 2. Respeta estrictamente el estado STOPPED cuando el operador detuvo una sesión manualmente.
+   * 3. Detiene sesiones abandonadas en SCAN_QR_CODE por más de 30 minutos para liberar RAM del VPS.
    */
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron('*/2 * * * *')
   async handleCron() {
     await this.checkAndHealWahaSessions();
   }
@@ -38,8 +39,8 @@ export class WahaWatchdogService implements OnApplicationBootstrap {
     this.isChecking = true;
 
     try {
-      await this.ensureProdSessionAlive();
-      await this.pruneIdleSandboxSessions();
+      await this.healCrashedTenantSessions();
+      await this.pruneIdleQrSessions();
     } catch (err: any) {
       this.logger.error(`[Watchdog] Error en ciclo de supervisión: ${err.message}`);
     } finally {
@@ -48,36 +49,47 @@ export class WahaWatchdogService implements OnApplicationBootstrap {
   }
 
   /**
-   * 1. Supervisa la sesión de producción principal ('ferreos' / Kits Docentes)
+   * 1. Supervisa todas las subcuentas activas y auto-reinicia únicamente sesiones que sufrieron una caída (FAILED / ERROR).
+   * Jamás reinicia sesiones en estado STOPPED (detenidas manualmente por el usuario o por inactividad de QR).
    */
-  private async ensureProdSessionAlive() {
+  private async healCrashedTenantSessions() {
     try {
-      const prodStatus = await this.agencyService.getSubaccountWahaStatus(PROD_MAIN_TENANT_ID);
-      
-      // Si la sesión desapareció de WAHA (404 / NOT_CONFIGURED) o quedó en STOPPED/FAILED:
-      if (
-        prodStatus.status === 'NOT_CONFIGURED' ||
-        prodStatus.status === 'FAILED' ||
-        prodStatus.status === 'ERROR' ||
-        prodStatus.status === 'STOPPED'
-      ) {
-        this.logger.warn(
-          `[Watchdog Alert] Sesión de producción 'ferreos' en estado '${prodStatus.status}'. Auto-reconstruyendo sesión limpia...`
-        );
-        const started = await this.agencyService.startSubaccountWaha(PROD_MAIN_TENANT_ID);
-        this.logger.log(`[Watchdog] Sesión de producción 'ferreos' auto-iniciada con éxito: status=${started.status}`);
+      const activeTenants = await this.prisma.tenant.findMany({
+        where: {
+          status: 'active',
+          wahaSession: { not: null },
+        },
+        select: { id: true, name: true, wahaSession: true },
+      });
+
+      for (const tenant of activeTenants) {
+        if (!tenant.wahaSession) continue;
+        try {
+          const wahaStatus = await this.agencyService.getSubaccountWahaStatus(tenant.id);
+          if (wahaStatus.status === 'FAILED' || wahaStatus.status === 'ERROR') {
+            this.logger.warn(
+              `[Watchdog Auto-Heal] Sesión '${tenant.wahaSession}' (${tenant.name}) detectada en estado '${wahaStatus.status}'. Intentando reconexión automática...`,
+            );
+            const restarted = await this.agencyService.startSubaccountWaha(tenant.id);
+            this.logger.log(
+              `[Watchdog Auto-Heal] Sesión '${tenant.wahaSession}' reconectada: nuevo estado=${restarted.status}`,
+            );
+          }
+        } catch (innerErr: any) {
+          this.logger.debug(`[Watchdog] No se pudo verificar sesión de ${tenant.name}: ${innerErr.message}`);
+        }
       }
     } catch (err: any) {
-      this.logger.error(`[Watchdog] Error vigilando sesión de producción: ${err.message}`);
+      this.logger.error(`[Watchdog] Error supervisando sesiones activas: ${err.message}`);
     }
   }
 
   /**
-   * 2. Libera procesos Chromium en Sandbox que lleven más de 45 minutos en SCAN_QR_CODE sin vincularse
+   * 2. Libera recursos en WAHA deteniendo sesiones que lleven más de 30 minutos esperando lectura de QR (SCAN_QR_CODE)
    */
-  private async pruneIdleSandboxSessions() {
+  private async pruneIdleQrSessions() {
     try {
-      const rawUrl = process.env.WAHA_SANDBOX_URL || process.env.WAHA_API_URL || 'https://waha-sandbox.ingeniodigital.shop';
+      const rawUrl = process.env.WAHA_SANDBOX_URL || process.env.WAHA_API_URL || 'https://waha.ingeniodigital.shop';
       const apiUrl = rawUrl.replace(/\/+$/, '');
       const apiKey = process.env.WAHA_SANDBOX_API_KEY || process.env.WAHA_API_KEY || 'secreto123';
 
@@ -90,17 +102,16 @@ export class WahaWatchdogService implements OnApplicationBootstrap {
 
       const sessions: any[] = await res.json().catch(() => []);
       const now = Date.now();
-      const MAX_IDLE_MS = 45 * 60 * 1000; // 45 minutos
+      const MAX_QR_IDLE_MS = 30 * 60 * 1000; // 30 minutos esperando QR
 
       for (const s of sessions) {
-        // Solo aplica a sesiones de subcuentas en Sandbox que estén esperando QR y no estén conectadas
-        if (s.name && s.name.startsWith('sub_') && (s.status === 'SCAN_QR_CODE' || s.status === 'STARTING')) {
+        if (s.name && s.status === 'SCAN_QR_CODE') {
           const activityTime = s.timestamps?.activity ? Number(s.timestamps.activity) : 0;
-          const idleTime = activityTime > 0 ? (now - activityTime) : Infinity;
+          const idleTime = activityTime > 0 ? now - activityTime : MAX_QR_IDLE_MS + 1;
 
-          if (idleTime > MAX_IDLE_MS) {
+          if (idleTime > MAX_QR_IDLE_MS) {
             this.logger.warn(
-              `[Watchdog Memory Guard] Subcuenta Sandbox '${s.name}' inactiva esperando QR por más de 45 min (${Math.round(idleTime / 60000)} min). Deteniendo Chromium para liberar RAM del VPS.`
+              `[Watchdog Memory Guard] Sesión '${s.name}' lleva más de 30 min en SCAN_QR_CODE sin vincularse. Pasando a STOPPED para proteger RAM del VPS.`,
             );
             await fetch(`${apiUrl}/api/sessions/${s.name}/stop`, {
               method: 'POST',
@@ -110,7 +121,7 @@ export class WahaWatchdogService implements OnApplicationBootstrap {
         }
       }
     } catch (err: any) {
-      this.logger.debug(`[Watchdog Sandbox Prune] ${err.message}`);
+      this.logger.debug(`[Watchdog QR Prune] ${err.message}`);
     }
   }
 }
