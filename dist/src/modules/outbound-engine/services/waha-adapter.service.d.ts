@@ -14,7 +14,7 @@ export declare class WahaAdapterService {
     isSentBySystemContent(targetChatIdOrPhone: string, content: string): boolean;
     isSentBySystem(messageId: any): boolean;
     normalizeJid(rawId: string): string;
-    resolveTargetChatId(contactIdOrPhone: string): Promise<{
+    resolveTargetChatId(contactIdOrPhone: string, tenantId?: string): Promise<{
         chatId: string;
         contactId?: string;
     }>;

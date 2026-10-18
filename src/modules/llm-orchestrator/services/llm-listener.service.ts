@@ -10,7 +10,7 @@ import { PrismaService } from '../../../shared/database/prisma.service';
 import { FunnelEngineService } from '../../funnel-engine/funnel-engine.service';
 import { RuntimeEngineService } from '../../funnel-engine/runtime/runtime-engine.service';
 import { ExecutionContext } from '../../funnel-engine/runtime/execution-context.interface';
-import { sanitizeUserFacingResponse } from '../utils/response-sanitizer';
+import { sanitizeUserFacingResponse, isSafeUserFacingResponse } from '../utils/response-sanitizer';
 
 /**
  * Tracks the recursive depth of the Executive Loop per conversation.
@@ -386,19 +386,17 @@ export class LlmListenerService {
       );
 
       let finalContent = '';
-      // Flag: si el texto ya fue guardado dentro del registro TOOL_CALL, NO crear un segundo
-      // registro TEXT con el mismo contenido (evita duplicados en WhatsApp y en la DB).
-      let skipTextInteraction = false;
       const response = await this.hermesClient.generateResponse(masterPrompt, true);
 
       // Si el LLM ejecutó herramientas
       if (response.toolCalls && response.toolCalls.length > 0) {
+        // NUNCA almacenar CoT crudo en BD: el registro TOOL_CALL solo guarda las llamadas a función
         await this.prisma.interaction.create({
           data: {
             conversationId: payload.conversationId,
             direction: 'OUTBOUND',
             type: 'TOOL_CALL',
-            content: response.content || '',
+            content: '',
             role: 'assistant',
             toolCalls: response.toolCalls
           }
@@ -415,35 +413,27 @@ export class LlmListenerService {
           ));
         }
 
-        const cleanedCompanion = response.content ? sanitizeUserFacingResponse(response.content) : '';
+        // AISLAMIENTO TOTAL: NUNCA despachar a WhatsApp texto acompañante de turnos con tool calls.
+        // Los LLMs (especialmente Gemini Flash) emiten razonamiento interno (CoT) en content cuando llaman tools.
+        // Siempre solicitamos la respuesta conversacional humana limpia en un segundo paso con tools deshabilitadas.
+        this.logger.log(`[Executive Loop] Herramienta(s) ejecutada(s) en CRM. Solicitando respuesta de texto conversacional limpia para el usuario...`);
+        const textPrompt = await this.contextBuilder.buildContext(
+          payload.tenantId,
+          payload.contactId,
+          payload.conversationId,
+          payload.content,
+          null
+        );
 
-        if (cleanedCompanion && cleanedCompanion.trim() !== '') {
-          // El texto ya está guardado en el TOOL_CALL record.
-          // Lo emitimos a WhatsApp limpio pero NO lo guardamos de nuevo como TEXT para evitar duplicado.
-          finalContent = cleanedCompanion;
-          skipTextInteraction = true;
-          this.logger.log(`[Executive Loop] Tool call + texto conversacional válido en mismo turno. Emitiendo texto limpio.`);
-        } else {
-          // El LLM solo hizo el tool call (o produjo solo monólogo en inglés/código python) → pedimos la respuesta conversacional limpia por separado
-          this.logger.log(`[Executive Loop] Herramienta ejecutada sin texto conversacional válido. Solicitando respuesta de texto conversacional para el usuario...`);
-          const textPrompt = await this.contextBuilder.buildContext(
-            payload.tenantId,
-            payload.contactId,
-            payload.conversationId,
-            payload.content,
-            null
-          );
+        // Directiva explícita para que el LLM redacte la respuesta sin demoras y sin herramientas
+        textPrompt.push({
+          role: 'user',
+          content: `[SISTEMA]: La memoria del CRM ya fue actualizada con éxito. Redacta ahora tu respuesta conversacional completa para el usuario respondiendo a su mensaje: "${payload.content}". Sé persuasivo, amable y continúa el embudo de ventas.`
+        });
 
-          // Directiva explícita para que el LLM redacte la respuesta sin demoras
-          textPrompt.push({
-            role: 'user',
-            content: `[SISTEMA]: La memoria del CRM ya fue actualizada con éxito. Redacta ahora tu respuesta conversacional completa para el usuario respondiendo a su mensaje: "${payload.content}". Sé persuasivo, amable y termina con una pregunta de cierre.`
-          });
-
-          const textResponse = await this.hermesClient.generateResponse(textPrompt, false);
-          if (textResponse.content) {
-            finalContent = textResponse.content;
-          }
+        const textResponse = await this.hermesClient.generateResponse(textPrompt, false);
+        if (textResponse.content) {
+          finalContent = textResponse.content;
         }
       } else if (response.content) {
         // Blindaje contra fugas de sintaxis de tool interna JSON (ej: call:update_business_memory{...})
@@ -558,6 +548,11 @@ export class LlmListenerService {
       if (finalContent) {
         finalContent = sanitizeUserFacingResponse(finalContent);
 
+        if (!isSafeUserFacingResponse(finalContent)) {
+          this.logger.warn(`[Executive Loop Shield] Bloqueada respuesta no segura que contiene razonamiento interno o inglés técnico. Contenido suprimido.`);
+          finalContent = '';
+        }
+
         const lower = finalContent.toLowerCase();
         if (
           lower.includes('hermes no pudo') ||
@@ -582,8 +577,6 @@ export class LlmListenerService {
       }
 
       if (finalContent) {
-        finalContent = sanitizeUserFacingResponse(finalContent);
-
         // Blindaje contra fugas de enlaces de descarga / Google Docs antes de validar el pago
         const hasDownloadLink = /(?:https?:\/\/)?(?:docs\.google\.com|drive\.google\.com|mega\.nz|dropbox\.com)\/[^\s]+/i.test(finalContent);
         if (hasDownloadLink) {
@@ -617,30 +610,16 @@ export class LlmListenerService {
       }
 
       if (finalContent && finalContent.trim() !== '') {
-        // Solo crear registro TEXT en la DB si el texto NO viene ya guardado dentro de un TOOL_CALL.
-        // Cuando skipTextInteraction=true, el contenido ya está guardado en el TOOL_CALL record.
-        if (!skipTextInteraction) {
-          await this.prisma.interaction.create({
-            data: {
-              conversationId: payload.conversationId,
-              direction: 'OUTBOUND',
-              type: 'TEXT',
-              content: finalContent,
-              role: 'assistant'
-            }
-          });
-        } else {
-          // Sincronizar el contenido final sanitizado en el registro TOOL_CALL para consistencia en DB y anti-echo
-          await this.prisma.interaction.updateMany({
-            where: {
-              conversationId: payload.conversationId,
-              direction: 'OUTBOUND',
-              type: 'TOOL_CALL',
-              role: 'assistant',
-            },
-            data: { content: finalContent }
-          }).catch(() => {});
-        }
+        // Registrar en DB la respuesta de texto real enviada al cliente
+        await this.prisma.interaction.create({
+          data: {
+            conversationId: payload.conversationId,
+            direction: 'OUTBOUND',
+            type: 'TEXT',
+            content: finalContent,
+            role: 'assistant'
+          }
+        });
 
         // Siempre emitir el evento para que WhatsApp reciba el mensaje
         this.eventEmitter.emit('response.generated', new ResponseGeneratedEvent(

@@ -42,33 +42,13 @@ let FollowUpEngineService = FollowUpEngineService_1 = class FollowUpEngineServic
             return report;
         }
         await this.evaluatePostSaleUpsells(now);
-        const activeConversations = await this.prisma.conversation.findMany({
-            where: {
-                status: { in: ['NEW', 'ACTIVE'] }
-            },
-            include: {
-                contact: {
-                    include: { memory: true }
-                },
-                interactions: {
-                    orderBy: { timestamp: 'desc' },
-                    take: 20
-                }
-            }
-        });
-        report.activeConversationsFound = activeConversations.length;
-        if (!activeConversations.length) {
+        const bundles = await this.prisma.knowledgeBundle.findMany();
+        if (!bundles.length) {
             return report;
         }
-        const tenantIds = [...new Set(activeConversations.map(c => c.contact.tenantId))];
-        for (const tenantId of tenantIds) {
-            const bundle = await this.prisma.knowledgeBundle.findUnique({
-                where: { tenantId }
-            });
-            if (!bundle) {
-                report.skipped.push({ tenantId, reason: 'No KnowledgeBundle found' });
-                continue;
-            }
+        const MAX_FRESHNESS_WINDOW_MS = 90 * 60 * 1000;
+        for (const bundle of bundles) {
+            const tenantId = bundle.tenantId;
             const systemPrompt = bundle.systemPrompt || {};
             const rawData = typeof systemPrompt === 'string' ? JSON.parse(systemPrompt) : (systemPrompt['_raw'] || systemPrompt);
             const rawSeguimientos = rawData['seguimientos'] || rawData['followups'] || systemPrompt['followups'] || systemPrompt['seguimientos'] || rawData['scriptsComerciales'];
@@ -78,7 +58,30 @@ let FollowUpEngineService = FollowUpEngineService_1 = class FollowUpEngineServic
                 continue;
             }
             const sortedRules = [...rules].sort((a, b) => this.parseDelayMs(a) - this.parseDelayMs(b));
-            const tenantConvos = activeConversations.filter(c => c.contact.tenantId === tenantId);
+            const maxRuleDelayMs = Math.max(...sortedRules.map(r => this.parseDelayMs(r)));
+            const sqlLookbackMs = maxRuleDelayMs + MAX_FRESHNESS_WINDOW_MS + (60 * 60 * 1000);
+            const cutoffDate = new Date(now.getTime() - sqlLookbackMs);
+            const tenantConvos = await this.prisma.conversation.findMany({
+                where: {
+                    status: { in: ['NEW', 'ACTIVE'] },
+                    contact: { tenantId },
+                    interactions: {
+                        some: {
+                            timestamp: { gte: cutoffDate }
+                        }
+                    }
+                },
+                include: {
+                    contact: {
+                        include: { memory: true }
+                    },
+                    interactions: {
+                        orderBy: { timestamp: 'desc' },
+                        take: 20
+                    }
+                }
+            });
+            report.activeConversationsFound += tenantConvos.length;
             report.evaluatedTenants.push({
                 tenantId,
                 rulesCount: sortedRules.length,

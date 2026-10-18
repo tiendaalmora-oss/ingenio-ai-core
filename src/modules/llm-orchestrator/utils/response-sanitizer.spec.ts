@@ -1,4 +1,4 @@
-import { sanitizeUserFacingResponse } from './response-sanitizer';
+import { sanitizeUserFacingResponse, isSafeUserFacingResponse } from './response-sanitizer';
 
 describe('sanitizeUserFacingResponse', () => {
   it('should extract final response when model outputs scratchpad tags', () => {
@@ -125,5 +125,58 @@ print(default_api.update_business_memory(interests=['Física'], leadStatus='WARM
 
     const cleaned = sanitizeUserFacingResponse(raw);
     expect(cleaned).toBe('');
+  });
+
+  it('should completely suppress Apure English CoT reasoning leak with KOS and tool parameters', () => {
+    const raw = `. According to the KOS, the first step for this product is 'Paso 1 — Calificación y Micro-Filtro'... The update_business_memory tool can be used for this... interests: ['Mega Pack Musculación & Fitness Pro 2026']...`;
+
+    const cleaned = sanitizeUserFacingResponse(raw);
+    expect(cleaned).toBe('');
+    expect(isSafeUserFacingResponse(raw)).toBe(false);
+    expect(isSafeUserFacingResponse(cleaned)).toBe(false);
+  });
+
+  it('should cleanly extract Spanish dialogue when preceded by English KOS monologue', () => {
+    const raw = `According to the KOS, the first step for this product is 'Paso 1'. The script for Step 1 is: "¡Hola! Qué gusto saludarte. 💪🏋️‍♂️ ¿Entrenas en casa o en gimnasio?" I will call update_business_memory.`;
+
+    const cleaned = sanitizeUserFacingResponse(raw);
+    expect(cleaned).toContain('¡Hola! Qué gusto saludarte.');
+    expect(cleaned).toContain('¿Entrenas en casa o en gimnasio?');
+    expect(cleaned).not.toContain('According to the KOS');
+    expect(cleaned).not.toContain('update_business_memory');
+    expect(isSafeUserFacingResponse(cleaned)).toBe(true);
+  });
+});
+
+describe('isSafeUserFacingResponse', () => {
+  it('should accept clean Spanish messages', () => {
+    expect(isSafeUserFacingResponse('¡Hola! Bienvenido, ¿en qué podemos ayudarte hoy?')).toBe(true);
+    expect(isSafeUserFacingResponse('El precio promocional es de 10$ o al cambio en Bs.')).toBe(true);
+    expect(isSafeUserFacingResponse('✅ Evaluaciones de 3°, 4° y 5° Año\n✅ Versión Profesor Resuelta Paso a Paso')).toBe(true);
+  });
+
+  it('should reject messages containing internal tool names or code', () => {
+    expect(isSafeUserFacingResponse('Voy a llamar a update_business_memory para guardar tus datos.')).toBe(false);
+    expect(isSafeUserFacingResponse('tool_code print(default_api.test())')).toBe(false);
+    expect(isSafeUserFacingResponse('call:create_task{"title":"test"}')).toBe(false);
+  });
+
+  it('should reject messages containing prompt or architecture metadata', () => {
+    expect(isSafeUserFacingResponse('According to the KOS, this is step 1.')).toBe(false);
+    expect(isSafeUserFacingResponse('[ESTADO DEL EMBUDO] Paso 1 COMPLETADO')).toBe(false);
+    expect(isSafeUserFacingResponse('Paso 2 PENDIENTE')).toBe(false);
+    expect(isSafeUserFacingResponse('leadStatus="WARM"')).toBe(false);
+  });
+
+  it('should reject dominant English planning sentences', () => {
+    expect(isSafeUserFacingResponse('The user is asking for information about this product.')).toBe(false);
+    expect(isSafeUserFacingResponse('Therefore, I need to start the funnel from step 1.')).toBe(false);
+    expect(isSafeUserFacingResponse('I will use this script to respond to the user.')).toBe(false);
+  });
+
+  it('should reject empty or whitespace-only messages', () => {
+    expect(isSafeUserFacingResponse('')).toBe(false);
+    expect(isSafeUserFacingResponse('   ')).toBe(false);
+    expect(isSafeUserFacingResponse('.')).toBe(false);
   });
 });

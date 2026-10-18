@@ -13,6 +13,7 @@ exports.DebugTenantController = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../shared/database/prisma.service");
 const tenant_resolver_service_1 = require("./services/tenant-resolver.service");
+const admin_api_key_guard_1 = require("../../shared/guards/admin-api-key.guard");
 let DebugTenantController = class DebugTenantController {
     prisma;
     tenantResolverService;
@@ -71,6 +72,7 @@ __decorate([
 ], DebugTenantController.prototype, "getTenantDebugInfo", null);
 exports.DebugTenantController = DebugTenantController = __decorate([
     (0, common_1.Controller)('debug/tenant'),
+    (0, common_1.UseGuards)(admin_api_key_guard_1.AdminApiKeyGuard),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         tenant_resolver_service_1.TenantResolverService])
 ], DebugTenantController);

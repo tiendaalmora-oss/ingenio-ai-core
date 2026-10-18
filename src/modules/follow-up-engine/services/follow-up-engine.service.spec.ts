@@ -11,7 +11,20 @@ describe('FollowUpEngineService (Candado de Horario de Atención)', () => {
   beforeEach(async () => {
     prisma = {
       tenant: { findMany: jest.fn().mockResolvedValue([]) },
-      knowledgeBundle: { findUnique: jest.fn() },
+      knowledgeBundle: {
+        findUnique: jest.fn().mockResolvedValue({
+          tenantId: 'tenant-1',
+          systemPrompt: {
+            seguimientos: [{ tiempo: '15 dias', instruccion: 'Reactivar' }]
+          }
+        }),
+        findMany: jest.fn().mockResolvedValue([{
+          tenantId: 'tenant-1',
+          systemPrompt: {
+            seguimientos: [{ tiempo: '15 dias', instruccion: 'Reactivar' }]
+          }
+        }])
+      },
       conversation: { findMany: jest.fn().mockResolvedValue([]) },
       pendingOutboundMessage: { findFirst: jest.fn() },
     };

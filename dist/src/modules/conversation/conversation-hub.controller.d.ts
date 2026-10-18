@@ -4,6 +4,7 @@ export declare class ConversationHubController {
     private readonly prisma;
     private readonly wahaAdapter;
     private readonly logger;
+    private readonly lastConsolidationByTenant;
     constructor(prisma: PrismaService, wahaAdapter: WahaAdapterService);
     listConversations(tenantId: string, page?: string, limit?: string, search?: string, status?: string): Promise<{
         total: number;

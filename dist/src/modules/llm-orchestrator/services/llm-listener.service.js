@@ -280,7 +280,6 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
             this.logger.log(`No hay automatización, ejecutando Agente Universal...`);
             const masterPrompt = await this.contextBuilder.buildContext(payload.tenantId, payload.contactId, payload.conversationId, payload.content, null);
             let finalContent = '';
-            let skipTextInteraction = false;
             const response = await this.hermesClient.generateResponse(masterPrompt, true);
             if (response.toolCalls && response.toolCalls.length > 0) {
                 await this.prisma.interaction.create({
@@ -288,7 +287,7 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                         conversationId: payload.conversationId,
                         direction: 'OUTBOUND',
                         type: 'TOOL_CALL',
-                        content: response.content || '',
+                        content: '',
                         role: 'assistant',
                         toolCalls: response.toolCalls
                     }
@@ -296,23 +295,15 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 for (const call of response.toolCalls) {
                     await this.eventEmitter.emitAsync('tool.called', new tool_called_event_1.ToolCalledEvent(payload.tenantId, payload.conversationId, payload.contactId, call.id, call.name, call.arguments));
                 }
-                const cleanedCompanion = response.content ? (0, response_sanitizer_1.sanitizeUserFacingResponse)(response.content) : '';
-                if (cleanedCompanion && cleanedCompanion.trim() !== '') {
-                    finalContent = cleanedCompanion;
-                    skipTextInteraction = true;
-                    this.logger.log(`[Executive Loop] Tool call + texto conversacional válido en mismo turno. Emitiendo texto limpio.`);
-                }
-                else {
-                    this.logger.log(`[Executive Loop] Herramienta ejecutada sin texto conversacional válido. Solicitando respuesta de texto conversacional para el usuario...`);
-                    const textPrompt = await this.contextBuilder.buildContext(payload.tenantId, payload.contactId, payload.conversationId, payload.content, null);
-                    textPrompt.push({
-                        role: 'user',
-                        content: `[SISTEMA]: La memoria del CRM ya fue actualizada con éxito. Redacta ahora tu respuesta conversacional completa para el usuario respondiendo a su mensaje: "${payload.content}". Sé persuasivo, amable y termina con una pregunta de cierre.`
-                    });
-                    const textResponse = await this.hermesClient.generateResponse(textPrompt, false);
-                    if (textResponse.content) {
-                        finalContent = textResponse.content;
-                    }
+                this.logger.log(`[Executive Loop] Herramienta(s) ejecutada(s) en CRM. Solicitando respuesta de texto conversacional limpia para el usuario...`);
+                const textPrompt = await this.contextBuilder.buildContext(payload.tenantId, payload.contactId, payload.conversationId, payload.content, null);
+                textPrompt.push({
+                    role: 'user',
+                    content: `[SISTEMA]: La memoria del CRM ya fue actualizada con éxito. Redacta ahora tu respuesta conversacional completa para el usuario respondiendo a su mensaje: "${payload.content}". Sé persuasivo, amable y continúa el embudo de ventas.`
+                });
+                const textResponse = await this.hermesClient.generateResponse(textPrompt, false);
+                if (textResponse.content) {
+                    finalContent = textResponse.content;
                 }
             }
             else if (response.content) {
@@ -387,6 +378,10 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
             }
             if (finalContent) {
                 finalContent = (0, response_sanitizer_1.sanitizeUserFacingResponse)(finalContent);
+                if (!(0, response_sanitizer_1.isSafeUserFacingResponse)(finalContent)) {
+                    this.logger.warn(`[Executive Loop Shield] Bloqueada respuesta no segura que contiene razonamiento interno o inglés técnico. Contenido suprimido.`);
+                    finalContent = '';
+                }
                 const lower = finalContent.toLowerCase();
                 if (lower.includes('hermes no pudo') ||
                     lower.includes('error calling') ||
@@ -404,7 +399,6 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 return;
             }
             if (finalContent) {
-                finalContent = (0, response_sanitizer_1.sanitizeUserFacingResponse)(finalContent);
                 const hasDownloadLink = /(?:https?:\/\/)?(?:docs\.google\.com|drive\.google\.com|mega\.nz|dropbox\.com)\/[^\s]+/i.test(finalContent);
                 if (hasDownloadLink) {
                     const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } });
@@ -434,28 +428,15 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 }
             }
             if (finalContent && finalContent.trim() !== '') {
-                if (!skipTextInteraction) {
-                    await this.prisma.interaction.create({
-                        data: {
-                            conversationId: payload.conversationId,
-                            direction: 'OUTBOUND',
-                            type: 'TEXT',
-                            content: finalContent,
-                            role: 'assistant'
-                        }
-                    });
-                }
-                else {
-                    await this.prisma.interaction.updateMany({
-                        where: {
-                            conversationId: payload.conversationId,
-                            direction: 'OUTBOUND',
-                            type: 'TOOL_CALL',
-                            role: 'assistant',
-                        },
-                        data: { content: finalContent }
-                    }).catch(() => { });
-                }
+                await this.prisma.interaction.create({
+                    data: {
+                        conversationId: payload.conversationId,
+                        direction: 'OUTBOUND',
+                        type: 'TEXT',
+                        content: finalContent,
+                        role: 'assistant'
+                    }
+                });
                 this.eventEmitter.emit('response.generated', new response_generated_event_1.ResponseGeneratedEvent(payload.tenantId, payload.conversationId, finalContent));
                 if (reglasBot.enableMessageLimit !== false) {
                     const maxMessages = Number(reglasBot.maxBotMessages) || 25;

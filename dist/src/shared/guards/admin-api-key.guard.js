@@ -46,8 +46,8 @@ let AdminApiKeyGuard = AdminApiKeyGuard_1 = class AdminApiKeyGuard {
             if (payload) {
                 request.user = payload;
                 const url = request.raw?.url || request.url || '';
-                if (url.includes('/agency') && payload.role !== 'agency_admin') {
-                    this.logger.warn(`Intento no autorizado de cliente a ruta de agencia: ${url}`);
+                if ((url.includes('/agency') || url.includes('/debug')) && payload.role !== 'agency_admin') {
+                    this.logger.warn(`Intento no autorizado de cliente a ruta protegida: ${url}`);
                     throw new common_1.ForbiddenException('Acceso restringido a administradores de agencia');
                 }
                 return true;

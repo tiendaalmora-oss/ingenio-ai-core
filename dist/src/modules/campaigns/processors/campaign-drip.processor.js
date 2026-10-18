@@ -27,6 +27,27 @@ let CampaignDripProcessor = CampaignDripProcessor_1 = class CampaignDripProcesso
         this.wahaAdapter = wahaAdapter;
         this.emailSender = emailSender;
     }
+    MAX_CAMPAIGN_WHATSAPP_PER_HOUR = 20;
+    MAX_CAMPAIGN_WHATSAPP_PER_DAY = 120;
+    ALLOWED_START_HOUR = 7;
+    ALLOWED_END_HOUR = 22;
+    isWithinAllowedWindow(now) {
+        try {
+            const hourStr = new Intl.DateTimeFormat('en-US', {
+                hour: 'numeric',
+                hour12: false,
+                timeZone: 'America/Caracas',
+            }).format(now);
+            const localHour = parseInt(hourStr, 10);
+            if (isNaN(localHour))
+                return true;
+            return localHour >= this.ALLOWED_START_HOUR && localHour < this.ALLOWED_END_HOUR;
+        }
+        catch {
+            const currentHour = now.getHours();
+            return currentHour >= this.ALLOWED_START_HOUR && currentHour < this.ALLOWED_END_HOUR;
+        }
+    }
     async handleDripDispatch() {
         if (this.isProcessing)
             return;
@@ -50,15 +71,63 @@ let CampaignDripProcessor = CampaignDripProcessor_1 = class CampaignDripProcesso
     }
     async processSingleCampaign(campaign) {
         const campaignId = campaign.id;
+        const tenantId = campaign.tenantId;
+        const isWhatsApp = campaign.channel === 'WHATSAPP' || campaign.channel === 'BOTH';
+        const now = new Date();
+        if (isWhatsApp && !this.isWithinAllowedWindow(now)) {
+            return;
+        }
+        if (isWhatsApp) {
+            const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+            const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            const [sentLastHour, sentLastDay] = await Promise.all([
+                this.prisma.campaignItem.count({
+                    where: {
+                        status: 'SENT',
+                        sentAt: { gte: oneHourAgo },
+                        campaign: { tenantId, channel: { in: ['WHATSAPP', 'BOTH'] } },
+                    },
+                }),
+                this.prisma.campaignItem.count({
+                    where: {
+                        status: 'SENT',
+                        sentAt: { gte: oneDayAgo },
+                        campaign: { tenantId, channel: { in: ['WHATSAPP', 'BOTH'] } },
+                    },
+                }),
+            ]);
+            if (sentLastHour >= this.MAX_CAMPAIGN_WHATSAPP_PER_HOUR || sentLastDay >= this.MAX_CAMPAIGN_WHATSAPP_PER_DAY) {
+                this.logger.debug(`[CampaignDrip Anti-Ban] Subcuenta ${tenantId} alcanzó tope seguro (${sentLastHour}/${this.MAX_CAMPAIGN_WHATSAPP_PER_HOUR} hora, ${sentLastDay}/${this.MAX_CAMPAIGN_WHATSAPP_PER_DAY} día). Esperando enfriamiento.`);
+                return;
+            }
+        }
+        const recentProcessed = await this.prisma.campaignItem.findMany({
+            where: { campaignId, status: { in: ['SENT', 'FAILED'] } },
+            orderBy: { updatedAt: 'desc' },
+            take: 3,
+            select: { status: true },
+        });
+        if (recentProcessed.length === 3 && recentProcessed.every((item) => item.status === 'FAILED')) {
+            await this.prisma.campaign.update({
+                where: { id: campaignId },
+                data: { status: 'PAUSED' },
+            });
+            this.logger.warn(`[CampaignDrip Circuit-Breaker] ⏸️ Campaña "${campaign.name}" pausada automáticamente tras 3 fallos consecutivos de entrega (verifica la conexión de WhatsApp de la subcuenta).`);
+            return;
+        }
         const lastSentItem = await this.prisma.campaignItem.findFirst({
             where: { campaignId, status: 'SENT' },
             orderBy: { sentAt: 'desc' },
             select: { sentAt: true },
         });
         if (lastSentItem && lastSentItem.sentAt) {
-            const baseIntervalMs = (campaign.dripIntervalSeconds || 30) * 1000;
-            const randomJitterMs = Math.floor(Math.random() * 7000) - 3000;
-            const effectiveDelayMs = Math.max(15000, baseIntervalMs + randomJitterMs);
+            const minIntervalSec = isWhatsApp ? Math.max(45, campaign.dripIntervalSeconds || 60) : Math.max(15, campaign.dripIntervalSeconds || 30);
+            let effectiveDelayMs = minIntervalSec * 1000;
+            const randomJitterMs = isWhatsApp ? Math.floor(Math.random() * 20000) : Math.floor(Math.random() * 5000);
+            effectiveDelayMs += randomJitterMs;
+            if (isWhatsApp && campaign.sentCount > 0 && campaign.sentCount % 10 === 0) {
+                effectiveDelayMs += 5 * 60 * 1000;
+            }
             const elapsedMs = Date.now() - new Date(lastSentItem.sentAt).getTime();
             if (elapsedMs < effectiveDelayMs) {
                 return;
@@ -91,7 +160,6 @@ let CampaignDripProcessor = CampaignDripProcessor_1 = class CampaignDripProcesso
             where: { id: item.id },
             data: { status: 'SENDING' },
         });
-        const tenantId = campaign.tenantId;
         const phone = item.recipientPhone || item.contact?.phone || item.contact?.externalId;
         const content = item.renderedMessage || campaign.messageTemplate;
         try {
@@ -193,7 +261,7 @@ let CampaignDripProcessor = CampaignDripProcessor_1 = class CampaignDripProcesso
 };
 exports.CampaignDripProcessor = CampaignDripProcessor;
 __decorate([
-    (0, schedule_1.Interval)(4000),
+    (0, schedule_1.Interval)(10000),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)

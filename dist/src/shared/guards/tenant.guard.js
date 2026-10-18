@@ -39,12 +39,17 @@ let TenantGuard = TenantGuard_1 = class TenantGuard {
         let tenantId = request.headers?.['x-tenant-id'];
         if (request.user?.role === 'client') {
             const allowedTenantId = request.user.tenantId;
+            if (!allowedTenantId) {
+                throw new common_1.ForbiddenException('Tu cuenta de cliente no tiene una subcuenta asignada');
+            }
             if (tenantId && tenantId !== 'default' && tenantId !== allowedTenantId) {
-                this.logger.warn(`[TenantGuard] Cliente intentó acceder a subcuenta ajena: tokenTenant=${allowedTenantId}, reqTenant=${tenantId}`);
-                throw new common_1.ForbiddenException('No tienes permisos para acceder a esta subcuenta');
+                this.logger.warn(`[TenantGuard] Header x-tenant-id (${tenantId}) corregido automáticamente al tenant del token (${allowedTenantId}) para usuario client`);
             }
             tenantId = allowedTenantId;
             request.tenantId = tenantId;
+            if (request.headers) {
+                request.headers['x-tenant-id'] = tenantId;
+            }
             return true;
         }
         if (!tenantId || typeof tenantId !== 'string' || tenantId.trim() === '' || tenantId === 'default') {

@@ -39,8 +39,8 @@ let WahaWatchdogService = WahaWatchdogService_1 = class WahaWatchdogService {
             return;
         this.isChecking = true;
         try {
-            await this.ensureProdSessionAlive();
-            await this.pruneIdleSandboxSessions();
+            await this.healCrashedTenantSessions();
+            await this.pruneIdleQrSessions();
         }
         catch (err) {
             this.logger.error(`[Watchdog] Error en ciclo de supervisión: ${err.message}`);
@@ -49,25 +49,38 @@ let WahaWatchdogService = WahaWatchdogService_1 = class WahaWatchdogService {
             this.isChecking = false;
         }
     }
-    async ensureProdSessionAlive() {
+    async healCrashedTenantSessions() {
         try {
-            const prodStatus = await this.agencyService.getSubaccountWahaStatus(PROD_MAIN_TENANT_ID);
-            if (prodStatus.status === 'NOT_CONFIGURED' ||
-                prodStatus.status === 'FAILED' ||
-                prodStatus.status === 'ERROR' ||
-                prodStatus.status === 'STOPPED') {
-                this.logger.warn(`[Watchdog Alert] Sesión de producción 'ferreos' en estado '${prodStatus.status}'. Auto-reconstruyendo sesión limpia...`);
-                const started = await this.agencyService.startSubaccountWaha(PROD_MAIN_TENANT_ID);
-                this.logger.log(`[Watchdog] Sesión de producción 'ferreos' auto-iniciada con éxito: status=${started.status}`);
+            const activeTenants = await this.prisma.tenant.findMany({
+                where: {
+                    status: 'active',
+                    wahaSession: { not: null },
+                },
+                select: { id: true, name: true, wahaSession: true },
+            });
+            for (const tenant of activeTenants) {
+                if (!tenant.wahaSession)
+                    continue;
+                try {
+                    const wahaStatus = await this.agencyService.getSubaccountWahaStatus(tenant.id);
+                    if (wahaStatus.status === 'FAILED' || wahaStatus.status === 'ERROR') {
+                        this.logger.warn(`[Watchdog Auto-Heal] Sesión '${tenant.wahaSession}' (${tenant.name}) detectada en estado '${wahaStatus.status}'. Intentando reconexión automática...`);
+                        const restarted = await this.agencyService.startSubaccountWaha(tenant.id);
+                        this.logger.log(`[Watchdog Auto-Heal] Sesión '${tenant.wahaSession}' reconectada: nuevo estado=${restarted.status}`);
+                    }
+                }
+                catch (innerErr) {
+                    this.logger.debug(`[Watchdog] No se pudo verificar sesión de ${tenant.name}: ${innerErr.message}`);
+                }
             }
         }
         catch (err) {
-            this.logger.error(`[Watchdog] Error vigilando sesión de producción: ${err.message}`);
+            this.logger.error(`[Watchdog] Error supervisando sesiones activas: ${err.message}`);
         }
     }
-    async pruneIdleSandboxSessions() {
+    async pruneIdleQrSessions() {
         try {
-            const rawUrl = process.env.WAHA_SANDBOX_URL || process.env.WAHA_API_URL || 'https://waha-sandbox.ingeniodigital.shop';
+            const rawUrl = process.env.WAHA_SANDBOX_URL || process.env.WAHA_API_URL || 'https://waha.ingeniodigital.shop';
             const apiUrl = rawUrl.replace(/\/+$/, '');
             const apiKey = process.env.WAHA_SANDBOX_API_KEY || process.env.WAHA_API_KEY || 'secreto123';
             const res = await fetch(`${apiUrl}/api/sessions`, {
@@ -78,13 +91,13 @@ let WahaWatchdogService = WahaWatchdogService_1 = class WahaWatchdogService {
                 return;
             const sessions = await res.json().catch(() => []);
             const now = Date.now();
-            const MAX_IDLE_MS = 45 * 60 * 1000;
+            const MAX_QR_IDLE_MS = 30 * 60 * 1000;
             for (const s of sessions) {
-                if (s.name && s.name.startsWith('sub_') && (s.status === 'SCAN_QR_CODE' || s.status === 'STARTING')) {
+                if (s.name && s.status === 'SCAN_QR_CODE') {
                     const activityTime = s.timestamps?.activity ? Number(s.timestamps.activity) : 0;
-                    const idleTime = activityTime > 0 ? (now - activityTime) : Infinity;
-                    if (idleTime > MAX_IDLE_MS) {
-                        this.logger.warn(`[Watchdog Memory Guard] Subcuenta Sandbox '${s.name}' inactiva esperando QR por más de 45 min (${Math.round(idleTime / 60000)} min). Deteniendo Chromium para liberar RAM del VPS.`);
+                    const idleTime = activityTime > 0 ? now - activityTime : MAX_QR_IDLE_MS + 1;
+                    if (idleTime > MAX_QR_IDLE_MS) {
+                        this.logger.warn(`[Watchdog Memory Guard] Sesión '${s.name}' lleva más de 30 min en SCAN_QR_CODE sin vincularse. Pasando a STOPPED para proteger RAM del VPS.`);
                         await fetch(`${apiUrl}/api/sessions/${s.name}/stop`, {
                             method: 'POST',
                             headers: { 'X-Api-Key': apiKey },
@@ -94,13 +107,13 @@ let WahaWatchdogService = WahaWatchdogService_1 = class WahaWatchdogService {
             }
         }
         catch (err) {
-            this.logger.debug(`[Watchdog Sandbox Prune] ${err.message}`);
+            this.logger.debug(`[Watchdog QR Prune] ${err.message}`);
         }
     }
 };
 exports.WahaWatchdogService = WahaWatchdogService;
 __decorate([
-    (0, schedule_1.Cron)(schedule_1.CronExpression.EVERY_MINUTE),
+    (0, schedule_1.Cron)('*/2 * * * *'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)

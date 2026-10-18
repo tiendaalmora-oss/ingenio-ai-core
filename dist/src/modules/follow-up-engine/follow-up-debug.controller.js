@@ -18,6 +18,7 @@ const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../shared/database/prisma.service");
 const follow_up_engine_service_1 = require("./services/follow-up-engine.service");
 const waha_adapter_service_1 = require("../outbound-engine/services/waha-adapter.service");
+const admin_api_key_guard_1 = require("../../shared/guards/admin-api-key.guard");
 let FollowUpDebugController = FollowUpDebugController_1 = class FollowUpDebugController {
     prisma;
     followUpEngine;
@@ -53,6 +54,8 @@ let FollowUpDebugController = FollowUpDebugController_1 = class FollowUpDebugCon
             where: {
                 status: { in: ['NEW', 'ACTIVE'] },
             },
+            orderBy: { id: 'desc' },
+            take: 50,
             include: {
                 contact: {
                     include: { memory: true },
@@ -232,6 +235,7 @@ __decorate([
 ], FollowUpDebugController.prototype, "cleanupRetroactivePostSale", null);
 exports.FollowUpDebugController = FollowUpDebugController = FollowUpDebugController_1 = __decorate([
     (0, common_1.Controller)('debug/follow-up'),
+    (0, common_1.UseGuards)(admin_api_key_guard_1.AdminApiKeyGuard),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         follow_up_engine_service_1.FollowUpEngineService,
         waha_adapter_service_1.WahaAdapterService])

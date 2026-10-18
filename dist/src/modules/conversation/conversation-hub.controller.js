@@ -24,6 +24,7 @@ let ConversationHubController = ConversationHubController_1 = class Conversation
     prisma;
     wahaAdapter;
     logger = new common_1.Logger(ConversationHubController_1.name);
+    lastConsolidationByTenant = new Map();
     constructor(prisma, wahaAdapter) {
         this.prisma = prisma;
         this.wahaAdapter = wahaAdapter;
@@ -32,12 +33,14 @@ let ConversationHubController = ConversationHubController_1 = class Conversation
         if (!tenantId)
             throw new common_1.BadRequestException('tenantId is required');
         await this.consolidateDuplicateConversations(tenantId);
-        const skip = (parseInt(page) - 1) * parseInt(limit);
-        const take = parseInt(limit);
+        const pageNum = Math.max(1, parseInt(page, 10) || 1);
+        const take = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+        const skip = (pageNum - 1) * take;
         const where = {};
         if (status)
             where.status = status;
-        if (search && search.trim()) {
+        const hasSearch = Boolean(search && search.trim());
+        if (hasSearch) {
             const searchRaw = search.trim();
             const searchDigits = searchRaw.replace(/\D/g, '');
             const searchWithoutZero = searchDigits.startsWith('0') ? searchDigits.replace(/^0+/, '') : searchDigits;
@@ -66,10 +69,68 @@ let ConversationHubController = ConversationHubController_1 = class Conversation
         else {
             where.contact = { tenantId };
         }
-        const [total, rawConversations] = await Promise.all([
-            this.prisma.conversation.count({ where }),
-            this.prisma.conversation.findMany({
-                where,
+        let total = 0;
+        let pageIds = [];
+        if (!hasSearch) {
+            const countPromise = this.prisma.conversation.count({ where });
+            const rowsPromise = status
+                ? this.prisma.$queryRaw `
+            SELECT c.id
+            FROM "Conversation" c
+            INNER JOIN "Contact" ct ON ct.id = c."contactId"
+            WHERE ct."tenantId" = ${tenantId} AND c.status = ${status}
+            ORDER BY (
+              SELECT MAX(i."timestamp")
+              FROM "Interaction" i
+              WHERE i."conversationId" = c.id AND i."type" <> 'TOOL_RESULT'
+            ) DESC NULLS LAST
+            LIMIT ${take} OFFSET ${skip}
+          `
+                : this.prisma.$queryRaw `
+            SELECT c.id
+            FROM "Conversation" c
+            INNER JOIN "Contact" ct ON ct.id = c."contactId"
+            WHERE ct."tenantId" = ${tenantId}
+            ORDER BY (
+              SELECT MAX(i."timestamp")
+              FROM "Interaction" i
+              WHERE i."conversationId" = c.id AND i."type" <> 'TOOL_RESULT'
+            ) DESC NULLS LAST
+            LIMIT ${take} OFFSET ${skip}
+          `;
+            const [totalCount, idRows] = await Promise.all([countPromise, rowsPromise]);
+            total = totalCount;
+            pageIds = idRows.map((r) => r.id);
+        }
+        else {
+            const [totalCount, lightweightMatches] = await Promise.all([
+                this.prisma.conversation.count({ where }),
+                this.prisma.conversation.findMany({
+                    where,
+                    select: {
+                        id: true,
+                        interactions: {
+                            where: { type: { notIn: ['TOOL_RESULT'] } },
+                            orderBy: { timestamp: 'desc' },
+                            take: 1,
+                            select: { timestamp: true },
+                        },
+                    },
+                }),
+            ]);
+            total = totalCount;
+            pageIds = lightweightMatches
+                .sort((a, b) => {
+                const timeA = a.interactions[0]?.timestamp ? new Date(a.interactions[0].timestamp).getTime() : 0;
+                const timeB = b.interactions[0]?.timestamp ? new Date(b.interactions[0].timestamp).getTime() : 0;
+                return timeB - timeA;
+            })
+                .slice(skip, skip + take)
+                .map((c) => c.id);
+        }
+        const hydratedConvs = pageIds.length > 0
+            ? await this.prisma.conversation.findMany({
+                where: { id: { in: pageIds } },
                 include: {
                     contact: {
                         include: { memory: true },
@@ -81,18 +142,17 @@ let ConversationHubController = ConversationHubController_1 = class Conversation
                     },
                     _count: { select: { interactions: true } },
                 },
-            }),
-        ]);
-        const sortedConvs = rawConversations.sort((a, b) => {
+            })
+            : [];
+        const paginatedConvs = hydratedConvs.sort((a, b) => {
             const timeA = a.interactions[0]?.timestamp ? new Date(a.interactions[0].timestamp).getTime() : 0;
             const timeB = b.interactions[0]?.timestamp ? new Date(b.interactions[0].timestamp).getTime() : 0;
             return timeB - timeA;
         });
-        const paginatedConvs = sortedConvs.slice(skip, skip + take);
         const responseData = {
             total,
-            page: parseInt(page),
-            limit: parseInt(limit),
+            page: pageNum,
+            limit: take,
             data: paginatedConvs.map((c) => ({
                 id: c.id,
                 status: c.status,
@@ -115,9 +175,26 @@ let ConversationHubController = ConversationHubController_1 = class Conversation
         return responseData;
     }
     async consolidateDuplicateConversations(tenantId) {
+        const now = Date.now();
+        const lastRun = this.lastConsolidationByTenant.get(tenantId) || 0;
+        if (now - lastRun < 30 * 60 * 1000) {
+            return;
+        }
+        this.lastConsolidationByTenant.set(tenantId, now);
         try {
+            const duplicateGroups = await this.prisma.conversation.groupBy({
+                by: ['contactId'],
+                where: { contact: { tenantId } },
+                _count: { id: true },
+                having: {
+                    id: { _count: { gt: 1 } },
+                },
+            });
+            if (duplicateGroups.length === 0)
+                return;
+            const duplicateContactIds = duplicateGroups.map((g) => g.contactId);
             const contactsWithMultipleConvs = await this.prisma.contact.findMany({
-                where: { tenantId },
+                where: { id: { in: duplicateContactIds }, tenantId },
                 select: {
                     id: true,
                     conversations: {

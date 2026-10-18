@@ -165,14 +165,19 @@ let AnalyticsService = AnalyticsService_1 = class AnalyticsService {
     async getSummary(tenantId) {
         const contacts = await this.prisma.contact.findMany({
             where: { tenantId },
-            include: {
-                memory: true,
+            select: {
+                id: true,
+                memory: {
+                    select: {
+                        leadStatus: true,
+                        tags: true,
+                        objections: true,
+                        interests: true,
+                    },
+                },
                 conversations: {
-                    include: {
-                        interactions: {
-                            orderBy: { timestamp: 'desc' },
-                            take: 1,
-                        },
+                    select: {
+                        status: true,
                     },
                 },
             },

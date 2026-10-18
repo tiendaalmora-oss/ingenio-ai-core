@@ -27,8 +27,9 @@ let SettingsService = SettingsService_1 = class SettingsService {
             where: { id: tenantId },
             include: { knowledgeBundle: true },
         });
+        const isPrimary = tenantId === 'dba1c54c-89c6-41e9-ae9d-03613377a5b3';
         const wahaApiUrl = process.env.WAHA_API_URL || 'https://waha.ingeniodigital.shop';
-        const wahaSession = tenant?.wahaSession || process.env.WAHA_SESSION || 'ferreos';
+        const wahaSession = tenant?.wahaSession || (isPrimary ? 'ferreos' : `sub_${tenantId.replace(/-/g, '').slice(0, 10)}`);
         const aiProvider = process.env.AI_PROVIDER || 'openrouter';
         const aiModel = process.env.AI_MODEL || 'google/gemini-2.5-flash-lite';
         const aiBaseUrl = process.env.AI_BASE_URL || 'https://openrouter.ai/api/v1';
@@ -36,7 +37,7 @@ let SettingsService = SettingsService_1 = class SettingsService {
             tenant: {
                 id: tenant?.id,
                 name: tenant?.name || 'Mi Empresa',
-                wahaSession: tenant?.wahaSession || 'ferreos',
+                wahaSession,
                 currentBundleVersion: tenant?.currentBundleVersion || 'v1',
                 createdAt: tenant?.createdAt,
             },
@@ -44,7 +45,7 @@ let SettingsService = SettingsService_1 = class SettingsService {
                 apiUrl: wahaApiUrl,
                 session: wahaSession,
                 hasApiKey: !!process.env.WAHA_API_KEY,
-                status: 'CONNECTED',
+                status: tenant?.wahaSession ? 'CONFIGURED' : 'NOT_CONFIGURED',
             },
             ai: {
                 provider: aiProvider,

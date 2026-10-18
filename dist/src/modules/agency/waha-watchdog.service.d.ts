@@ -10,6 +10,6 @@ export declare class WahaWatchdogService implements OnApplicationBootstrap {
     onApplicationBootstrap(): Promise<void>;
     handleCron(): Promise<void>;
     checkAndHealWahaSessions(): Promise<void>;
-    private ensureProdSessionAlive;
-    private pruneIdleSandboxSessions;
+    private healCrashedTenantSessions;
+    private pruneIdleQrSessions;
 }

@@ -160,12 +160,14 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
         }
         return `${cleaned}@c.us`;
     }
-    async resolveTargetChatId(contactIdOrPhone) {
+    async resolveTargetChatId(contactIdOrPhone, tenantId) {
         let rawTarget = contactIdOrPhone;
         let foundContactId;
+        const tenantFilter = tenantId ? { tenantId } : {};
         if (contactIdOrPhone && !contactIdOrPhone.includes('@')) {
             const contact = await this.prisma.contact.findFirst({
                 where: {
+                    ...tenantFilter,
                     OR: [
                         { id: contactIdOrPhone },
                         { externalId: contactIdOrPhone },
@@ -184,6 +186,7 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
             const cleanDigits = contactIdOrPhone.replace(/\D/g, '');
             const contact = await this.prisma.contact.findFirst({
                 where: {
+                    ...tenantFilter,
                     OR: [
                         { externalId: contactIdOrPhone },
                         { phone: cleanDigits },
@@ -218,46 +221,22 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
         };
     }
     async resolveSession(tenantId) {
+        const PRIMARY_TENANT_ID = 'dba1c54c-89c6-41e9-ae9d-03613377a5b3';
         if (tenantId) {
             const tenant = await this.prisma.tenant.findUnique({
                 where: { id: tenantId },
-                select: { wahaSession: true },
+                select: { id: true, name: true, wahaSession: true },
             });
-            if (tenant?.wahaSession) {
-                return tenant.wahaSession;
+            if (tenant?.wahaSession && tenant.wahaSession.trim() !== '' && tenant.wahaSession !== 'default') {
+                return tenant.wahaSession.trim();
             }
+            if (tenantId !== PRIMARY_TENANT_ID) {
+                throw new Error(`La subcuenta "${tenant?.name || tenantId}" no tiene una sesión de WhatsApp vinculada. Conecta su código QR en Dispositivos.`);
+            }
+            return 'ferreos';
         }
         if (process.env.WAHA_SESSION) {
             return process.env.WAHA_SESSION;
-        }
-        const prodTenant = await this.prisma.tenant.findFirst({
-            where: {
-                OR: [
-                    { id: 'dba1c54c-89c6-41e9-ae9d-03613377a5b3' },
-                    { wahaSession: 'ferreos' }
-                ]
-            },
-            select: { wahaSession: true },
-        });
-        if (prodTenant?.wahaSession) {
-            return prodTenant.wahaSession;
-        }
-        if (this.cachedActiveSession) {
-            return this.cachedActiveSession;
-        }
-        try {
-            const sessions = await this.getWahaSessions('prod');
-            if (Array.isArray(sessions) && sessions.length > 0) {
-                const working = sessions.find((s) => s.status === 'WORKING' || s.status === 'CONNECTED' || s.status === 'STARTING') ||
-                    sessions[0];
-                if (working?.name) {
-                    this.cachedActiveSession = working.name;
-                    this.logger.log(`[WAHA] Sesión descubierta dinámicamente: "${working.name}"`);
-                    return working.name;
-                }
-            }
-        }
-        catch {
         }
         return 'ferreos';
     }
@@ -347,7 +326,7 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
             };
             if (config.apiKey)
                 headers['X-Api-Key'] = config.apiKey;
-            const target = await this.resolveTargetChatId(contactIdOrPhone);
+            const target = await this.resolveTargetChatId(contactIdOrPhone, tenantId);
             const chatId = target.chatId;
             this.logger.log(`[WAHA] Solicitando estado "Escribiendo..." para ${chatId} (sesión: ${session}, host: ${config.apiUrl})`);
             const result = await this.executeTypingWithRetry(config.apiUrl, session, chatId, headers, true);
@@ -371,7 +350,7 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
             };
             if (config.apiKey)
                 headers['X-Api-Key'] = config.apiKey;
-            const target = await this.resolveTargetChatId(contactIdOrPhone);
+            const target = await this.resolveTargetChatId(contactIdOrPhone, tenantId);
             const chatId = target.chatId;
             await this.executeTypingWithRetry(config.apiUrl, session, chatId, headers, false);
         }
@@ -388,7 +367,7 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
             this.logger.log(`Enrutando mensaje omnicanal hacia Meta (Instagram/FB): ${rawPhone}`);
             return this.metaChannelAdapter.sendMessage(rawPhone, content);
         }
-        const target = await this.resolveTargetChatId(contactIdOrPhone);
+        const target = await this.resolveTargetChatId(contactIdOrPhone, tenantId);
         let chatId = target.chatId;
         const session = await this.resolveSession(tenantId);
         const config = this.resolveWahaConfig(tenantId, session);
@@ -479,7 +458,7 @@ let WahaAdapterService = WahaAdapterService_1 = class WahaAdapterService {
         }
     }
     async sendFile(tenantId, contactIdOrPhone, fileUrl, caption, filename, mimetype) {
-        const target = await this.resolveTargetChatId(contactIdOrPhone);
+        const target = await this.resolveTargetChatId(contactIdOrPhone, tenantId);
         let chatId = target.chatId;
         const session = await this.resolveSession(tenantId);
         const config = this.resolveWahaConfig(tenantId, session);

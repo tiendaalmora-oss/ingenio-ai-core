@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PromptComposerService = exports.PromptMode = void 0;
 const common_1 = require("@nestjs/common");
+const response_sanitizer_1 = require("../utils/response-sanitizer");
 var PromptMode;
 (function (PromptMode) {
     PromptMode["NORMAL"] = "NORMAL";
@@ -28,8 +29,10 @@ let PromptComposerService = class PromptComposerService {
 - Comunícate siempre en español natural, empático, profesional y persuasivo (tono conversacional de WhatsApp).
 - Utiliza formato nativo de WhatsApp: párrafos cortos y legibles, espaciados limpios con saltos de línea reales, emojis adecuados y negritas con un solo asterisco (*negrita*).
 - NUNCA uses Markdown con doble asterisco (**texto**) ni reduzcas la conversación a viñetas secas (•).
-- Respeta estrictamente los guiones, textos, ofertas y emojis configurados en tu base de conocimiento KOS.
-- 🛑 CERO MONÓLOGO O EXPLICACIONES EN INGLÉS: NUNCA escribas pensamientos internos, notas de planificación, razonamiento Chain-of-Thought ni frases en inglés como "The user is asking...", "s asking for information...", "This request falls under...", "The script for Step 1...", "I will use this script...", "I should also update...". Tu respuesta conversacional debe comenzar INMEDIATAMENTE con el saludo o mensaje en español final para el cliente de WhatsApp, sin envolverlo en comillas dobles externas.
+- 🛑 IDIOMA 100% ESPAÑOL Y CERO MONÓLOGO DE PLANIFICACIÓN (CHAIN-OF-THOUGHT):
+  * Tu comunicación hacia el cliente es 100% en ESPAÑOL. Está TERMINANTEMENTE PROHIBIDO redactar pensamientos, razonamiento en inglés, notas de planificación o introspección (ej: "According to the KOS...", "The user has...", "Therefore, I need to...", "The update_business_memory tool can be used...").
+  * Si utilizas una herramienta (function call), NO agregues texto de justificación ni monólogos en el contenido. Ejecútala de forma invisible.
+  * Tu respuesta hacia el usuario debe ser exclusivamente el mensaje final de WhatsApp en español, cálido, conversacional y directo, sin envolverlo en comillas externas.
 - 🛑 PROHIBIDO ESCRIBIR CÓDIGO PYTHON O LLAMADAS DE HERRAMIENTAS EN EL TEXTO: NUNCA escribas "tool_code", "print(default_api...)", "call:update_business_memory..." ni código o bloques entre llaves en tu mensaje de texto. Las herramientas se ejecutan de forma invisible a través de la API nativa de function calling, NUNCA redactándolas como texto para el cliente.
 - 🛑 CERO FILTRACIÓN DE METADATOS O ESTADOS DEL EMBUDO: NUNCA escribas frases de control de pasos como "Paso 1 COMPLETADO", "Paso 2 PENDIENTE", "Estado Paso...", ni reproduzcas las etiquetas de estado del embudo en tu mensaje. El cliente solo debe recibir la conversación humana y el guion comercial.
 - 🛑 REGLA ESTRICTA DE COMPROBANTES HISTÓRICOS:
@@ -105,9 +108,12 @@ let PromptComposerService = class PromptComposerService {
         }
         const pastBotMessages = history
             .filter((h) => h.role === 'assistant' || h.direction === 'OUTBOUND')
+            .filter((h) => h.type !== 'TOOL_CALL')
             .filter((h) => h.content && h.content.trim() !== '')
+            .map((h) => (0, response_sanitizer_1.sanitizeUserFacingResponse)(h.content))
+            .filter((text) => (0, response_sanitizer_1.isSafeUserFacingResponse)(text))
             .slice(-4)
-            .map((h) => `"${(h.content || '').replace(/\n/g, ' ').substring(0, 160).trim()}..."`);
+            .map((text) => `"${text.replace(/\n/g, ' ').substring(0, 160).trim()}..."`);
         if (pastBotMessages.length > 0) {
             finalSystemContent += `\n[ESCUDO ANTI-REPETICIÓN Y RUPTURA DE BUCLES (LOOP BREAKER)]:\nÚLTIMOS MENSAJES YA ENVIADOS POR EL ASISTENTE EN ESTA CONVERSACIÓN:\n${pastBotMessages.join('\n')}\n\n🛑 REGLAS INQUEBRANTABLES DE FLUIDEZ Y NO REPETICIÓN:\n1. ESTÁ TERMINANTEMENTE PROHIBIDO repetir el mismo mensaje, saludo, listado de viñetas, características o pregunta de cierre que ya enviaste previamente.\n2. RUPTURA DE BUCLE (LOOP BREAKER): Si el usuario repite su respuesta, da una respuesta corta o insiste con la misma opción (ej: vuelve a decir "en casa", "gym", "info", "ok"): NO vuelvas a enviar la presentación ni el filtro. Reconoce brevemente lo que dijo con entusiasmo y AVANZA DE INMEDIATO al siguiente paso del embudo comercial (presenta el precio promocional o pasa a los datos de pago).\n3. Si ya preguntaste en tu turno anterior si quería conocer el precio o la oferta y el usuario vuelve a responder, NO repitas la pregunta: dale directamente el precio promocional y las facilidades de pago.\n4. Cada intervención debe sentirse fresca, natural, humana y orientada a hacer progresar la venta hacia el cierre.\n`;
         }
@@ -132,12 +138,16 @@ let PromptComposerService = class PromptComposerService {
             const ruleText = typeof followUpRule === 'string'
                 ? followUpRule
                 : (parts.length > 0 ? parts.join('\n') : (ruleObj.condicion || '- Reactivar la conversación cordialmente con empatía'));
-            const pastBotMessages = history
+            const pastFollowUpBotMessages = history
                 .filter((h) => h.role === 'assistant' || h.direction === 'OUTBOUND')
+                .filter((h) => h.type !== 'TOOL_CALL')
+                .filter((h) => h.content && h.content.trim() !== '')
+                .map((h) => (0, response_sanitizer_1.sanitizeUserFacingResponse)(h.content))
+                .filter((text) => (0, response_sanitizer_1.isSafeUserFacingResponse)(text))
                 .slice(-4)
-                .map((h) => `"${(h.content || '').substring(0, 120).trim()}..."`);
-            const pastContextNotice = pastBotMessages.length > 0
-                ? `\nÚLTIMOS MENSAJES YA ENVIADOS POR EL BOT (¡PROHIBIDO REPETIR ESTAS PALABRAS, ESTRUCTURA O PREGUNTAS!):\n${pastBotMessages.join('\n')}`
+                .map((text) => `"${text.substring(0, 120).trim()}..."`);
+            const pastContextNotice = pastFollowUpBotMessages.length > 0
+                ? `\nÚLTIMOS MENSAJES YA ENVIADOS POR EL BOT (¡PROHIBIDO REPETIR ESTAS PALABRAS, ESTRUCTURA O PREGUNTAS!):\n${pastFollowUpBotMessages.join('\n')}`
                 : '';
             const leadState = memory?.leadStatus || 'COLD';
             const interestedProduct = memory?.interests?.[0] || 'la propuesta comercial';
@@ -453,7 +463,7 @@ REGLA OBLIGATORIA: Siempre debes responder de forma amable, profesional y persua
                 const toolCallsArr = Array.isArray(msg.toolCalls) ? msg.toolCalls : [];
                 messages.push({
                     role: 'assistant',
-                    content: msg.content || null,
+                    content: null,
                     tool_calls: toolCallsArr.map((tc) => ({
                         id: tc.id,
                         type: 'function',
@@ -472,9 +482,16 @@ REGLA OBLIGATORIA: Siempre debes responder de forma amable, profesional y persua
                 }
             }
             else {
+                let content = msg.content;
+                if (msg.role === 'assistant' || msg.direction === 'OUTBOUND') {
+                    content = (0, response_sanitizer_1.sanitizeUserFacingResponse)(content);
+                    if (!(0, response_sanitizer_1.isSafeUserFacingResponse)(content)) {
+                        continue;
+                    }
+                }
                 messages.push({
                     role: msg.role || (msg.direction === 'INBOUND' ? 'user' : 'assistant'),
-                    content: msg.content
+                    content: content
                 });
             }
         }
