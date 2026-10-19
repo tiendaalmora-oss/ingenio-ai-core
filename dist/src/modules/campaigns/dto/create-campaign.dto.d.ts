@@ -1,6 +1,7 @@
 export declare class TargetFiltersDto {
     leadStatus?: string;
     product?: string;
+    products?: string[];
     tags?: string[];
 }
 export declare class CreateCampaignDto {
@@ -18,6 +19,7 @@ export declare class CreateCampaignDto {
 export declare class EstimateAudienceDto {
     leadStatus?: string;
     product?: string;
+    products?: string[];
     tags?: string[];
     channel?: 'WHATSAPP' | 'EMAIL' | 'BOTH';
 }

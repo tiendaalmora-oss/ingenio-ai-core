@@ -40,11 +40,18 @@ export class CampaignsService {
       }
     }
 
-    // 2. Filtro por Producto Adquirido o Interés
-    if (filters.product && filters.product !== 'ALL') {
-      const prodTerm = filters.product.trim();
+    // 2. Filtro por Producto Adquirido o Interés (Soporta selección de múltiples productos o individual)
+    const productTerms: string[] = [];
+    if (filters.products && Array.isArray(filters.products) && filters.products.length > 0) {
+      productTerms.push(...filters.products.filter((p) => p && p !== 'ALL').map((p) => p.trim()));
+    } else if (filters.product && filters.product !== 'ALL') {
+      const parts = filters.product.split(',').map((p) => p.trim()).filter((p) => p && p !== 'ALL');
+      productTerms.push(...parts);
+    }
+
+    if (productTerms.length > 0) {
       conditions.push({
-        interests: { hasSome: [prodTerm] },
+        interests: { hasSome: productTerms },
       });
     }
 
@@ -66,11 +73,24 @@ export class CampaignsService {
   /**
    * Renderiza el mensaje sustituyendo variables dinámicas del contacto.
    */
-  renderMessage(template: string, contact: { name?: string | null; phone?: string | null; interests?: string[] }): string {
+  renderMessage(
+    template: string,
+    contact: { name?: string | null; phone?: string | null; interests?: string[] },
+    targetProducts?: string[],
+  ): string {
     let text = template || '';
     const cleanName = (contact.name || 'Amigo/a').trim();
     const cleanPhone = (contact.phone || '').trim();
-    const primaryProduct = contact.interests?.[0] || 'tu producto';
+
+    let primaryProduct = 'tu producto';
+    if (contact.interests && contact.interests.length > 0) {
+      if (targetProducts && targetProducts.length > 0) {
+        const matchingProd = contact.interests.find((i) => targetProducts.includes(i));
+        primaryProduct = matchingProd || contact.interests[0];
+      } else {
+        primaryProduct = contact.interests[0];
+      }
+    }
 
     text = text.replace(/\{\{\s*nombre\s*\}\}/gi, cleanName);
     text = text.replace(/\{\{\s*name\s*\}\}/gi, cleanName);
@@ -221,12 +241,16 @@ export class CampaignsService {
     });
 
     // Encolar los elementos individuales de la campaña
+    const targetProducts = dto.targetFilters?.products && dto.targetFilters.products.length > 0
+      ? dto.targetFilters.products
+      : (dto.targetFilters?.product && dto.targetFilters.product !== 'ALL' ? [dto.targetFilters.product] : undefined);
+
     const itemsData = matchingContacts.map((contact) => {
       const rendered = this.renderMessage(dto.messageTemplate, {
         name: contact.name,
         phone: contact.phone || contact.externalId,
         interests: contact.memory?.interests,
-      });
+      }, targetProducts);
 
       return {
         campaignId: campaign.id,

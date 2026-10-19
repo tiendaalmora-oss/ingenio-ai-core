@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/services/api';
 import PageContainer from '@/components/PageContainer';
@@ -30,6 +30,10 @@ import {
   RefreshCw,
   Sliders,
   ChevronRight,
+  ChevronDown,
+  Search,
+  X,
+  Check,
   UserCheck,
 } from 'lucide-react';
 
@@ -73,7 +77,11 @@ export default function CampaignsPage() {
   const [campaignName, setCampaignName] = useState('');
   const [channel, setChannel] = useState<'WHATSAPP' | 'EMAIL' | 'BOTH'>('WHATSAPP');
   const [leadStatusFilter, setLeadStatusFilter] = useState<string>('ALL');
-  const [productFilter, setProductFilter] = useState<string>('ALL');
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
+  const [productSearchTerm, setProductSearchTerm] = useState('');
+  const productDropdownRef = useRef<HTMLDivElement>(null);
+
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [messageTemplate, setMessageTemplate] = useState(
     '¡Hola {{nombre}}! 👋 Te escribimos con una sorpresa especial: por haber adquirido {{producto}}, te dejamos este regalo complementario exclusivo para ti.'
@@ -84,6 +92,19 @@ export default function CampaignsPage() {
   const [subject, setSubject] = useState('');
   const [dripIntervalSeconds, setDripIntervalSeconds] = useState(30);
 
+  // Cerrar el dropdown al hacer clic fuera
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (productDropdownRef.current && !productDropdownRef.current.contains(event.target as Node)) {
+        setIsProductDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   // Consulta de opciones de filtrado
   const { data: filterOptions } = useQuery<FilterOptions>({
     queryKey: ['campaign-filter-options'],
@@ -93,13 +114,16 @@ export default function CampaignsPage() {
     },
   });
 
-  // Estimador de audiencia en tiempo real
+  // Estimador de audiencia en tiempo real (reacciona a múltiples productos)
   const { data: audienceEstimate, isFetching: isEstimating } = useQuery<AudienceEstimate>({
-    queryKey: ['campaign-audience-estimate', leadStatusFilter, productFilter, selectedTags, channel],
+    queryKey: ['campaign-audience-estimate', leadStatusFilter, selectedProducts, selectedTags, channel],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (leadStatusFilter && leadStatusFilter !== 'ALL') params.append('leadStatus', leadStatusFilter);
-      if (productFilter && productFilter !== 'ALL') params.append('product', productFilter);
+      if (selectedProducts.length > 0) {
+        params.append('products', selectedProducts.join(','));
+        params.append('product', selectedProducts.join(','));
+      }
       if (selectedTags.length > 0) params.append('tags', selectedTags.join(','));
       params.append('channel', channel);
 
@@ -130,7 +154,8 @@ export default function CampaignsPage() {
         channel,
         targetFilters: {
           leadStatus: leadStatusFilter !== 'ALL' ? leadStatusFilter : undefined,
-          product: productFilter !== 'ALL' ? productFilter : undefined,
+          product: selectedProducts.length > 0 ? selectedProducts.join(', ') : undefined,
+          products: selectedProducts.length > 0 ? selectedProducts : undefined,
           tags: selectedTags.length > 0 ? selectedTags : undefined,
         },
         messageTemplate,
@@ -330,23 +355,185 @@ export default function CampaignsPage() {
                   </select>
                 </div>
 
-                {/* Filtro por Producto Adquirido */}
-                <div>
-                  <label className="text-xs font-semibold text-gray-600 block mb-1">
-                    Producto Adquirido / Interés:
-                  </label>
-                  <select
-                    value={productFilter}
-                    onChange={(e) => setProductFilter(e.target.value)}
-                    className="w-full text-xs px-2.5 py-1.5 border border-gray-300 rounded-lg bg-gray-50/50"
+                {/* Filtro por Producto Adquirido / Interés (Multi-selección) */}
+                <div className="relative" ref={productDropdownRef}>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-gray-600">
+                      Producto Adquirido / Interés:
+                    </label>
+                    {selectedProducts.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProducts([])}
+                        className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold"
+                      >
+                        Limpiar selección ({selectedProducts.length})
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Trigger del selector */}
+                  <button
+                    type="button"
+                    onClick={() => setIsProductDropdownOpen((prev) => !prev)}
+                    className="w-full text-left text-xs px-2.5 py-2 border border-gray-300 rounded-lg bg-gray-50/50 hover:bg-gray-100/50 flex items-center justify-between transition focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    <option value="ALL">Cualquier Producto</option>
-                    {filterOptions?.products.map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                  </select>
+                    <span className="truncate pr-2">
+                      {selectedProducts.length === 0 ? (
+                        <span className="text-gray-500">Cualquier Producto (Todos)</span>
+                      ) : selectedProducts.length === 1 ? (
+                        <span className="text-gray-900 font-medium">{selectedProducts[0]}</span>
+                      ) : (
+                        <span className="text-blue-700 font-bold">{selectedProducts.length} productos seleccionados</span>
+                      )}
+                    </span>
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 text-gray-400 transition-transform flex-shrink-0 ${
+                        isProductDropdownOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {/* Menú desplegable flotante con búsqueda y selección múltiple */}
+                  {isProductDropdownOpen && (
+                    <div className="absolute left-0 right-0 z-30 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl p-2 space-y-2">
+                      {/* Buscador de productos */}
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2" />
+                        <input
+                          type="text"
+                          value={productSearchTerm}
+                          onChange={(e) => setProductSearchTerm(e.target.value)}
+                          placeholder="Buscar productos..."
+                          className="w-full text-xs pl-7 pr-7 py-1 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          autoFocus
+                        />
+                        {productSearchTerm && (
+                          <button
+                            type="button"
+                            onClick={() => setProductSearchTerm('')}
+                            className="absolute right-2 top-1.5 text-gray-400 hover:text-gray-600"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Barra de acciones rápidas */}
+                      <div className="flex items-center justify-between text-[11px] px-1 pt-1 border-t border-gray-100">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (filterOptions?.products) {
+                              setSelectedProducts([...filterOptions.products]);
+                            }
+                          }}
+                          className="text-blue-600 hover:text-blue-800 font-semibold"
+                        >
+                          Seleccionar todos
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProducts([])}
+                          className="text-gray-500 hover:text-gray-700"
+                        >
+                          Cualquier Producto (Todos)
+                        </button>
+                      </div>
+
+                      {/* Lista de productos con scroll */}
+                      <div className="max-h-48 overflow-y-auto space-y-0.5 divide-y divide-gray-50">
+                        {/* Opción Cualquier Producto (Todos) */}
+                        <div
+                          onClick={() => setSelectedProducts([])}
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition ${
+                            selectedProducts.length === 0
+                              ? 'bg-blue-50 text-blue-700 font-bold'
+                              : 'hover:bg-gray-50 text-gray-700'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            readOnly
+                            checked={selectedProducts.length === 0}
+                            className="rounded text-blue-600 focus:ring-0 w-3.5 h-3.5 pointer-events-none"
+                          />
+                          <span>Cualquier Producto (Todos)</span>
+                        </div>
+
+                        {/* Productos filtrados */}
+                        {filterOptions?.products
+                          ?.filter((p) =>
+                            productSearchTerm.trim() === ''
+                              ? true
+                              : p.toLowerCase().includes(productSearchTerm.toLowerCase())
+                          )
+                          .map((p) => {
+                            const isSelected = selectedProducts.includes(p);
+                            return (
+                              <div
+                                key={p}
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedProducts(selectedProducts.filter((item) => item !== p));
+                                  } else {
+                                    setSelectedProducts([...selectedProducts, p]);
+                                  }
+                                }}
+                                className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition ${
+                                  isSelected
+                                    ? 'bg-blue-50 text-blue-800 font-semibold'
+                                    : 'hover:bg-gray-50 text-gray-700'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  readOnly
+                                  checked={isSelected}
+                                  className="rounded text-blue-600 focus:ring-0 w-3.5 h-3.5 pointer-events-none"
+                                />
+                                <span className="truncate">{p}</span>
+                              </div>
+                            );
+                          })}
+
+                        {filterOptions?.products?.filter((p) =>
+                          productSearchTerm.trim() === ''
+                            ? true
+                            : p.toLowerCase().includes(productSearchTerm.toLowerCase())
+                        ).length === 0 && (
+                          <div className="text-center py-3 text-xs text-gray-400">
+                            No se encontraron productos coincidentes
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Badges / Chips de productos seleccionados */}
+                  {selectedProducts.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 bg-blue-50/50 border border-blue-100 rounded-lg">
+                      {selectedProducts.map((p) => (
+                        <span
+                          key={p}
+                          className="inline-flex items-center gap-1 text-[11px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-medium"
+                        >
+                          <ShoppingBag className="w-3 h-3 text-blue-600 flex-shrink-0" />
+                          <span className="truncate max-w-[200px]">{p}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedProducts(selectedProducts.filter((item) => item !== p));
+                            }}
+                            className="hover:bg-blue-200 rounded-full p-0.5 text-blue-600 transition"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -583,8 +770,14 @@ export default function CampaignsPage() {
                     {messageTemplate
                       .replace(/\{\{\s*nombre\s*\}\}/gi, 'Carlos')
                       .replace(/\{\{\s*name\s*\}\}/gi, 'Carlos')
-                      .replace(/\{\{\s*producto\s*\}\}/gi, 'Kit de Biología')
-                      .replace(/\{\{\s*product\s*\}\}/gi, 'Kit de Biología')}
+                      .replace(
+                        /\{\{\s*producto\s*\}\}/gi,
+                        selectedProducts.length > 0 ? selectedProducts[0] : 'Kit de Biología'
+                      )
+                      .replace(
+                        /\{\{\s*product\s*\}\}/gi,
+                        selectedProducts.length > 0 ? selectedProducts[0] : 'Kit de Biología'
+                      )}
                   </p>
 
                   <div className="text-[9px] text-emerald-200 text-right mt-1.5 flex items-center justify-end gap-1">

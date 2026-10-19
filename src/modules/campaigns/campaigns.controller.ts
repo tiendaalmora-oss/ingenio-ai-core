@@ -28,15 +28,24 @@ export class CampaignsController {
     @TenantId() tenantId: string,
     @Query('leadStatus') leadStatus?: string,
     @Query('product') product?: string,
+    @Query('products') productsQuery?: string,
     @Query('tags') tags?: string,
     @Query('channel') channel?: 'WHATSAPP' | 'EMAIL' | 'BOTH',
   ) {
     if (!tenantId) throw new BadRequestException('tenantId es requerido');
 
     const parsedTags = tags ? tags.split(',').map((t) => t.trim()).filter(Boolean) : undefined;
+    let parsedProducts: string[] | undefined = undefined;
+    if (productsQuery) {
+      parsedProducts = productsQuery.split(',').map((p) => p.trim()).filter(Boolean);
+    } else if (product && product !== 'ALL') {
+      parsedProducts = product.split(',').map((p) => p.trim()).filter(Boolean);
+    }
+
     const filters: EstimateAudienceDto = {
       leadStatus,
       product,
+      products: parsedProducts,
       tags: parsedTags,
       channel,
     };

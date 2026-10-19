@@ -3,7 +3,7 @@ import { CreateCampaignDto } from './dto/create-campaign.dto';
 export declare class CampaignsController {
     private readonly campaignsService;
     constructor(campaignsService: CampaignsService);
-    estimateAudience(tenantId: string, leadStatus?: string, product?: string, tags?: string, channel?: 'WHATSAPP' | 'EMAIL' | 'BOTH'): Promise<{
+    estimateAudience(tenantId: string, leadStatus?: string, product?: string, productsQuery?: string, tags?: string, channel?: 'WHATSAPP' | 'EMAIL' | 'BOTH'): Promise<{
         totalCount: number;
         sampleContacts: {
             id: string;

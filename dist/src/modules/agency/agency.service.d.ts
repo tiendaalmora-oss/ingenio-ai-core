@@ -38,8 +38,8 @@ export declare class AgencyService {
             id: string;
             createdAt: Date;
             agencyId: string;
-            email: string;
             role: string;
+            email: string;
         }[];
         _count: {
             subaccounts: number;
@@ -285,8 +285,8 @@ export declare class AgencyService {
             id: string;
             name: string | null;
             createdAt: Date;
-            email: string;
             role: string;
+            email: string;
         }[];
     }>;
     createSubaccountUser(tenantId: string, data: {
@@ -297,8 +297,8 @@ export declare class AgencyService {
         id: string;
         name: string | null;
         createdAt: Date;
-        email: string;
         role: string;
+        email: string;
     }>;
     deleteSubaccountUser(tenantId: string, userId: string): Promise<import("@prisma/client").Prisma.BatchPayload>;
     regenerateSubaccountAccessKey(tenantId: string): Promise<{
@@ -310,8 +310,8 @@ export declare class AgencyService {
             id: string;
             name: string | null;
             createdAt: Date;
-            email: string;
             role: string;
+            email: string;
         }[];
     }>;
 }

@@ -24,13 +24,21 @@ let CampaignsController = class CampaignsController {
     constructor(campaignsService) {
         this.campaignsService = campaignsService;
     }
-    async estimateAudience(tenantId, leadStatus, product, tags, channel) {
+    async estimateAudience(tenantId, leadStatus, product, productsQuery, tags, channel) {
         if (!tenantId)
             throw new common_1.BadRequestException('tenantId es requerido');
         const parsedTags = tags ? tags.split(',').map((t) => t.trim()).filter(Boolean) : undefined;
+        let parsedProducts = undefined;
+        if (productsQuery) {
+            parsedProducts = productsQuery.split(',').map((p) => p.trim()).filter(Boolean);
+        }
+        else if (product && product !== 'ALL') {
+            parsedProducts = product.split(',').map((p) => p.trim()).filter(Boolean);
+        }
         const filters = {
             leadStatus,
             product,
+            products: parsedProducts,
             tags: parsedTags,
             channel,
         };
@@ -78,10 +86,11 @@ __decorate([
     __param(0, (0, tenant_id_decorator_1.TenantId)()),
     __param(1, (0, common_1.Query)('leadStatus')),
     __param(2, (0, common_1.Query)('product')),
-    __param(3, (0, common_1.Query)('tags')),
-    __param(4, (0, common_1.Query)('channel')),
+    __param(3, (0, common_1.Query)('products')),
+    __param(4, (0, common_1.Query)('tags')),
+    __param(5, (0, common_1.Query)('channel')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, String, String, String]),
+    __metadata("design:paramtypes", [String, String, String, String, String, String]),
     __metadata("design:returntype", Promise)
 ], CampaignsController.prototype, "estimateAudience", null);
 __decorate([

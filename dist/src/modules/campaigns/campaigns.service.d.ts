@@ -9,7 +9,7 @@ export declare class CampaignsService {
         name?: string | null;
         phone?: string | null;
         interests?: string[];
-    }): string;
+    }, targetProducts?: string[]): string;
     estimateAudience(tenantId: string, filters?: EstimateAudienceDto): Promise<{
         totalCount: number;
         sampleContacts: {

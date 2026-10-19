@@ -78,8 +78,8 @@ export declare class AgencyController {
             id: string;
             createdAt: Date;
             agencyId: string;
-            email: string;
             role: string;
+            email: string;
         }[];
         _count: {
             subaccounts: number;
@@ -279,8 +279,8 @@ export declare class AgencyController {
             id: string;
             name: string | null;
             createdAt: Date;
-            email: string;
             role: string;
+            email: string;
         }[];
     }>;
     createUser(tenantId: string, body: {
@@ -291,8 +291,8 @@ export declare class AgencyController {
         id: string;
         name: string | null;
         createdAt: Date;
-        email: string;
         role: string;
+        email: string;
     }>;
     deleteUser(tenantId: string, userId: string): Promise<import("@prisma/client").Prisma.BatchPayload>;
     regenerateAccessKey(tenantId: string): Promise<{
@@ -304,8 +304,8 @@ export declare class AgencyController {
             id: string;
             name: string | null;
             createdAt: Date;
-            email: string;
             role: string;
+            email: string;
         }[];
     }>;
 }

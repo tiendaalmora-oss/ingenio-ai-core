@@ -4,6 +4,7 @@ exports.EstimateAudienceDto = exports.CreateCampaignDto = exports.TargetFiltersD
 class TargetFiltersDto {
     leadStatus;
     product;
+    products;
     tags;
 }
 exports.TargetFiltersDto = TargetFiltersDto;
@@ -23,6 +24,7 @@ exports.CreateCampaignDto = CreateCampaignDto;
 class EstimateAudienceDto {
     leadStatus;
     product;
+    products;
     tags;
     channel;
 }

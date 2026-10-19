@@ -130,12 +130,12 @@ export declare class CrmController {
             id: string;
             name: string | null;
             updatedAt: Date;
+            leadStatus: string | null;
             contactId: string;
             company: string | null;
             interests: string[];
             lastInteraction: Date | null;
             objections: string[];
-            leadStatus: string | null;
             tags: string[];
         };
     }>;

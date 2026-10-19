@@ -1,6 +1,7 @@
 export class TargetFiltersDto {
   leadStatus?: string; // 'ALL' | 'CLOSED' | 'WARM' | 'HOT' | 'COLD'
-  product?: string;    // 'ALL' | specific product name
+  product?: string;    // 'ALL' | specific product name (mantenido por compatibilidad)
+  products?: string[]; // Múltiples productos seleccionados en la misma campaña
   tags?: string[];
 }
 
@@ -20,6 +21,7 @@ export class CreateCampaignDto {
 export class EstimateAudienceDto {
   leadStatus?: string;
   product?: string;
+  products?: string[];
   tags?: string[];
   channel?: 'WHATSAPP' | 'EMAIL' | 'BOTH';
 }
