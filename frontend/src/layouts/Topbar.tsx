@@ -8,6 +8,7 @@ import { useAuthStore } from '../store/auth.store';
 
 import NotificationCenter from '../components/NotificationCenter';
 import SubaccountSwitcher from '../components/SubaccountSwitcher';
+import ThemeToggle from '../components/ThemeToggle';
 
 interface HealthItem {
   name: string;
@@ -48,36 +49,36 @@ export default function Topbar({ tenant, tenantName, version, timestamp, health 
       : pathname.split('/').filter(Boolean).join(' / ').replace(/-/g, ' ');
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-3 sm:px-6 flex-shrink-0">
+    <header className="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-3 sm:px-6 flex-shrink-0 transition-colors duration-200">
       <div className="flex items-center gap-2 sm:gap-4 min-w-0">
         {/* Mobile Hamburger Button */}
         <button
           onClick={toggleMobileMenu}
-          className="md:hidden p-2 -ml-1 rounded-lg hover:bg-gray-100 text-gray-600 focus:outline-none"
+          className="md:hidden p-2 -ml-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-400 focus:outline-none"
           aria-label="Abrir menú"
         >
           <Menu className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 font-medium bg-gray-100 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full flex-shrink-0">
-          <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 shrink-0" />
+        <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-300 font-medium bg-gray-100 dark:bg-slate-800 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full flex-shrink-0 border border-transparent dark:border-slate-700/60">
+          <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 dark:text-slate-400 shrink-0" />
           <span className="truncate max-w-[90px] sm:max-w-[160px]">
             {tenantName || tenant}
           </span>
         </div>
 
-        <nav className="hidden sm:flex items-center text-sm text-gray-500 capitalize truncate">
+        <nav className="hidden sm:flex items-center text-sm text-gray-500 dark:text-slate-400 capitalize truncate">
           {breadcrumb}
         </nav>
       </div>
 
-      <div className="flex items-center gap-4 flex-shrink-0">
-        <div className="hidden md:flex items-center gap-2 text-sm text-gray-500">
+      <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+        <div className="hidden md:flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
           <Clock className="w-4 h-4" />
           <span>{timestamp ? new Date(timestamp).toLocaleTimeString() : '—'}</span>
         </div>
 
-        <div className="hidden md:flex items-center gap-2 text-sm text-gray-500">
+        <div className="hidden md:flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
           <Activity className="w-4 h-4" />
           <span>KOS: v{version}</span>
         </div>
@@ -89,18 +90,19 @@ export default function Topbar({ tenant, tenantName, version, timestamp, health 
             />
             <span className={`relative inline-flex rounded-full h-3 w-3 ${globalStatusColor}`} />
           </span>
-          <span className="text-sm font-medium text-gray-700 hidden sm:inline">{globalStatusText}</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-slate-300 hidden sm:inline">{globalStatusText}</span>
         </div>
 
         {/* Human Operator Live Notification & Alert Center */}
         {!isClient ? (
           <SubaccountSwitcher />
         ) : (
-          <span className="text-xs px-2.5 py-1 bg-blue-50 text-blue-700 font-medium rounded-lg border border-blue-200 flex items-center gap-1">
-            <Building2 className="w-3 h-3 text-blue-600" /> Espacio Cliente
+          <span className="text-xs px-2.5 py-1 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium rounded-lg border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+            <Building2 className="w-3 h-3 text-blue-600 dark:text-blue-400" /> Espacio Cliente
           </span>
         )}
         <NotificationCenter />
+        <ThemeToggle />
 
         <button
           onClick={() => {
@@ -108,7 +110,7 @@ export default function Topbar({ tenant, tenantName, version, timestamp, health 
             window.location.href = '/';
           }}
           title="Cerrar sesión / Salir del CRM"
-          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 dark:hover:text-red-400 rounded-lg transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>

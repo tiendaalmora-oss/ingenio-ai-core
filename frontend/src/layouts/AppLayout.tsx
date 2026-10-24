@@ -108,7 +108,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
+    <div className="flex h-screen bg-gray-50 dark:bg-slate-950 overflow-hidden font-sans transition-colors duration-200">
       {/* Sidebar — fixed, always visible on desktop */}
       <Sidebar menu={data.menu} />
 
@@ -129,7 +129,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           timestamp={data.timestamp}
           health={data.health}
         />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 flex flex-col">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 flex flex-col bg-gray-50 dark:bg-slate-950 transition-colors duration-200">
           <div className="flex-1 flex flex-col min-h-0">
             {children}
           </div>

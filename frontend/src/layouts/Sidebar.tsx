@@ -56,15 +56,15 @@ export default function Sidebar({ menu }: { menu: MenuItem[] }) {
     <>
       {/* ── Desktop sidebar ── */}
       <aside
-        className={`hidden md:flex flex-col fixed top-0 left-0 z-40 h-screen bg-white border-r border-gray-200 transition-all duration-300 ${sidebarWidth}`}
+        className={`hidden md:flex flex-col fixed top-0 left-0 z-40 h-screen bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 transition-all duration-300 ${sidebarWidth}`}
       >
-        <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 flex-shrink-0">
+        <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-slate-800 flex-shrink-0">
           {sidebarOpen && (
-            <span className="text-xl font-bold text-gray-800 truncate">Ingenio AI</span>
+            <span className="text-xl font-bold text-gray-800 dark:text-gray-100 truncate">Ingenio AI</span>
           )}
           <button
             onClick={toggleSidebar}
-            className="p-2 rounded-md hover:bg-gray-100 text-gray-600 flex-shrink-0"
+            className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-400 flex-shrink-0"
             aria-label="Toggle sidebar"
           >
             <Menu className="w-5 h-5" />
@@ -86,14 +86,14 @@ export default function Sidebar({ menu }: { menu: MenuItem[] }) {
                       !item.enabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''
                     } ${
                       isActive
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                        ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400 font-semibold'
+                        : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800/80 hover:text-gray-900 dark:hover:text-white'
                     }`}
                     title={!sidebarOpen ? item.title : undefined}
                   >
                     <Icon
                       className={`w-5 h-5 flex-shrink-0 ${
-                        isActive ? 'text-blue-700' : 'text-gray-500 group-hover:text-gray-900'
+                        isActive ? 'text-blue-700 dark:text-blue-400' : 'text-gray-500 dark:text-slate-400 group-hover:text-gray-900 dark:group-hover:text-white'
                       }`}
                     />
                     {sidebarOpen && (
@@ -106,19 +106,19 @@ export default function Sidebar({ menu }: { menu: MenuItem[] }) {
 
             {/* ── Ítem fijo: Panel de Agencia (solo para administradores) ── */}
             {!isClient && (
-              <li className="pt-2 mt-2 border-t border-gray-100">
+              <li className="pt-2 mt-2 border-t border-gray-100 dark:border-slate-800">
                 <Link
                   href="/agency"
                   className={`flex items-center p-2 rounded-lg group transition-colors ${
                     pathname === '/agency' || pathname.startsWith('/agency/')
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                      ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400 font-semibold'
+                      : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800/80 hover:text-gray-900 dark:hover:text-white'
                   }`}
                   title={!sidebarOpen ? 'Panel de Agencia' : undefined}
                 >
                   <Building2
                     className={`w-5 h-5 flex-shrink-0 ${
-                      pathname.startsWith('/agency') ? 'text-blue-700' : 'text-gray-500 group-hover:text-gray-900'
+                      pathname.startsWith('/agency') ? 'text-blue-700 dark:text-blue-400' : 'text-gray-500 dark:text-slate-400 group-hover:text-gray-900 dark:group-hover:text-white'
                     }`}
                   />
                   {sidebarOpen && (
@@ -131,13 +131,13 @@ export default function Sidebar({ menu }: { menu: MenuItem[] }) {
         </nav>
 
         {/* ── Footer / Logout ── */}
-        <div className="p-3 border-t border-gray-200">
+        <div className="p-3 border-t border-gray-200 dark:border-slate-800">
           <button
             onClick={() => {
               logout();
               window.location.href = '/';
             }}
-            className="w-full flex items-center p-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors text-xs font-medium"
+            className="w-full flex items-center p-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors text-xs font-medium"
             title={!sidebarOpen ? 'Cerrar Sesión' : undefined}
           >
             <LogOut className="w-4 h-4 flex-shrink-0" />
@@ -150,15 +150,15 @@ export default function Sidebar({ menu }: { menu: MenuItem[] }) {
       {mobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
           <div
-            className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
+            className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs transition-opacity"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <aside className="relative z-10 w-72 max-w-[85vw] h-full bg-white shadow-2xl flex flex-col animate-in slide-in-from-left duration-200">
-            <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
-              <span className="text-xl font-bold text-gray-900">Ingenio AI</span>
+          <aside className="relative z-10 w-72 max-w-[85vw] h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col animate-in slide-in-from-left duration-200 border-r border-transparent dark:border-slate-800">
+            <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-slate-800">
+              <span className="text-xl font-bold text-gray-900 dark:text-white">Ingenio AI</span>
               <button
                 onClick={() => setMobileMenuOpen(false)}
-                className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-500 dark:text-slate-400"
                 aria-label="Cerrar menú"
               >
                 <X className="w-5 h-5" />
@@ -180,10 +180,10 @@ export default function Sidebar({ menu }: { menu: MenuItem[] }) {
                         } ${
                           isActive
                             ? 'bg-blue-600 text-white font-medium shadow-md shadow-blue-600/20'
-                            : 'text-gray-700 hover:bg-gray-100'
+                            : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800'
                         }`}
                       >
-                        <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-500'}`} />
+                        <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-500 dark:text-slate-400'}`} />
                         <span className="ms-3 text-sm">{item.title}</span>
                       </Link>
                     </li>
