@@ -150,14 +150,14 @@ export default function CrmPage() {
           <div className="flex items-center gap-2">
             <Link
               href="/sales"
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 shadow-xs transition"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/50 dark:border-emerald-800/70 dark:text-emerald-300 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/60 shadow-xs transition"
             >
-              <BadgeDollarSign className="w-3.5 h-3.5 text-emerald-600" />
+              <BadgeDollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               <span>Ventas del Día</span>
             </Link>
             <button
               onClick={handleExportCSV}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-xs transition"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 shadow-xs transition"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Exportar CSV</span>
@@ -172,7 +172,7 @@ export default function CrmPage() {
             <button
               onClick={() => refetch()}
               disabled={isFetching}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-xs transition disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 shadow-xs transition disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
               <span>Actualizar</span>
@@ -183,43 +183,43 @@ export default function CrmPage() {
 
       {/* Metrics Summary Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+        <div className="bg-white dark:bg-slate-800/90 p-4 rounded-xl border border-gray-200 dark:border-slate-700/60 shadow-xs flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center flex-shrink-0">
             <Users className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-xs text-gray-500 font-medium">Total Prospectos</span>
-            <h4 className="text-lg font-bold text-gray-900">{totalLeads}</h4>
+            <span className="text-xs text-gray-500 dark:text-slate-300 font-medium">Total Prospectos</span>
+            <h4 className="text-lg font-bold text-gray-900 dark:text-white">{totalLeads}</h4>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+        <div className="bg-white dark:bg-slate-800/90 p-4 rounded-xl border border-gray-200 dark:border-slate-700/60 shadow-xs flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center flex-shrink-0">
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-xs text-gray-500 font-medium">Interesados (Warm)</span>
-            <h4 className="text-lg font-bold text-blue-700">{stageCounts['Interesado'] || 0}</h4>
+            <span className="text-xs text-gray-500 dark:text-slate-300 font-medium">Interesados (Warm)</span>
+            <h4 className="text-lg font-bold text-blue-700 dark:text-blue-400">{stageCounts['Interesado'] || 0}</h4>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+        <div className="bg-white dark:bg-slate-800/90 p-4 rounded-xl border border-gray-200 dark:border-slate-700/60 shadow-xs flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
             <Flame className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-xs text-gray-500 font-medium">Listos para Pagar (Hot)</span>
-            <h4 className="text-lg font-bold text-amber-600">{stageCounts['Oferta'] || 0}</h4>
+            <span className="text-xs text-gray-500 dark:text-slate-300 font-medium">Listos para Pagar (Hot)</span>
+            <h4 className="text-lg font-bold text-amber-600 dark:text-amber-400">{stageCounts['Oferta'] || 0}</h4>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-green-50 text-green-600 flex items-center justify-center flex-shrink-0">
+        <div className="bg-white dark:bg-slate-800/90 p-4 rounded-xl border border-gray-200 dark:border-slate-700/60 shadow-xs flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-green-50 dark:bg-emerald-950/60 text-green-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0">
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-xs text-gray-500 font-medium">Ventas Cerradas (Closed)</span>
-            <h4 className="text-lg font-bold text-green-600">{stageCounts['Venta'] || 0}</h4>
+            <span className="text-xs text-gray-500 dark:text-slate-300 font-medium">Ventas Cerradas (Closed)</span>
+            <h4 className="text-lg font-bold text-green-600 dark:text-emerald-400">{stageCounts['Venta'] || 0}</h4>
           </div>
         </div>
       </div>
@@ -244,13 +244,13 @@ export default function CrmPage() {
           )}
 
           {/* Switcher Table / Kanban */}
-          <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200">
+          <div className="flex items-center bg-gray-100 dark:bg-slate-800/90 p-1 rounded-xl border border-gray-200 dark:border-slate-700/60">
             <button
               onClick={() => setViewMode('kanban')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                 viewMode === 'kanban'
-                  ? 'bg-white text-blue-600 shadow-xs'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-300 shadow-xs'
+                  : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
@@ -260,12 +260,12 @@ export default function CrmPage() {
               onClick={() => setViewMode('table')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                 viewMode === 'table'
-                  ? 'bg-white text-blue-600 shadow-xs'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-300 shadow-xs'
+                  : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               <List className="w-3.5 h-3.5" />
-              Tabla
+              Lista
             </button>
           </div>
         </div>
