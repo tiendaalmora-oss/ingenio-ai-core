@@ -92,12 +92,27 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado LOST por opt-out previo. Manteniendo bot en silencio.`);
                 return;
             }
-            this.logger.log(`[Universal Auto-Wake] Reactivando conversación ${payload.conversationId} de '${conversation.status}' a 'ACTIVE' por mensaje entrante: "${payload.content}".`);
-            await this.prisma.conversation.update({
-                where: { id: payload.conversationId },
-                data: { status: 'ACTIVE' }
-            });
-            conversation.status = 'ACTIVE';
+            const isReactivationCommand = textNorm === '#bot' || textNorm === '#activar' || textNorm === '#reactivar' || textNorm === '#play';
+            if (isReactivationCommand) {
+                this.logger.log(`[Executive Loop] Comando explícito de reactivación recibido ("${textNorm}") para conversación ${payload.conversationId}. Reactivando bot a ACTIVE.`);
+                await this.prisma.conversation.update({
+                    where: { id: payload.conversationId },
+                    data: { status: 'ACTIVE' }
+                });
+                conversation.status = 'ACTIVE';
+            }
+            else if (conversation.status === 'HANDOFF' || conversation.status === 'PAUSED') {
+                this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}' (pausa manual / operador humano activo). Manteniendo bot silenciado.`);
+                return;
+            }
+            else if (conversation.status === 'RESOLVED' || conversation.status === 'LOST') {
+                this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}' reactivada a 'ACTIVE' por nuevo mensaje entrante.`);
+                await this.prisma.conversation.update({
+                    where: { id: payload.conversationId },
+                    data: { status: 'ACTIVE' }
+                });
+                conversation.status = 'ACTIVE';
+            }
         }
         if (reglasBot.autoPauseOptOut !== false) {
             const optOutPatterns = [

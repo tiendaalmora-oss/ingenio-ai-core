@@ -134,14 +134,30 @@ export class LlmListenerService {
         return;
       }
 
-      // 3. UNIVERSAL AUTO-WAKE: Para cualquier conversación en HANDOFF o PAUSED (ej: de Meta Ads, saludos o estados previos),
-      // reactivar automáticamente a ACTIVE para responder al cliente de inmediato y jamás perder la venta.
-      this.logger.log(`[Universal Auto-Wake] Reactivando conversación ${payload.conversationId} de '${conversation.status}' a 'ACTIVE' por mensaje entrante: "${payload.content}".`);
-      await this.prisma.conversation.update({
-        where: { id: payload.conversationId },
-        data: { status: 'ACTIVE' }
-      });
-      conversation.status = 'ACTIVE';
+      // 3. Comandos explícitos de reactivación (#bot, #activar, #reactivar, #play)
+      const isReactivationCommand = textNorm === '#bot' || textNorm === '#activar' || textNorm === '#reactivar' || textNorm === '#play';
+      if (isReactivationCommand) {
+        this.logger.log(`[Executive Loop] Comando explícito de reactivación recibido ("${textNorm}") para conversación ${payload.conversationId}. Reactivando bot a ACTIVE.`);
+        await this.prisma.conversation.update({
+          where: { id: payload.conversationId },
+          data: { status: 'ACTIVE' }
+        });
+        conversation.status = 'ACTIVE';
+      } 
+      // 4. Si la conversación fue pausada por un operador humano o está en HANDOFF, RESPETAR la pausa
+      else if (conversation.status === 'HANDOFF' || conversation.status === 'PAUSED') {
+        this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}' (pausa manual / operador humano activo). Manteniendo bot silenciado.`);
+        return;
+      }
+      // 5. Conversación previamente resuelta o perdida: si el cliente vuelve a escribir, reactivar ciclo
+      else if (conversation.status === 'RESOLVED' || conversation.status === 'LOST') {
+        this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}' reactivada a 'ACTIVE' por nuevo mensaje entrante.`);
+        await this.prisma.conversation.update({
+          where: { id: payload.conversationId },
+          data: { status: 'ACTIVE' }
+        });
+        conversation.status = 'ACTIVE';
+      }
     }
 
     // 1. REGLA: Auto-Pausa por Rechazo / Desinterés (Opt-Out)
