@@ -125,6 +125,11 @@ export class MetaWebhookController {
             /^(hola|buenas|buen dia|buenos dias|buenas tardes|buenas noches|bienvenido|bienvenida)$/i.test(cleanGreeting) ||
             cleanGreeting === 'hola' ||
             cleanGreeting === 'hola como estas' ||
+            cleanGreeting.includes('como podemos ayudarte') ||
+            cleanGreeting.includes('en que podemos ayudarte') ||
+            cleanGreeting.includes('en que te podemos ayudar') ||
+            cleanGreeting.includes('como te podemos ayudar') ||
+            cleanGreeting.includes('saludo automatico') ||
             cleanGreeting.startsWith('gracias por comunicarte') ||
             cleanGreeting.startsWith('gracias por contactarnos');
 

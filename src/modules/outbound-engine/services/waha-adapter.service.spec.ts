@@ -279,15 +279,13 @@ describe('WahaAdapterService (WhatsApp LID y Presencia "Escribiendo...")', () =>
       expect(config.isProd).toBe(false);
     });
 
-    it('debe hacer fallback seguro a WAHA_API_URL si WAHA_SANDBOX_URL no está definido', () => {
+    it('debe hacer fallback seguro a WAHA Sandbox por defecto si WAHA_SANDBOX_URL no está definido', () => {
       delete process.env.WAHA_SANDBOX_URL;
       delete process.env.WAHA_SANDBOX_API_KEY;
-      process.env.WAHA_API_URL = 'https://waha-default.example.com';
-      process.env.WAHA_API_KEY = 'default-key';
 
       const config = service.resolveWahaConfig('tenant-subcuenta-xyz');
-      expect(config.apiUrl).toBe('https://waha-default.example.com');
-      expect(config.apiKey).toBe('default-key');
+      expect(config.apiUrl).toBe('https://waha-sandbox.ingeniodigital.shop');
+      expect(config.apiKey).toBe('test-key');
       expect(config.isProd).toBe(false);
     });
 

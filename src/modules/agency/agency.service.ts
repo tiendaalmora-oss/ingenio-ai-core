@@ -222,7 +222,7 @@ export class AgencyService {
       };
     }
 
-    const rawUrl = process.env.WAHA_SANDBOX_URL || process.env.WAHA_API_URL || 'https://waha.ingeniodigital.shop';
+    const rawUrl = process.env.WAHA_SANDBOX_URL || 'https://waha-sandbox.ingeniodigital.shop';
     return {
       apiUrl: rawUrl.replace(/\/+$/, ''),
       apiKey: process.env.WAHA_SANDBOX_API_KEY || process.env.WAHA_API_KEY || 'secreto123',
