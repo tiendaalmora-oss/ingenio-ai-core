@@ -14,4 +14,15 @@ export class AppController {
   getHealth() {
     return { status: 'ok', service: 'ingenio-ai-core' };
   }
+
+  @Get('version')
+  getVersion() {
+    return {
+      status: 'ok',
+      service: 'ingenio-ai-core',
+      version: '1.2.0',
+      commit: '012c834-fix-pause-and-waha',
+      updatedAt: '2026-10-26T19:45:00Z',
+    };
+  }
 }

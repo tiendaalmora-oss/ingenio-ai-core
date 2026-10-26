@@ -7,4 +7,11 @@ export declare class AppController {
         status: string;
         service: string;
     };
+    getVersion(): {
+        status: string;
+        service: string;
+        version: string;
+        commit: string;
+        updatedAt: string;
+    };
 }

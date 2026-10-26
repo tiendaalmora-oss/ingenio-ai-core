@@ -23,6 +23,15 @@ let AppController = class AppController {
     getHealth() {
         return { status: 'ok', service: 'ingenio-ai-core' };
     }
+    getVersion() {
+        return {
+            status: 'ok',
+            service: 'ingenio-ai-core',
+            version: '1.2.0',
+            commit: '012c834-fix-pause-and-waha',
+            updatedAt: '2026-10-26T19:45:00Z',
+        };
+    }
 };
 exports.AppController = AppController;
 __decorate([
@@ -37,6 +46,12 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], AppController.prototype, "getHealth", null);
+__decorate([
+    (0, common_1.Get)('version'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], AppController.prototype, "getVersion", null);
 exports.AppController = AppController = __decorate([
     (0, common_1.Controller)(),
     __metadata("design:paramtypes", [app_service_1.AppService])
