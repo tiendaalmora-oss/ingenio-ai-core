@@ -65,7 +65,13 @@ let ToolCallListenerService = ToolCallListenerService_1 = class ToolCallListener
                     }
                     this.logger.log(`Actualizando memoria de ${payload.contactId} con: ${JSON.stringify(toolArgs)}`);
                     this.logger.debug(`Emitting memory.updated for contactId=${payload.contactId}`);
-                    this.eventEmitter.emit('memory.updated', new memory_updated_event_1.MemoryUpdatedEvent(payload.tenantId, payload.contactId, toolArgs));
+                    const memoryEvent = new memory_updated_event_1.MemoryUpdatedEvent(payload.tenantId, payload.contactId, toolArgs);
+                    if (typeof this.eventEmitter.emitAsync === 'function') {
+                        await this.eventEmitter.emitAsync('memory.updated', memoryEvent);
+                    }
+                    else {
+                        this.eventEmitter.emit('memory.updated', memoryEvent);
+                    }
                     toolResultStr = JSON.stringify({ status: 'success', message: 'Business Memory actualizada en CRM.' });
                     break;
                 case 'create_task':

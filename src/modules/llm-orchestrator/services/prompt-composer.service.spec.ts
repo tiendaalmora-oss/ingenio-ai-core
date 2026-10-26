@@ -161,5 +161,69 @@ describe('PromptComposerService — Recompra y Blindaje de Clientes Pagados', ()
     expect(sysMsg).toContain('NUNCA le pidas comprobantes de pago');
     expect(sysMsg).toContain('ESTÁ ESTRICTAMENTE PROHIBIDO aplicar la "Situación A"');
   });
+
+  it('8. Dynamic Product Router detecta productos de cualquier subcuenta (ej: REPUESTERA EN CONTROL 2026) y los pone en foco', () => {
+    const subaccountBundle = {
+      identity: 'Asesor Comercial Ingenio Digital',
+      business: 'Ingenio Digital',
+      productos: [
+        { nombre: 'REPUESTERA EN CONTROL 2026', embudoVenta: 'Paso 1 Repuestera... Paso 2 Inventario...' },
+        { nombre: 'SISTEMA GYM PRO 2026', embudoVenta: 'Paso 1 Gym... Paso 2 Membresías...' },
+      ],
+    };
+
+    const result = service.compose({
+      kosBundle: subaccountBundle,
+      memory: null,
+      history: [],
+      currentMessage: 'Hola quiero más info de REPUESTERA EN CONTROL 2026',
+    });
+
+    const sysMsg = result.find((m) => m.role === 'system')?.content;
+    expect(sysMsg).toContain('[PRODUCTO ACTIVO EN FOCO EN ESTA CONVERSACIÓN]: "REPUESTERA EN CONTROL 2026"');
+    expect(sysMsg).toContain('⭐ [PRODUCTO ACTIVO DEL CLIENTE]: REPUESTERA EN CONTROL 2026');
+  });
+
+  it('9. Evita falsos positivos de Paso 4 cuando la presentación menciona "cuentas por cobrar" o "ten en cuenta"', () => {
+    const result = service.compose({
+      kosBundle: mockKosBundle,
+      memory: { leadStatus: 'WARM', interests: ['Física'], tags: ['INTERESADO'] } as any,
+      history: [
+        { direction: 'INBOUND', role: 'user', content: 'Hola quiero info' } as any,
+        {
+          direction: 'OUTBOUND',
+          role: 'assistant',
+          content: '¡Hola! Ten en cuenta que nuestro sistema incluye control total de cuentas por cobrar, inventario y facturación en todo lo que recibes.',
+        } as any,
+      ],
+      currentMessage: 'Me interesa, qué precio tiene?',
+    });
+
+    const sysMsg = result.find((m) => m.role === 'system')?.content;
+    expect(sysMsg).toContain('Estado Paso 4: PENDIENTE (Datos de pago)');
+    expect(sysMsg).not.toContain('CLIENTE EN ESPERA DE PAGO — Los datos de pago ya fueron entregados');
+  });
+
+  it('10. No duplica el mensaje del usuario en la segunda pasada después de ejecutar una herramienta (TOOL_RESULT)', () => {
+    const result = service.compose({
+      kosBundle: mockKosBundle,
+      memory: null,
+      history: [
+        { direction: 'INBOUND', role: 'user', type: 'TEXT', content: 'Hola quiero info de Física' } as any,
+        {
+          direction: 'OUTBOUND',
+          role: 'assistant',
+          type: 'TOOL_CALL',
+          content: '',
+          toolCalls: [{ id: 'tc_1', name: 'update_business_memory', arguments: { interests: ['Física'] } }],
+        } as any,
+        { direction: 'INBOUND', role: 'tool', type: 'TOOL_RESULT', content: '{"status":"ok"}', toolCallId: 'tc_1' } as any,
+      ],
+      currentMessage: 'Hola quiero info de Física',
+    });
+
+    const userMsgs = result.filter((m) => m.role === 'user' && m.content === 'Hola quiero info de Física');
+    expect(userMsgs.length).toBe(1);
+  });
 });
 

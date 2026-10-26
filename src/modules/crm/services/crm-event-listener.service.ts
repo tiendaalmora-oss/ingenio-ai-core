@@ -18,30 +18,69 @@ export class CrmEventListenerService {
     try {
       const updates = payload.updates;
 
-      // 1. Leer estado ANTES del upsert para el audit log
+      // 1. Leer estado ANTES del upsert para fusión no-destructiva y audit log
       const before = await this.prisma.businessMemory.findUnique({
         where: { contactId: payload.contactId },
       });
 
-      // 2. Ejecutar el upsert
+      // Fusión no-destructiva (Set Merge): los nuevos intereses van primero (producto activo en foco) sin borrar los anteriores
+      const mergedInterests = updates.interests !== undefined
+        ? Array.from(new Set([
+            ...(Array.isArray(updates.interests) ? updates.interests : []),
+            ...((before?.interests as string[]) || []),
+          ].map(s => String(s).trim()).filter(Boolean)))
+        : undefined;
+
+      const mergedObjections = updates.objections !== undefined
+        ? Array.from(new Set([
+            ...((before?.objections as string[]) || []),
+            ...(Array.isArray(updates.objections) ? updates.objections : []),
+          ].map(s => String(s).trim()).filter(Boolean)))
+        : undefined;
+
+      const mergedTags = updates.tags !== undefined
+        ? Array.from(new Set([
+            ...((before?.tags as string[]) || []),
+            ...(Array.isArray(updates.tags) ? updates.tags : []),
+          ].map(s => String(s).trim()).filter(Boolean)))
+        : undefined;
+
+      // Protección de temperatura: evitar que el LLM degrade accidentalmente un lead HOT/CLOSED a WARM/COLD
+      const statusRank: Record<string, number> = {
+        NEW: 0, COLD: 1, CONTACTED: 1, WARM: 2, HOT: 3, OFFER: 3, DEMO: 3, SALE: 4, CLOSED: 4, CLIENT: 4,
+      };
+      let resolvedLeadStatus = updates.leadStatus;
+      if (resolvedLeadStatus && before?.leadStatus) {
+        const prevUpper = before.leadStatus.toUpperCase();
+        const nextUpper = String(resolvedLeadStatus).toUpperCase();
+        if (nextUpper !== 'LOST' && nextUpper !== 'HANDOFF') {
+          const prevRank = statusRank[prevUpper] ?? 0;
+          const nextRank = statusRank[nextUpper] ?? 0;
+          if (prevRank > nextRank) {
+            resolvedLeadStatus = before.leadStatus;
+          }
+        }
+      }
+
+      // 2. Ejecutar el upsert con los datos fusionados
       await this.prisma.businessMemory.upsert({
         where: { contactId: payload.contactId },
         update: {
-          ...(updates.name      !== undefined && { name:       updates.name }),
-          ...(updates.company   !== undefined && { company:    updates.company }),
-          ...(updates.interests !== undefined && { interests:  updates.interests }),
-          ...(updates.objections!== undefined && { objections: updates.objections }),
-          ...(updates.leadStatus!== undefined && { leadStatus: updates.leadStatus }),
-          ...(updates.tags      !== undefined && { tags:       updates.tags }),
+          ...(updates.name           !== undefined && { name:       updates.name }),
+          ...(updates.company        !== undefined && { company:    updates.company }),
+          ...(mergedInterests        !== undefined && { interests:  mergedInterests }),
+          ...(mergedObjections       !== undefined && { objections: mergedObjections }),
+          ...(resolvedLeadStatus     !== undefined && { leadStatus: resolvedLeadStatus }),
+          ...(mergedTags             !== undefined && { tags:       mergedTags }),
         },
         create: {
           contactId:   payload.contactId,
           name:        updates.name,
           company:     updates.company,
-          interests:   updates.interests  || [],
-          objections:  updates.objections || [],
-          leadStatus:  updates.leadStatus,
-          tags:        updates.tags       || [],
+          interests:   mergedInterests  || [],
+          objections:  mergedObjections || [],
+          leadStatus:  resolvedLeadStatus,
+          tags:        mergedTags       || [],
         },
       });
       this.logger.debug(`BusinessMemory upserted for contactId=${payload.contactId}`);

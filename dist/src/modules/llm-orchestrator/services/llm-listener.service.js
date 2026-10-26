@@ -181,11 +181,46 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
             }
         }
         try {
-            const memory = await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } });
+            const memory = await this.prisma.businessMemory?.findUnique
+                ? await this.prisma.businessMemory.findUnique({ where: { contactId: payload.contactId } })
+                : null;
             const currentStatus = memory?.leadStatus || 'COLD';
             let nextStatus = currentStatus;
             const currentTags = memory?.tags || [];
             const newTags = new Set(currentTags);
+            const currentInterests = memory?.interests || [];
+            let mergedInterests = [...currentInterests];
+            const rawProducts = rawData?.productos || rawData?.products?.items || [];
+            if (Array.isArray(rawProducts) && rawProducts.length > 0 && textNorm.length > 0) {
+                const stopWords = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'en', 'con', 'para', 'por', 'un', 'una', 'kit', 'mega', 'pack', 'sistema', 'metodo', 'curso', 'programa', 'pro', '2025', '2026', 'control', 'docente']);
+                let matchedProductName = null;
+                let bestScore = 0;
+                for (const p of rawProducts) {
+                    const pNameRaw = String(p.nombre || p.name || '').trim();
+                    const pNameNorm = pNameRaw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+                    if (!pNameNorm)
+                        continue;
+                    if (textNorm.includes(pNameNorm)) {
+                        matchedProductName = pNameRaw;
+                        break;
+                    }
+                    const tokens = pNameNorm.split(' ').filter(t => t.length >= 3 && !stopWords.has(t));
+                    let score = 0;
+                    for (const token of tokens) {
+                        if (new RegExp(`\\b${token}`, 'i').test(textNorm)) {
+                            score += token.length >= 5 ? 2 : 1;
+                        }
+                    }
+                    if (score > bestScore) {
+                        bestScore = score;
+                        matchedProductName = pNameRaw;
+                    }
+                }
+                if (matchedProductName) {
+                    mergedInterests = Array.from(new Set([matchedProductName, ...currentInterests]));
+                    newTags.add('INTERESADO');
+                }
+            }
             const hasImageVoucher = (payload.content || '').includes('[Comprobante de Pago Detectado]');
             const hasFinancialRef = /(?:ref|referencia|nro|numero|comprobante|operacion|aprobacion|txid|hash|recibo|folio|autorizacion)[\s#:]*([a-zA-Z0-9]{4,})/i.test(textNorm);
             const hasPlatformOrBank = /(?:pago\s*movil|transferencia|zelle|binance|usdt|paypal|zinli|wally|wise|stripe|payoneer|airtm|reserve|nequi|daviplata|bancolombia|pse|yape|plin|bcp|interbank|pix|nubank|spei|oxxo|bbva|santander|banamex|banesco|bdv|mercantil|provincial|bancaribe|bnc|bancamiga|banplus)/i.test(textNorm);
@@ -195,7 +230,7 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
             const isPaymentMsg = hasImageVoucher || isExplicitPaymentProof;
             const isPromiseToPay = /(?:hoy puedo pagar|puedo pagar|voy a pagar|pago en la tarde|pago manana|cuando cobre|cuando me paguen|dame chance|te transfiero mas tarde)/i.test(textNorm);
             const isHotMsg = isPromiseToPay || textNorm.includes('precio') || textNorm.includes('costo') || textNorm.includes('cuanto vale') || textNorm.includes('como pago') || textNorm.includes('datos de pago') || textNorm.includes('metodo de pago') || textNorm.includes('transferencia') || textNorm.includes('tarjeta') || textNorm.includes('pago movil') || textNorm.includes('quiero comprar') || textNorm.includes('comprar') || textNorm.includes('cuenta') || textNorm.includes('link de pago');
-            const isWarmMsg = textNorm.includes('me interesa') || textNorm.includes('informacion') || textNorm.includes('tienen') || textNorm.includes('disponible') || textNorm.includes('catalogo') || textNorm.includes('opciones') || textNorm.includes('servicio') || textNorm.includes('producto');
+            const isWarmMsg = mergedInterests.length > currentInterests.length || textNorm.includes('me interesa') || textNorm.includes('info') || textNorm.includes('informacion') || textNorm.includes('tienen') || textNorm.includes('disponible') || textNorm.includes('catalogo') || textNorm.includes('opciones') || textNorm.includes('servicio') || textNorm.includes('producto');
             if (isPromiseToPay) {
                 newTags.add('ESPERA_DE_PAGO');
                 newTags.add('PIDIO_DATOS_PAGO');
@@ -216,10 +251,12 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                     create: {
                         contactId: payload.contactId,
                         leadStatus: 'CLOSED',
+                        interests: mergedInterests,
                         tags: Array.from(newTags),
                     },
                     update: {
                         leadStatus: 'CLOSED',
+                        interests: mergedInterests,
                         tags: Array.from(newTags),
                     }
                 });
@@ -257,20 +294,23 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 nextStatus = 'WARM';
                 newTags.add('INTERESADO');
             }
-            if (nextStatus !== currentStatus || newTags.size !== currentTags.length) {
+            const interestsChanged = JSON.stringify(mergedInterests) !== JSON.stringify(currentInterests);
+            if (nextStatus !== currentStatus || newTags.size !== currentTags.length || interestsChanged) {
                 await this.prisma.businessMemory.upsert({
                     where: { contactId: payload.contactId },
                     create: {
                         contactId: payload.contactId,
                         leadStatus: nextStatus,
+                        interests: mergedInterests,
                         tags: Array.from(newTags),
                     },
                     update: {
                         leadStatus: nextStatus,
+                        interests: mergedInterests,
                         tags: Array.from(newTags),
                     }
                 });
-                this.logger.log(`[CRM Auto-Pipeline] Lead ${payload.contactId} actualizado de "${currentStatus}" a "${nextStatus}" (Tags: ${Array.from(newTags).join(', ')})`);
+                this.logger.log(`[CRM Auto-Pipeline] Lead ${payload.contactId} actualizado de "${currentStatus}" a "${nextStatus}" (Intereses: ${mergedInterests.join(', ')} | Tags: ${Array.from(newTags).join(', ')})`);
             }
         }
         catch (err) {
@@ -439,6 +479,16 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                     if (!isPaid && !hasVoucherInMsg) {
                         this.logger.warn(`[Shield] Interceptada felicitación prematura de comprobante por LLM para contacto sin pago verificado (${payload.contactId}). Reemplazando por respuesta cordial de espera.`);
                         finalContent = '¡Excelente! Quedo muy atento. En cuanto realices la transferencia o pago, envíame por aquí la captura del comprobante o el número de referencia para confirmarlo de inmediato con el banco y entregarte tu acceso. 🙌✨';
+                    }
+                }
+                const claimsScheduledCall = /(?:te llamo|te llamar[eé]|hacerte una llamada|agendamos una llamada|agendar una llamada|videollamada|reuni[oó]n por zoom|google meet|nos conectamos a las)/i.test(finalContent);
+                if (claimsScheduledCall) {
+                    this.logger.warn(`[Shield] Interceptada promesa de llamada/reunión no autorizada para contacto (${payload.contactId}). Sanitizando a atención exclusiva por WhatsApp.`);
+                    finalContent = finalContent
+                        .replace(/[^.!?\n]*(?:te llamo|te llamar[eé]|hacerte una llamada|agendamos una llamada|agendar una llamada|videollamada|reuni[oó]n por zoom|google meet|nos conectamos a las)[^.!?\n]*[.!?]?/gi, '')
+                        .trim();
+                    if (!finalContent || finalContent.length < 15) {
+                        finalContent = '¡Con mucho gusto! En este momento no contamos con asesores telefónicos disponibles, pero por este medio escrito en WhatsApp te brindamos toda la información, enlaces de demostración y soporte de inmediato. ¿Qué duda te gustaría resolver? 😊';
                     }
                 }
             }

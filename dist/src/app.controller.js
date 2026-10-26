@@ -27,9 +27,9 @@ let AppController = class AppController {
         return {
             status: 'ok',
             service: 'ingenio-ai-core',
-            version: '1.2.0',
-            commit: '012c834-fix-pause-and-waha',
-            updatedAt: '2026-10-26T19:45:00Z',
+            version: '2.0.0',
+            commit: 'crm-ai-2.0-high-precision',
+            updatedAt: '2026-10-26T21:15:00Z',
         };
     }
 };

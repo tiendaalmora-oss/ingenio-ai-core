@@ -25,11 +25,14 @@ export class PromptComposerService {
   compose(input: PromptComposerInput): any[] {
     const { kosBundle, memory, history, conversationSummary, activeGoal, availableSkills, currentMessage, mode, followUpRule } = input;
     
-    // 1. Build System Instructions
-    const systemInstructions = this.buildSystemKOS(kosBundle);
+    // 0. Detectar el producto activo en foco (Dynamic Product Router)
+    const activeProduct = this.resolveActiveProduct(kosBundle, memory, history, currentMessage);
+
+    // 1. Build System Instructions (con priorización del producto en foco)
+    const systemInstructions = this.buildSystemKOS(kosBundle, activeProduct);
     
-    // 2. Build Business Memory (now also receives history and currentMessage to detect funnel stage)
-    const memoryContext = this.buildMemoryContext(memory, history, currentMessage);
+    // 2. Build Business Memory (now also receives history, currentMessage, kosBundle, and activeProduct to detect funnel stage)
+    const memoryContext = this.buildMemoryContext(memory, history, currentMessage, kosBundle, activeProduct);
 
     // 3. Build Summary & Goal Context
     const summaryContext = conversationSummary ? `\n[RESUMEN DE CONVERSACIÓN]\n${conversationSummary}\n` : '';
@@ -54,6 +57,10 @@ export class PromptComposerService {
   * Tu respuesta hacia el usuario debe ser exclusivamente el mensaje final de WhatsApp en español, cálido, conversacional y directo, sin envolverlo en comillas externas.
 - 🛑 PROHIBIDO ESCRIBIR CÓDIGO PYTHON O LLAMADAS DE HERRAMIENTAS EN EL TEXTO: NUNCA escribas "tool_code", "print(default_api...)", "call:update_business_memory..." ni código o bloques entre llaves en tu mensaje de texto. Las herramientas se ejecutan de forma invisible a través de la API nativa de function calling, NUNCA redactándolas como texto para el cliente.
 - 🛑 CERO FILTRACIÓN DE METADATOS O ESTADOS DEL EMBUDO: NUNCA escribas frases de control de pasos como "Paso 1 COMPLETADO", "Paso 2 PENDIENTE", "Estado Paso...", ni reproduzcas las etiquetas de estado del embudo en tu mensaje. El cliente solo debe recibir la conversación humana y el guion comercial.
+- 🛑 PROHIBICIÓN ABSOLUTA DE LLAMADAS, VIDEOLLAMADAS O REUNIONES:
+  * Toda la atención y asesoría comercial se realiza 100% por este chat escrito de WhatsApp.
+  * ESTÁ TERMINANTEMENTE PROHIBIDO ofrecer, proponer o agendar llamadas telefónicas, videollamadas, sesiones por Zoom/Meet o citas a una hora determinada.
+  * Si el cliente solicita una llamada o reunión, indícale con amabilidad que en este momento no hay asesores telefónicos disponibles y que toda la información, demostraciones y soporte se brindan de forma inmediata por este medio escrito.
 - 🛑 REGLA ESTRICTA DE COMPROBANTES HISTÓRICOS:
   * Los comprobantes de pago, imágenes o referencias bancarias que aparezcan en mensajes anteriores del historial corresponden a transacciones pasadas ya entregadas y archivadas.
   * NUNCA envíes felicitaciones ni confirmaciones de pago ("Ya registramos tu comprobante...", "En breves minutos te entregamos tu acceso...") a menos que el mensaje entrante ACTUAL del usuario contenga un nuevo comprobante recién enviado. Si el usuario está enviando una pregunta, consulta o solicitud de compra, responde exclusivamente a su mensaje actual.
@@ -62,17 +69,16 @@ export class PromptComposerService {
 1. SEGUIMIENTO SECUENCIAL ESTRICTO (1 SOLO PASO POR MENSAJE):
    - Cuando un prospecto pregunte o muestre interés por un producto del catálogo (ej: "quiero información de...", "me interesa...", "tienen...?"):
      * Identifica el producto en el catálogo y localiza su "🎯 EMBUDO DE VENTA Y SECUENCIA PASO A PASO".
-     * OBLIGATORIO: Revisa minuciosamente el HISTORIAL de la conversación para determinar en qué paso del embudo se encuentra ese contacto.
-     * Ejecuta estrictamente el paso que corresponde en la secuencia:
-       - PASO 1 (Calificación / Gancho inicial): Si el cliente acaba de iniciar la consulta sobre el producto, saluda cordialmente, valida su interés y hazle la pregunta de calificación correspondiente al Paso 1 (ej: confirmar necesidad o requerimiento puntual).
-        - PASO 2 (Presentación y Beneficios): Una vez que el cliente responde al Paso 1, valida su respuesta con entusiasmo, presenta el contenido y valor de la oferta según el Paso 2 y formula la pregunta de transición.
-        - PASO 3 (Oferta, Precio y Regalos): Si el cliente muestra interés o solicita precios/oferta, presenta la propuesta de valor con su precio y bonos según el Paso 3 del embudo.
-        - PASO 4 (Cierre y Datos de Pago): Si el cliente confirma la compra o solicita cuentas, proporciona los datos bancarios y las instrucciones para enviar el comprobante.
+     * OBLIGATORIO: Revisa minuciosamente el HISTORIAL de la conversación y el [ESTADO DEL EMBUDO] para ejecutar únicamente el paso que corresponde:
+       - PASO 1 (Calificación / Gancho inicial): Si el cliente acaba de iniciar la consulta sobre el producto, saluda cordialmente, valida su interés y hazle la pregunta de calificación correspondiente al Paso 1.
+       - PASO 2 (Presentación y Beneficios): Una vez que el cliente responde al Paso 1, valida su respuesta con entusiasmo, presenta el contenido y valor de la oferta según el Paso 2 (incluyendo los enlaces de demostración o regalo si están en el guion) y formula la pregunta de transición.
+       - PASO 3 (Oferta, Precio y Regalos): Si el cliente muestra interés tras el Paso 2 o solicita precios/oferta directamente, presenta la propuesta de valor con su precio y bonos según el Paso 3 del embudo.
+       - PASO 4 (Cierre y Datos de Pago): Si el cliente confirma la compra o solicita cuentas, proporciona los datos bancarios y las instrucciones para enviar el comprobante.
 
 2. BASE DE CONOCIMIENTO TÉCNICA (SOLO BAJO DEMANDA / PREGUNTAS TÉCNICAS PUNTUALES):
-   - La base de conocimiento técnica de cada producto contiene especificaciones detalladas que SOLO debes consultar y responder cuando el cliente formule una pregunta técnica puntual (ej: formatos de archivo, detalles del temario, requisitos).
+   - La base de conocimiento técnica de cada producto contiene especificaciones detalladas que SOLO debes consultar y responder cuando el cliente formule una pregunta técnica puntual (ej: formatos de archivo, detalles del temario, requisitos, equipos compatibles).
    - NUNCA reemplaces los pasos del embudo comercial por fichas técnicas si el cliente no lo ha solicitado explícitamente.
-   - Tras responder la duda técnica puntual, retoma de inmediato el paso activo del embudo.
+   - Tras responder la duda técnica puntual de forma concisa, retoma de inmediato el paso activo del embudo con su pregunta de avance.
 
 [REGLAS ESTRICTAS DE PROGRESIÓN COMERCIAL Y CIERRE]:
 1. NUNCA REPETIR MENSAJES YA ENVIADOS Y RUPTURA DE BUCLES (LOOP BREAKER):
@@ -91,7 +97,7 @@ export class PromptComposerService {
        -> Responde con calidez, naturalidad y brevedad, indicándole que quedas a su completa disposición cuando esté listo.
      * ⚠️ CERO ASUNCIÓN DE PAGO: Un mensaje de texto ordinario NO constituye pago. NUNCA felicites por la compra, ni des por recibido un pago ficticio, ni entregues enlaces de acceso, credenciales o productos sin comprobante.
 
-3. 📸 CONDICIÓN ÚNICA PARA CONFIRMAR PAGO Y PROCESAR ENTREGA (POST-VENTA):
+3. 📸 CONDICIÓN ÚCA PARA CONFIRMAR PAGO Y PROCESAR ENTREGA (POST-VENTA):
    - La confirmación formal de compra y la entrega de productos, accesos o servicios SOLO se ejecutará cuando:
      a) El cliente envíe una imagen reconocida como '[Comprobante de Pago Detectado]' con datos bancarios válidos, O
      b) El cliente envíe explícitamente el número de referencia bancaria indicando que ya transfirió (ej: "Listo, ya transferí ref 12345678").
@@ -99,28 +105,27 @@ export class PromptComposerService {
 
 4. DETECCIÓN DE COMPROBANTES DE PAGO Y NOTAS DE VOZ:
    - Si el mensaje describe una FOTO GENERAL que NO es un comprobante: responde amablemente al contexto de la foto sin asumir un pago ficticio.
-   - Si el mensaje contiene '[Nota de voz del usuario]': responde con naturalidad a lo expresado en el audio.
+   - Si el mensaje contiene '[Nota de voz del usuario]': responde con naturalidad a lo expresado en el audio y continúa el paso del embudo correspondiente.
 
 5. CLIENTES CON COMPRA CONFIRMADA (POST-VENTA VIP Y RECOMPRA):
    - Si el cliente ya completó una compra verificada, trátalo como cliente VIP de la casa.
    - Si consulta dudas sobre sus accesos o soporte de su compra anterior, asístelo amablemente y con empatía.
    - 🚫 CERO PETICIONES DE COMPROBANTE A CLIENTES QUE YA COMPRARON: Si el cliente ya pagó y tiene su acceso, NUNCA le pidas comprobantes ni capturas para el producto que ya compró. Ante respuestas breves o de cortesía ("Ok en cuenta", "Listo", "Gracias", "Buen día"), responde con un cierre cordial de atención al cliente y deseándole éxito, NUNCA digas "quedo atenta a tu comprobante".
-   - Si el cliente consulta por OTRA materia del catálogo, pide información o dice "Quiero", "1", "Pásame los datos" para un nuevo producto: INICIA DE INMEDIATO el flujo comercial para la nueva materia y proporciónale los datos de pago con total normalidad para concretar su nueva compra. La prohibición de cobrar aplica únicamente para no volver a cobrar el producto que ya pagó, NUNCA para compras de nuevos productos o combos.
+   - Si el cliente consulta por OTRA materia o producto del catálogo, pide información o dice "Quiero", "1", "Pásame los datos" para un nuevo producto: INICIA DE INMEDIATO el flujo comercial para ese nuevo producto y proporciónale los datos de pago con total normalidad para concretar su nueva compra. La prohibición de cobrar aplica únicamente para no volver a cobrar el producto que ya pagó, NUNCA para compras de nuevos productos o combos.
 
 6. SOLICITUD DE ASESOR HUMANO Y RECHAZO / OPT-OUT:
-   - Si el cliente solicita atención con una persona real o asesor: llama a pause_bot_and_handoff con reason: 'HUMAN_REQUESTED' y leadStatus: 'HANDOFF', confirmando amablemente que un asesor humano atenderá el chat.
-   - Si el cliente manifiesta desinterés o pide no recibir más mensajes: llama a pause_bot_and_handoff con reason: 'NOT_INTERESTED' y leadStatus: 'LOST', despidiéndote de forma cordial y respetuosa.
+   - Si el cliente solicita atención con una persona real o asesor: registra en update_business_memory la etiqueta 'SOLICITA_ASESOR' y confirma amablemente que le atenderemos por este mismo medio escrito para resolver su consulta de inmediato.
+   - Si el cliente manifiesta desinterés explícito o pide no recibir más mensajes: despídete de forma cordial y respetuosa.
 
 7. 🛑 ATENCIÓN EXCLUSIVA POR TEXTO Y SEGURIDAD DE ARCHIVOS:
    - ATENCIÓN EXCLUSIVA POR TEXTO: Eres un asistente automatizado que opera ÚNICAMENTE por mensajes de texto en WhatsApp. NO tienes capacidad técnica de enviar imágenes, capturas de pantalla ni documentos adjuntos antes de la venta.
    - 🚫 NUNCA ofrezcas: "¿Quieres que te envíe una muestra?", "¿Te paso una foto?", "Aquí te comparto una imagen", "¿Te gustaría ver cómo se ve?".
    - 🚫 ESTÁ ESTRICTAMENTE PROHIBIDO inventar o simular que envías un archivo escribiendo texto entre corchetes como '[IMAGEN DE...]', '[FOTO...]', '[CAPTURE...]' o cualquier descripción entre corchetes. Esto arruina la credibilidad del negocio.
    - 🔒 BLINDAJE DE ENLACES DE ENTREGA FINAL: Los enlaces de entrega final y acceso al producto pagado completo son EXCLUSIVAMENTE para clientes que ya pagaron y enviaron su comprobante. NUNCA compartas enlaces a carpetas completas de productos pagados como "muestra" no autorizada, ni inventes enlaces inexistentes.
-   - ✅ ENLACES AUTORIZADOS DEL EMBUDO (REGALOS Y PÁGINAS WEB): Si el embudo de un producto o la base de conocimiento incluye expresamente un enlace de regalo gratuito (ej: muestra/diplomas de obsequio en Google Drive) o el enlace de la página web oficial (landing page en os.ingeniodigital.shop), DEBES incluir exactamente el enlace correspondiente tal como está indicado en el guion del embudo.
+   - ✅ ENLACES AUTORIZADOS DEL EMBUDO (REGALOS Y PÁGINAS WEB): Si el embudo de un producto o la base de conocimiento incluye expresamente un enlace de regalo gratuito (ej: muestra/diplomas de obsequio en Google Drive) o el enlace de la página web oficial (landing page en os.ingeniodigital.shop o similar), DEBES incluir exactamente el enlace correspondiente tal como está indicado en el guion del embudo.
    - 💬 CÓMO RESPONDER SI EL CLIENTE PIDE MUESTRAS O FOTOS:
-     * Explica con palabras descriptivas, claras y atractivas las características y beneficios según la información de tu catálogo KOS.
-     * Explica amablemente que por este canal automatizado le brindas todos los detalles y especificaciones por escrito, pero que si desea capturas de pantalla o muestras adicionales antes de concretar, un asesor humano de nuestro equipo con gusto se las enviará directamente a este chat para su total tranquilidad.
-     * Si el cliente insiste en ver capturas antes de pagar: llama a pause_bot_and_handoff con reason: 'HUMAN_REQUESTED' y leadStatus: 'WARM' para que el equipo humano le atienda.\n${toolInstructions}`;
+     * Explica con palabras descriptivas, claras y atractivas las características y beneficios según la información de tu catálogo KOS, y comparte el enlace de la página de demostración si el embudo del producto lo incluye.
+     * Explica amablemente que por este canal le brindas todos los detalles y especificaciones por escrito.\n${toolInstructions}`;
 
     if (mode === PromptMode.FOLLOW_UP) {
       const followUpContext = `\n[MODO: SEGUIMIENTO AUTOMÁTICO ACTIVO (FOLLOW_UP)]\nEstás enviando un mensaje de reactivación proactivo porque el cliente no ha respondido recientemente.\nRegla de seguimiento aplicada: ${JSON.stringify(followUpRule)}\n\n🛑 PROHIBICIÓN ABSOLUTA DE OFRECER MATERIALES, MUESTRAS O ARCHIVOS:\n- NUNCA preguntes ni ofrezcas: "¿Quieres que te envíe el material?", "¿Te paso material?", "¿Quieres ver una muestra?", "¿Te gustaría que te comparta algo?".\n- El bot NO envía material antes de la compra ni ofrece descargas previas.\n- Si ofreces enviar material y el cliente responde "sí, envíamelo", se rompe el flujo comercial porque el material solo se entrega tras confirmar el pago.\n- El objetivo del seguimiento es reactivar el interés con preguntas sencillas de baja fricción (dudas sobre la propuesta, necesidad puntual, tiempo para revisar la información o método de pago), SIN ofrecer enviar nada.\n`;
@@ -178,7 +183,7 @@ export class PromptComposerService {
         : '';
 
       const leadState = memory?.leadStatus || 'COLD';
-      const interestedProduct = memory?.interests?.[0] || 'la propuesta comercial';
+      const interestedProduct = activeProduct?.nombre || activeProduct?.name || memory?.interests?.[0] || 'la propuesta comercial';
 
       messages.push({
         role: 'user',
@@ -216,9 +221,12 @@ ${ruleText}
 - ✨ TONO: Espontáneo, humano, empático, adaptado a la identidad y tono del negocio configurado en KOS, sin sonar jamás como un robot de cobranza ni presionar.`
       });
     } else if (currentMessage) {
-      // Only append if it's not the last message in history
-      const lastMsg = history.length > 0 ? history[history.length - 1] : null;
-      if (!lastMsg || lastMsg.content !== currentMessage) {
+      // Evitar duplicar el mensaje del usuario si ya está registrado en el historial (incluso si después hubo un TOOL_CALL / TOOL_RESULT)
+      const userMessagesInHistory = history.filter(
+        (h: any) => h.role === 'user' || (h.direction === 'INBOUND' && h.type !== 'TOOL_RESULT' && h.role !== 'tool')
+      );
+      const lastUserMsg = userMessagesInHistory.length > 0 ? userMessagesInHistory[userMessagesInHistory.length - 1] : null;
+      if (!lastUserMsg || lastUserMsg.content !== currentMessage) {
         messages.push({
           role: 'user',
           content: currentMessage
@@ -228,8 +236,99 @@ ${ruleText}
     
     return messages;
   }
+
+  /**
+   * Normaliza texto eliminando tildes y signos para comparaciones deterministas de catálogo.
+   */
+  private normalizeText(text: string): string {
+    return (text || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  /**
+   * Detecta dinámicamente cuál es el producto del catálogo KOS que está actualmente en foco
+   * evaluando: 1) mensaje actual del cliente, 2) memoria de intereses, 3) últimos mensajes entrantes.
+   */
+  private resolveActiveProduct(kosBundle: any, memory: BusinessMemory | null, history: any[] = [], currentMessage?: string | null): any | null {
+    const productsData = kosBundle?.products?.items || kosBundle?.productos;
+    const items: any[] = Array.isArray(productsData) ? productsData : [];
+    if (items.length === 0) return null;
+    if (items.length === 1) return items[0];
+
+    const stopWords = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'en', 'con', 'para', 'por', 'un', 'una', 'kit', 'mega', 'pack', 'sistema', 'metodo', 'curso', 'programa', 'pro', '2025', '2026', 'control', 'docente']);
+
+    const matchProductInText = (rawText: string): any | null => {
+      const normText = this.normalizeText(rawText);
+      if (!normText) return null;
+
+      // 1. Coincidencia por nombre completo normalizado
+      for (const item of items) {
+        const prodName = this.normalizeText(item.nombre || item.name || '');
+        if (prodName && normText.includes(prodName)) {
+          return item;
+        }
+      }
+
+      // 2. Coincidencia por palabras clave distintivas del nombre o categoría
+      let bestMatch: any = null;
+      let bestScore = 0;
+
+      for (const item of items) {
+        const prodName = this.normalizeText(item.nombre || item.name || '');
+        const prodCat = this.normalizeText(item.categoria || item.category || '');
+        const tokens = `${prodName} ${prodCat}`
+          .split(' ')
+          .filter(t => t.length >= 3 && !stopWords.has(t));
+
+        let score = 0;
+        for (const token of tokens) {
+          const regex = new RegExp(`\\b${token}`, 'i');
+          if (regex.test(normText)) {
+            score += token.length >= 5 ? 2 : 1;
+          }
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = item;
+        }
+      }
+
+      return bestScore > 0 ? bestMatch : null;
+    };
+
+    // Prioridad 1: Mensaje entrante actual (si menciona explícitamente un producto, ej: anuncio de Facebook)
+    if (currentMessage) {
+      const fromCurrent = matchProductInText(currentMessage);
+      if (fromCurrent) return fromCurrent;
+    }
+
+    // Prioridad 2: Últimos mensajes entrantes del usuario en la conversación
+    const inboundHistory = [...(history || [])]
+      .filter((h: any) => h.direction === 'INBOUND' || h.role === 'user')
+      .reverse();
+    for (const msg of inboundHistory.slice(0, 5)) {
+      const fromHistory = matchProductInText(msg.content || '');
+      if (fromHistory) return fromHistory;
+    }
+
+    // Prioridad 3: Intereses registrados en BusinessMemory (interests[0] es el más reciente)
+    if (memory?.interests && Array.isArray(memory.interests)) {
+      for (const interest of memory.interests) {
+        const fromMemory = matchProductInText(interest);
+        if (fromMemory) return fromMemory;
+      }
+    }
+
+    return null;
+  }
   
-  private buildSystemKOS(kosBundle: any): string {
+  private buildSystemKOS(kosBundle: any, activeProduct?: any | null): string {
     let result = '[CONOCIMIENTO DEL NEGOCIO Y CONFIGURACIÓN COMERCIAL (KOS)]\n';
     if (!kosBundle) return result;
 
@@ -249,16 +348,25 @@ ${ruleText}
       result += `### 🎯 ESTRATEGIA Y ENRUTAMIENTO GENERAL:\n${typeof routingContent === 'string' ? routingContent : JSON.stringify(routingContent, null, 2)}\n\n`;
     }
 
-    // 3. Catálogo de Productos y sus Embudos de Venta Paso a Paso
+    // 3. Catálogo de Productos y sus Embudos de Venta Paso a Paso (con Enrutamiento Dinámico en Foco)
     const productsData = kosBundle.products?.items || kosBundle.productos;
     if (productsData) {
       result += `### 📦 CATÁLOGO DE PRODUCTOS Y SUS EMBUDOS DE VENTA PASO A PASO (FUENTE ÚNICA DE VERDAD):\n`;
       result += `REGLA ESTRICTA DE CATÁLOGO: Este catálogo es la Fuente Única de Verdad de los productos autorizados para la venta. El bot comercializa única y exclusivamente los productos aquí listados. Cualquier materia o producto no listado aquí se considera no disponible.\n`;
       const items = Array.isArray(productsData) ? productsData : [];
+
+      if (activeProduct) {
+        const activeName = activeProduct.nombre || activeProduct.name;
+        result += `\n🎯 [PRODUCTO ACTIVO EN FOCO EN ESTA CONVERSACIÓN]: "${activeName}"\n`;
+        result += `🛑 DIRECTIVA DE FOCO: El cliente está consultando actualmente por "${activeName}". Utiliza EXCLUSIVAMENTE el embudo, precios, enlaces y beneficios de "${activeName}". NO mezcles información de otros productos a menos que el cliente pregunte expresamente por otro.\n`;
+      }
+
       if (items.length > 0) {
         items.forEach((p: any, i: number) => {
+          const pName = p.nombre || p.name || 'Sin nombre';
+          const isFocused = activeProduct && (pName === (activeProduct.nombre || activeProduct.name));
           result += `\n========================================\n`;
-          result += `📦 PRODUCTO #${i + 1}: ${p.nombre || p.name || 'Sin nombre'}\n`;
+          result += `📦 PRODUCTO #${i + 1}${isFocused ? ' ⭐ [PRODUCTO ACTIVO DEL CLIENTE]' : ''}: ${pName}\n`;
           if (p.categoria || p.category) result += `  - Categoría: ${p.categoria || p.category}\n`;
           
           const funnel = p.embudoVenta || p.secuenciaVenta || p.descripcion || p.description;
@@ -312,30 +420,50 @@ ${ruleText}
     return result;
   }
   
-  private buildMemoryContext(memory: BusinessMemory | null, history?: any[], currentMessage?: string | null): string {
-    if (!memory) return '[BUSINESS MEMORY]: Ninguna memoria previa detectada.\n[ESTADO DEL EMBUDO]: INICIO — El cliente está llegando por primera vez. Inicia con saludo y calificación.';
+  private buildMemoryContext(
+    memory: BusinessMemory | null,
+    history?: any[],
+    currentMessage?: string | null,
+    kosBundle?: any,
+    activeProduct?: any | null
+  ): string {
+    const activeProductName = activeProduct ? (activeProduct.nombre || activeProduct.name) : null;
+    const focusLine = activeProductName
+      ? `\n- 🎯 Producto Activo en Foco: ${activeProductName} (Mantén la conversación sobre este producto y su embudo)`
+      : '';
+
+    if (!memory && (!history || history.length === 0)) {
+      return `[BUSINESS MEMORY]: Ninguna memoria previa detectada.${focusLine}\n[ESTADO DEL EMBUDO]: INICIO — El cliente está llegando por primera vez. Inicia con saludo y calificación (Paso 1).`;
+    }
     
-    const baseMemory = `[BUSINESS MEMORY]:
+    const baseMemory = memory
+      ? `[BUSINESS MEMORY]:
 - Nombre: ${memory.name || 'Desconocido'}
 - Empresa: ${memory.company || 'Desconocida'}
-- Intereses: ${memory.interests?.join(', ') || 'Ninguno'}
+- Intereses: ${memory.interests?.join(', ') || activeProductName || 'Ninguno'}${focusLine}
 - Última interacción: ${memory.lastInteraction ? memory.lastInteraction.toISOString() : 'Desconocida'}
 - Estado del Lead: ${memory.leadStatus || 'Desconocido'}
 - Objeciones: ${memory.objections?.join(', ') || 'Ninguna'}
-- Tags: ${memory.tags?.join(', ') || 'Ninguno'}`;
+- Tags: ${memory.tags?.join(', ') || 'Ninguno'}`
+      : `[BUSINESS MEMORY]: Sin registro previo en CRM.${focusLine}`;
 
     // Detectar el paso del embudo basado en el historial de la conversación
-    const funnelState = this.detectFunnelState(history || [], memory, currentMessage);
+    const funnelState = this.detectFunnelState(history || [], memory, currentMessage, kosBundle, activeProduct);
     
     return `${baseMemory}\n\n${funnelState}`;
   }
 
   /**
-   * Detecta automáticamente en qué paso del embudo se encuentra el cliente
-   * analizando el historial de mensajes OUTBOUND del ciclo activo de venta.
-   * Retorna una sección [ESTADO DEL EMBUDO] para inyectar en el sistema prompt.
+   * Detecta de forma determinista y sin falsos positivos en qué paso del embudo se encuentra el cliente
+   * analizando el historial de mensajes OUTBOUND del ciclo activo de venta y las señales del catálogo.
    */
-  private detectFunnelState(history: any[], memory: BusinessMemory | null, currentMessage?: string | null): string {
+  private detectFunnelState(
+    history: any[],
+    memory: BusinessMemory | null,
+    currentMessage?: string | null,
+    kosBundle?: any,
+    activeProduct?: any | null
+  ): string {
     // 1. Detectar si hubo un comprobante o pago confirmado en el historial previo
     let lastPaymentIdx = -1;
     for (let i = history.length - 1; i >= 0; i--) {
@@ -357,7 +485,9 @@ ${ruleText}
     const activeHistory = lastPaymentIdx >= 0 ? history.slice(lastPaymentIdx + 1) : history;
 
     const outbound = activeHistory.filter((h: any) => 
-      h.direction === 'OUTBOUND' || h.role === 'assistant'
+      (h.direction === 'OUTBOUND' || h.role === 'assistant') &&
+      h.type !== 'TOOL_CALL' &&
+      (h.content || '').trim().length > 0
     );
 
     const memStatus = (memory?.leadStatus || '').toUpperCase();
@@ -369,48 +499,48 @@ ${ruleText}
                    memTags.some(t => ['PAGO_CONFIRMADO', 'COMPROBANTE_RECIBIDO', 'PAGADO', 'CLIENTE', 'ACCESO_ENTREGADO', 'VENTA_CERRADA'].includes(t)) ||
                    history.some((h: any) => (h.content || '').includes('Comprobante de Pago Detectado') || (h.content || '').includes('Venta manual confirmada'));
 
-    // Señales detectadas en los mensajes OUTBOUND del ciclo activo
-    // Paso 1 está COMPLETADO si el bot ya envió al menos un mensaje en este ciclo activo
-    // (el micro-filtro / saludo inicial) o si contiene preguntas de filtro o saludo
-    const paso1Done = outbound.length >= 1 || outbound.some((h: any) => {
-      const c = (h.content || '').toLowerCase();
-      return c.includes('?') || c.includes('¿') || c.includes('hola') || c.includes('saludarte') ||
-             c.includes('qué año') || c.includes('que año') || c.includes('que materia') || 
-             c.includes('cuéntame') || c.includes('entrenas') || c.includes('atiende');
-    });
+    // Paso 1 está COMPLETADO si el bot ya envió al menos un mensaje conversacional en este ciclo activo
+    const paso1Done = outbound.length >= 1;
     
-    // Paso 2 (Presentación del kit, rutinas, módulos, contenido o beneficios de cualquier producto)
-    const paso2Done = outbound.some((h: any) => {
+    // Paso 2 (Presentación de valor, contenido, módulos, beneficios o enlace de demostración)
+    // Requiere estructura de presentación real (no simples saludos cortos)
+    const paso2Raw = outbound.some((h: any) => {
       const c = (h.content || '').toLowerCase();
+      if (c.length < 80 && !c.includes('mega kit') && !c.includes('ingeniodigital.shop')) return false;
       return c.includes('todo lo que recibes') || c.includes('evaluaciones') || 
              c.includes('planificaciones') || c.includes('mega kit') || 
              c.includes('kit docente') || c.includes('beneficios') ||
              c.includes('regalos exclusivos') || c.includes('te gustaría ver') ||
              c.includes('mega pack') || c.includes('rutinas') || c.includes('módulos') ||
              c.includes('modulos') || c.includes('acceso de por vida') ||
-             c.includes('organizado en') || c.includes('drive') || c.includes('incluye') ||
-             c.includes('ingeniodigital.shop') || c.includes('gifs');
+             c.includes('organizado en') || c.includes('ingeniodigital.shop') ||
+             c.includes('inventario') || c.includes('facturación') || c.includes('facturacion') ||
+             c.includes('control total') || c.includes('sistema') || c.includes('incluye:');
     });
     
-    // Paso 3 (Oferta irresistible, precio, costo o inversión comercial)
-    const paso3Done = outbound.some((h: any) => {
+    // Paso 3 (Oferta comercial con monto numérico y divisa explícita o condiciones de precio/inversión)
+    // Evita falsos positivos cuando solo se menciona la palabra "precio" en una pregunta de transición
+    const paso3Raw = outbound.some((h: any) => {
       const c = (h.content || '').toLowerCase();
-      return c.includes('precio') || c.includes('hoy:') || c.includes('pago único') || 
-             c.includes('pago unico') || c.includes('bs.') || c.includes('usd') || 
-             c.includes('binance') || c.includes('zinli') || c.includes('garantía') || 
-             c.includes('garantia') || c.includes('lanzamiento') || c.includes('inversión') ||
-             c.includes('inversion') || c.includes('costo') || c.includes('oferta');
+      const hasExplicitPriceQuote = /(?:\d+[\s.,]*\d*\s*(?:bs|bolivares|usd|usdt|\$|dolares))|(?:\$\s*\d+)/i.test(c);
+      const hasOfferBlock = (c.includes('pago único') || c.includes('pago unico') || c.includes('precio promocional') || c.includes('inversión única') || c.includes('inversion unica')) && !c.endsWith('precio?');
+      return hasExplicitPriceQuote || hasOfferBlock;
     });
     
-    // Paso 4 (Datos de pago, cuentas bancarias o billeteras entregadas)
-    const paso4Done = outbound.some((h: any) => {
+    // Paso 4 (Coordenadas bancarias o datos de pago reales entregados)
+    // Evita falsos positivos con frases como "ten en cuenta" o "cuentas por cobrar"
+    const paso4Raw = outbound.some((h: any) => {
       const c = (h.content || '').toLowerCase();
-      return c.includes('datos de pago') || c.includes('banco') || c.includes('pago móvil') ||
-             c.includes('pago movil') || c.includes('transferencia') || c.includes('cédula') ||
-             c.includes('cedula') || c.includes('titular') || c.includes('cuenta') ||
-             c.includes('escribe quiero') || c.includes('escribe "quiero"') ||
-             c.includes('0102') || c.includes('usdt');
+      return c.includes('datos de pago') || c.includes('pago móvil') ||
+             c.includes('pago movil') || c.includes('cédula:') || c.includes('cedula:') ||
+             c.includes('titular:') || c.includes('0102') || c.includes('rif:') ||
+             (c.includes('banco') && (c.includes('cédula') || c.includes('cedula') || c.includes('teléfono') || c.includes('telefono') || c.includes('0412') || c.includes('0414') || c.includes('0424')));
     });
+
+    // Garantizar monotonicidad lógica de etapas (si ya entregó datos de pago -> pasos 1..3 completados; si ya cotizó precio -> pasos 1..2 completados)
+    const paso4Done = paso4Raw;
+    const paso3Done = paso3Raw || paso4Done;
+    const paso2Done = paso2Raw || paso3Done;
 
     // Detectar si un cliente pagador está consultando soporte o en proceso de RECOMPRA / VENTA CRUZADA
     const recentInboundText = [
@@ -427,6 +557,25 @@ ${ruleText}
       recentInboundText.includes('acceso al drive') ||
       recentInboundText.includes('mi correo') ||
       recentInboundText.includes('no puedo descargar');
+
+    // Extraer palabras clave dinámicas de todos los productos del tenant
+    const dynamicProductKeywords: string[] = [];
+    const productsData = kosBundle?.products?.items || kosBundle?.productos;
+    if (Array.isArray(productsData)) {
+      for (const p of productsData) {
+        const pName = this.normalizeText(p.nombre || p.name || '');
+        if (pName) {
+          dynamicProductKeywords.push(pName);
+          for (const token of pName.split(' ')) {
+            if (token.length >= 4 && !['para', 'como', 'este', 'todo', '2025', '2026'].includes(token)) {
+              dynamicProductKeywords.push(token);
+            }
+          }
+        }
+      }
+    }
+
+    const normRecentInbound = this.normalizeText(recentInboundText);
 
     const hasBuyOrProductIntent = 
       recentInboundText.includes('quiero') ||
@@ -446,15 +595,23 @@ ${ruleText}
       recentInboundText.includes('biologia') || recentInboundText.includes('biología') ||
       recentInboundText.includes('ingles') || recentInboundText.includes('inglés') ||
       recentInboundText.includes('preescolar') || recentInboundText.includes('bachillerato') ||
+      recentInboundText.includes('repuestera') || recentInboundText.includes('farmacia') ||
+      recentInboundText.includes('entrenador') || recentInboundText.includes('gym') ||
       recentInboundText.includes('combo') || recentInboundText.includes('otro kit') ||
-      recentInboundText.includes('otra materia');
+      recentInboundText.includes('otra materia') ||
+      dynamicProductKeywords.some(kw => kw.length >= 4 && normRecentInbound.includes(kw));
 
     const isRepurchaseOrNewInquiry = isPaid && hasBuyOrProductIntent && !isSupportInquiry;
+    const activeProductName = activeProduct ? (activeProduct.nombre || activeProduct.name) : null;
 
     let stateLines: string[] = [
       '[METADATO INTERNO DEL SISTEMA - ESTADO DEL EMBUDO]:',
       '🛑 CONFIDENCIAL / PROHIBIDO CITAR AL CLIENTE: Las siguientes líneas son notas internas del CRM para tu control de flujo. JAMÁS las transcribas, copies ni menciones en tu mensaje al cliente. PROHIBIDO razonar en inglés o citar estos estados en voz alta: utilízalos internamente para seleccionar tu respuesta directa en español.',
     ];
+
+    if (activeProductName) {
+      stateLines.push(`🎯 Producto en Foco: ${activeProductName}`);
+    }
     
     stateLines.push(paso1Done ? 'Estado Paso 1: COMPLETADO (Calificación inicial ya realizada).' : 'Estado Paso 1: PENDIENTE (Calificación inicial).');
     stateLines.push(paso2Done ? 'Estado Paso 2: COMPLETADO (Presentación del producto ya enviada).' : 'Estado Paso 2: PENDIENTE (Presentación del producto).');
@@ -497,13 +654,13 @@ ${ruleText}
 - Si el cliente dice "ok", "gracias", "ahora pago", "hoy puedo pagarlo", "voy a transferir", "dame chance" o promesas similares a futuro: confirma brevemente con calidez que quedas muy atento a su comprobante cuando realice la transferencia. 🚫 PROHIBICIÓN ABSOLUTA: JAMÁS envíes felicitaciones ni confirmaciones de pago ("Ya registramos tu comprobante...", "En breves minutos te entregamos tu acceso...") ni asumas que ya pagó hasta que el cliente realmente envíe la captura o la referencia bancaria en el chat.
 - 🚫 PROHIBIDO: Volver a presentar el producto completo, los beneficios detallados ni el precio si ya fueron enviados.`;
     } else if (paso3Done) {
-      instruction = `\n⏳ CLIENTE EN ETAPA DE CIERRE — La oferta y precio ya fueron presentados.\n🛑 INSTRUCCIÓN: Continúa hacia el Paso 4. Si el cliente acepta o pregunta cómo pagar, entrega los datos de pago del producto de su interés.`;
+      instruction = `\n⏳ CLIENTE EN ETAPA DE CIERRE — La oferta y precio ya fueron presentados.\n🛑 INSTRUCCIÓN: Continúa hacia el Paso 4. Si el cliente acepta, confirma interés o pregunta cómo pagar, entrega de inmediato los datos de pago oficiales del producto${activeProductName ? ` "${activeProductName}"` : ''}.`;
     } else if (paso2Done) {
-      instruction = `\n⏳ CLIENTE EN ETAPA DE PRESENTACIÓN — El producto ya fue presentado.\n🛑 INSTRUCCIÓN: Continúa hacia el Paso 3. Presenta la oferta con precio y bonos si el cliente muestra interés.`;
+      instruction = `\n⏳ CLIENTE EN ETAPA DE PRESENTACIÓN — El producto ya fue presentado.\n🛑 INSTRUCCIÓN: Continúa hacia el Paso 3. Presenta ahora la oferta con precio promocional, bonos y garantía de "${activeProductName || 'el producto en foco'}". NO vuelvas a repetir la presentación del Paso 2.`;
     } else if (paso1Done) {
-      instruction = `\n⏳ CLIENTE CALIFICADO — La pregunta de calificación ya fue realizada.\n🛑 INSTRUCCIÓN: Continúa hacia el Paso 2. Presenta el contenido y valor del kit según la respuesta del cliente.`;
+      instruction = `\n⏳ CLIENTE CALIFICADO — La pregunta de calificación (Paso 1) ya fue realizada.\n🛑 INSTRUCCIÓN: Continúa hacia el Paso 2. Valida la respuesta del cliente y presenta los beneficios, estructura y enlace de demostración de "${activeProductName || 'el producto en foco'}" según el Paso 2 de su embudo.`;
     } else {
-      instruction = `\n🛑 INSTRUCCIÓN: Inicia el embudo desde el Paso 1. Saluda y realiza la pregunta de calificación.`;
+      instruction = `\n🛑 INSTRUCCIÓN: El cliente está llegando por primera vez. Inicia el embudo desde el Paso 1${activeProductName ? ` para "${activeProductName}"` : ''}. Saluda cordialmente y realiza la pregunta de calificación del Paso 1.`;
     }
 
     stateLines.push(instruction);
@@ -515,14 +672,13 @@ ${ruleText}
 [INSTRUCCIONES DE TOOLS - ETIQUETADO Y CRM AUTOMÁTICO]:
 Tienes acceso a herramientas esenciales que puedes usar para registrar datos en el CRM:
 - update_business_memory: Úsala para registrar intereses del cliente, etiquetas o su nivel de avance en la compra:
-  * interests: Agrega el nombre del producto o servicio consultado (ej: ["Plan Premium"], ["Servicio A"]).
+  * interests: Agrega el nombre exacto del producto o servicio consultado (ej: ["REPUESTERA EN CONTROL 2026"], ["Física"]).
   * leadStatus: Clasifica el estado de venta ("COLD", "WARM", "HOT"). 🛑 REGLA INQUEBRANTABLE: NUNCA clasifiques a un lead como "CLOSED" ni uses la etiqueta "PAGO_CONFIRMADO" por promesas futuras de pago ("hoy puedo pagarlo", "mañana transfiero", "voy a pagar"). Si el cliente dice que pagará más tarde, clasifícalo como "HOT" con la etiqueta "ESPERA_DE_PAGO".
   * tags: Etiquetas relevantes (ej: ["INTERESADO_PRODUCTO", "PIDIO_PRECIO", "ESPERA_DE_PAGO", etc.]).
   * name, company, objections: Datos adicionales relevantes.
-- create_task: Para tareas o recordatorios internos.
-- schedule_meeting: Solo cuando el cliente acepte expresamente una reunión.
+- create_task: Para tareas o recordatorios internos del equipo comercial.
 
-REGLA OBLIGATORIA: Siempre debes responder de forma amable, profesional y persuasiva al mensaje del usuario en lenguaje natural. Nunca te pauses ni te despidas diciendo que transferirás a un asesor por saludos o preguntas de anuncios ("¿Hay alguien con quien pueda chatear?", "Quiero más información", etc.). Atiende al usuario de inmediato y llévalo a través del proceso de venta. Nunca dejes al usuario sin respuesta.`;
+REGLA OBLIGATORIA: Siempre debes responder de forma amable, profesional y persuasiva al mensaje del usuario en lenguaje natural. Nunca te pauses ni te despidas diciendo que transferirás a un asesor por saludos o preguntas de anuncios ("¿Hay alguien con quien pueda chatear?", "Quiero más información", etc.). Atiende al usuario de inmediato y llévalo a través del proceso de venta por este mismo chat escrito. Nunca dejes al usuario sin respuesta.`;
   }
   
   private buildHistory(history: Interaction[]): any[] {

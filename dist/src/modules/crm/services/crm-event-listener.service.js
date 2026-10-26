@@ -28,24 +28,57 @@ let CrmEventListenerService = CrmEventListenerService_1 = class CrmEventListener
             const before = await this.prisma.businessMemory.findUnique({
                 where: { contactId: payload.contactId },
             });
+            const mergedInterests = updates.interests !== undefined
+                ? Array.from(new Set([
+                    ...(Array.isArray(updates.interests) ? updates.interests : []),
+                    ...(before?.interests || []),
+                ].map(s => String(s).trim()).filter(Boolean)))
+                : undefined;
+            const mergedObjections = updates.objections !== undefined
+                ? Array.from(new Set([
+                    ...(before?.objections || []),
+                    ...(Array.isArray(updates.objections) ? updates.objections : []),
+                ].map(s => String(s).trim()).filter(Boolean)))
+                : undefined;
+            const mergedTags = updates.tags !== undefined
+                ? Array.from(new Set([
+                    ...(before?.tags || []),
+                    ...(Array.isArray(updates.tags) ? updates.tags : []),
+                ].map(s => String(s).trim()).filter(Boolean)))
+                : undefined;
+            const statusRank = {
+                NEW: 0, COLD: 1, CONTACTED: 1, WARM: 2, HOT: 3, OFFER: 3, DEMO: 3, SALE: 4, CLOSED: 4, CLIENT: 4,
+            };
+            let resolvedLeadStatus = updates.leadStatus;
+            if (resolvedLeadStatus && before?.leadStatus) {
+                const prevUpper = before.leadStatus.toUpperCase();
+                const nextUpper = String(resolvedLeadStatus).toUpperCase();
+                if (nextUpper !== 'LOST' && nextUpper !== 'HANDOFF') {
+                    const prevRank = statusRank[prevUpper] ?? 0;
+                    const nextRank = statusRank[nextUpper] ?? 0;
+                    if (prevRank > nextRank) {
+                        resolvedLeadStatus = before.leadStatus;
+                    }
+                }
+            }
             await this.prisma.businessMemory.upsert({
                 where: { contactId: payload.contactId },
                 update: {
                     ...(updates.name !== undefined && { name: updates.name }),
                     ...(updates.company !== undefined && { company: updates.company }),
-                    ...(updates.interests !== undefined && { interests: updates.interests }),
-                    ...(updates.objections !== undefined && { objections: updates.objections }),
-                    ...(updates.leadStatus !== undefined && { leadStatus: updates.leadStatus }),
-                    ...(updates.tags !== undefined && { tags: updates.tags }),
+                    ...(mergedInterests !== undefined && { interests: mergedInterests }),
+                    ...(mergedObjections !== undefined && { objections: mergedObjections }),
+                    ...(resolvedLeadStatus !== undefined && { leadStatus: resolvedLeadStatus }),
+                    ...(mergedTags !== undefined && { tags: mergedTags }),
                 },
                 create: {
                     contactId: payload.contactId,
                     name: updates.name,
                     company: updates.company,
-                    interests: updates.interests || [],
-                    objections: updates.objections || [],
-                    leadStatus: updates.leadStatus,
-                    tags: updates.tags || [],
+                    interests: mergedInterests || [],
+                    objections: mergedObjections || [],
+                    leadStatus: resolvedLeadStatus,
+                    tags: mergedTags || [],
                 },
             });
             this.logger.debug(`BusinessMemory upserted for contactId=${payload.contactId}`);

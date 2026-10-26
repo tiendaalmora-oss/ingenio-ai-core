@@ -62,10 +62,12 @@ export class ToolCallListenerService {
 
           this.logger.log(`Actualizando memoria de ${payload.contactId} con: ${JSON.stringify(toolArgs)}`);
           this.logger.debug(`Emitting memory.updated for contactId=${payload.contactId}`);
-          this.eventEmitter.emit(
-            'memory.updated',
-            new MemoryUpdatedEvent(payload.tenantId, payload.contactId, toolArgs)
-          );
+          const memoryEvent = new MemoryUpdatedEvent(payload.tenantId, payload.contactId, toolArgs);
+          if (typeof (this.eventEmitter as any).emitAsync === 'function') {
+            await (this.eventEmitter as any).emitAsync('memory.updated', memoryEvent);
+          } else {
+            this.eventEmitter.emit('memory.updated', memoryEvent);
+          }
           toolResultStr = JSON.stringify({ status: 'success', message: 'Business Memory actualizada en CRM.' });
           break;
 

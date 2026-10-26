@@ -16,6 +16,8 @@ export interface PromptComposerInput {
 }
 export declare class PromptComposerService {
     compose(input: PromptComposerInput): any[];
+    private normalizeText;
+    private resolveActiveProduct;
     private buildSystemKOS;
     private buildMemoryContext;
     private detectFunnelState;

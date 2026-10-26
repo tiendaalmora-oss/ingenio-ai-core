@@ -7,6 +7,8 @@ export declare class ReceiveMessageService {
     private readonly eventEmitter;
     private readonly logger;
     private readonly recentMessages;
+    private readonly pendingBursts;
     constructor(conversationRepo: IConversationRepository, interactionRepo: IInteractionRepository, eventEmitter: EventEmitter2);
     execute(tenantId: string, externalId: string, content: string, pushName?: string): Promise<void>;
+    private flushBurst;
 }
