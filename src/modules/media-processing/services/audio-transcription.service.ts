@@ -166,7 +166,7 @@ export class AudioTranscriptionService {
           ? 'https://generativelanguage.googleapis.com/v1beta/openai' 
           : 'https://openrouter.ai/api/v1');
 
-        const model = process.env.AI_MODEL || 'google/gemini-2.5-flash-lite';
+        const model = process.env.AI_AUDIO_MODEL || 'google/gemini-2.5-flash-lite';
         const base64Audio = audioBuffer.toString('base64');
         
         let format = 'ogg';
