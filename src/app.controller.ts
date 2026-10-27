@@ -20,9 +20,9 @@ export class AppController {
     return {
       status: 'ok',
       service: 'ingenio-ai-core',
-      version: '2.0.0',
-      commit: 'crm-ai-2.0-high-precision',
-      updatedAt: '2026-10-26T21:15:00Z',
+      version: '2.0.1',
+      commit: '353754e-openrouter-routing-and-handoff-sales',
+      updatedAt: '2026-10-27T23:35:00Z',
     };
   }
 }
