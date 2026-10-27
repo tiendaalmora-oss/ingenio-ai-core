@@ -24,6 +24,15 @@ export class OpenAiCompatibleProvider extends IAiProvider {
       messages,
     };
 
+    // Enrutamiento inteligente de infraestructura en OpenRouter (prioriza ultra baja latencia y alta velocidad)
+    if (this.providerName.toLowerCase().includes('openrouter')) {
+      const orderEnv = process.env.AI_PROVIDER_ORDER || 'CoreWeave,Inference.net';
+      body.provider = {
+        order: orderEnv.split(',').map((p) => p.trim()),
+        allow_fallbacks: true,
+      };
+    }
+
     // Si toolChoice es 'none' o no se requieren herramientas, omitir tools para modo texto puro
     if (options?.tools && options.tools.length > 0 && options.toolChoice !== 'none') {
       body.tools = options.tools;
