@@ -240,7 +240,7 @@ function matchProductFromCatalog(
   }
 
   // 5. Búsqueda por palabras significativas compartidas (>= 4 caracteres no triviales)
-  const stopWords = new Set(['PARA', 'DE', 'DEL', 'LOS', 'LAS', 'CON', 'DOCENTE', 'BACHILLERATO', 'VENEZUELA', 'KIT', 'MEGA', 'PRODUCTO']);
+  const stopWords = new Set(['PARA', 'DE', 'DEL', 'LOS', 'LAS', 'CON', 'DOCENTE', 'BACHILLERATO', 'VENEZUELA', 'KIT', 'MEGA', 'PRODUCTO', 'SISTEMA', 'METODO', 'CONTROL', '2025', '2026']);
   for (const cand of candidates) {
     const candWords = normalizeText(cand)
       .split(/[\s,.-]+/)
@@ -536,14 +536,10 @@ export class AnalyticsService {
             id: true,
             interactions: {
               where: {
-                OR: [
-                  { content: { contains: 'Comprobante de Pago Detectado' } },
-                  { content: { contains: '📸' } },
-                  { type: 'IMAGE' },
-                ],
+                content: { contains: 'Comprobante de Pago Detectado' },
               },
               orderBy: { timestamp: 'desc' },
-              take: 3,
+              take: 5,
             },
           },
           orderBy: { id: 'desc' },
