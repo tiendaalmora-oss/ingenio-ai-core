@@ -20,6 +20,8 @@ const conversation_1 = require("../../conversation");
 const response_generated_event_1 = require("../events/out/response-generated.event");
 const tool_called_event_1 = require("../events/out/tool-called.event");
 const prisma_service_1 = require("../../../shared/database/prisma.service");
+const telegram_alert_util_1 = require("../../../shared/utils/telegram-alert.util");
+const push_notification_service_1 = require("../../notifications/push-notification.service");
 const funnel_engine_service_1 = require("../../funnel-engine/funnel-engine.service");
 const runtime_engine_service_1 = require("../../funnel-engine/runtime/runtime-engine.service");
 const response_sanitizer_1 = require("../utils/response-sanitizer");
@@ -30,17 +32,19 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
     prisma;
     funnelEngine;
     runtimeEngine;
+    pushNotificationService;
     logger = new common_1.Logger(LlmListenerService_1.name);
     loopDepths = new Map();
     MAX_LOOP_DEPTH = 5;
     LOOP_RESET_MS = 30_000;
-    constructor(contextBuilder, hermesClient, eventEmitter, prisma, funnelEngine, runtimeEngine) {
+    constructor(contextBuilder, hermesClient, eventEmitter, prisma, funnelEngine, runtimeEngine, pushNotificationService) {
         this.contextBuilder = contextBuilder;
         this.hermesClient = hermesClient;
         this.eventEmitter = eventEmitter;
         this.prisma = prisma;
         this.funnelEngine = funnelEngine;
         this.runtimeEngine = runtimeEngine;
+        this.pushNotificationService = pushNotificationService;
     }
     async handleInteraction(payload) {
         this.logger.log(`Executive Loop atrapó interacción entrante (Conv: ${payload.conversationId})`);
@@ -113,6 +117,36 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                         where: { conversationId: payload.conversationId },
                     });
                     this.logger.log(`[Executive Loop] Comprobante recibido durante ${conversation.status} en conversación ${payload.conversationId}. Contacto actualizado automáticamente a CLOSED (Venta) en el CRM.`);
+                    this.prisma.contact.findUnique({
+                        where: { id: payload.contactId },
+                        include: { memory: true },
+                    }).then((ct) => {
+                        const memory = ct?.memory;
+                        const prodName = memory?.interests?.[0] || 'Producto Digital';
+                        const isBarber = prodName.toLowerCase().includes('barber');
+                        (0, telegram_alert_util_1.sendTelegramSaleAlert)({
+                            productName: prodName,
+                            customerName: ct?.name || undefined,
+                            customerPhone: ct?.phone || undefined,
+                            amountFormatted: isBarber ? '6 USDT / 6.024 Bs' : 'Pago Confirmado',
+                            statusText: 'Comprobante recibido por WhatsApp (en pausa manual)',
+                            accessUrl: isBarber ? 'https://barber.ingenioos.online/?registro=1' : undefined,
+                        }).catch(() => { });
+                        this.pushNotificationService.notifySale(payload.tenantId, {
+                            productName: prodName,
+                            customerName: ct?.name || undefined,
+                            amountFormatted: isBarber ? '6 USDT / 6.024 Bs' : 'Pago Confirmado',
+                        }).catch(() => { });
+                    }).catch(() => { });
+                    this.eventEmitter.emit('memory.updated', {
+                        tenantId: payload.tenantId,
+                        contactId: payload.contactId,
+                        conversationId: payload.conversationId,
+                        updates: {
+                            leadStatus: 'CLOSED',
+                            tags: updatedTags,
+                        },
+                    });
                 }
                 else {
                     this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}' (pausa manual / operador humano activo). Manteniendo bot silenciado.`);
@@ -142,8 +176,12 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 'no quiero recibir',
                 'deja de escribir',
                 'dejen de escribir',
-                'cancela',
-                'cancelar',
+                'cancelar suscripcion',
+                'cancelar suscripción',
+                'cancelar pedido',
+                'cancelar orden',
+                'cancelar servicio',
+                'cancela todo',
                 'eliminarme',
                 'darme de baja',
                 'ya no quiero',
@@ -155,7 +193,8 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 'desuscribir',
                 'no responder mas'
             ];
-            const isOptOut = optOutPatterns.some(p => textNorm.includes(p));
+            const hasPaymentIntent = ['vaya a cancelar', 'voy a cancelar', 'para cancelar', 'cancelar por', 'puedo cancelar', 'donde cancelar', 'como cancelar', 'pago', 'transferencia', 'comprobante', 'banco', 'bs', 'dolares', 'dólares'].some(p => textNorm.includes(p));
+            const isOptOut = !hasPaymentIntent && optOutPatterns.some(p => textNorm.includes(p));
             if (isOptOut) {
                 this.logger.log(`[Reglas Bot] Detectado Opt-Out ("${payload.content}"). Pausando bot permanentemente y cancelando seguimientos.`);
                 await this.prisma.conversation.update({
@@ -277,6 +316,37 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 await this.prisma.pendingOutboundMessage.deleteMany({
                     where: { conversationId: payload.conversationId }
                 });
+                this.prisma.contact.findUnique({
+                    where: { id: payload.contactId },
+                    include: { memory: true },
+                }).then((ct) => {
+                    const memory = ct?.memory;
+                    const prodName = (mergedInterests && mergedInterests[0]) || memory?.interests?.[0] || 'Producto Digital';
+                    const isBarber = prodName.toLowerCase().includes('barber');
+                    (0, telegram_alert_util_1.sendTelegramSaleAlert)({
+                        productName: prodName,
+                        customerName: ct?.name || undefined,
+                        customerPhone: ct?.phone || undefined,
+                        amountFormatted: isBarber ? '6 USDT / 6.024 Bs' : 'Pago Confirmado',
+                        statusText: isBarber ? 'Acceso entregado automaticamente por WhatsApp' : 'Comprobante recibido por WhatsApp',
+                        accessUrl: isBarber ? 'https://barber.ingenioos.online/?registro=1' : undefined,
+                    }).catch(() => { });
+                    this.pushNotificationService.notifySale(payload.tenantId, {
+                        productName: prodName,
+                        customerName: ct?.name || undefined,
+                        amountFormatted: isBarber ? '6 USDT / 6.024 Bs' : 'Pago Confirmado',
+                    }).catch(() => { });
+                }).catch(() => { });
+                this.eventEmitter.emit('memory.updated', {
+                    tenantId: payload.tenantId,
+                    contactId: payload.contactId,
+                    conversationId: payload.conversationId,
+                    updates: {
+                        leadStatus: 'CLOSED',
+                        tags: Array.from(newTags),
+                        interests: mergedInterests,
+                    },
+                });
                 const paymentAckMsg = (reglasBot.paymentReceivedMessage || '').trim() ||
                     '¡Muchas gracias! 🎉 Hemos recibido tu comprobante de pago. En breve un asesor de nuestro equipo verificará los datos de la transferencia y te entregará el acceso a tu material por este medio. ¡Quedamos a tu completa orden!';
                 await this.prisma.interaction.create({
@@ -325,6 +395,39 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                     }
                 });
                 this.logger.log(`[CRM Auto-Pipeline] Lead ${payload.contactId} actualizado de "${currentStatus}" a "${nextStatus}" (Intereses: ${mergedInterests.join(', ')} | Tags: ${Array.from(newTags).join(', ')})`);
+                if (nextStatus === 'CLOSED' && currentStatus !== 'CLOSED') {
+                    this.prisma.contact.findUnique({
+                        where: { id: payload.contactId },
+                        include: { memory: true },
+                    }).then((ct) => {
+                        const memory = ct?.memory;
+                        const prodName = (mergedInterests && mergedInterests[0]) || memory?.interests?.[0] || 'Producto Digital';
+                        const isBarber = prodName.toLowerCase().includes('barber');
+                        (0, telegram_alert_util_1.sendTelegramSaleAlert)({
+                            productName: prodName,
+                            customerName: ct?.name || undefined,
+                            customerPhone: ct?.phone || undefined,
+                            amountFormatted: isBarber ? '6 USDT / 6.024 Bs' : 'Pago Confirmado',
+                            statusText: 'Venta confirmada por WhatsApp',
+                            accessUrl: isBarber ? 'https://barber.ingenioos.online/?registro=1' : undefined,
+                        }).catch(() => { });
+                        this.pushNotificationService.notifySale(payload.tenantId, {
+                            productName: prodName,
+                            customerName: ct?.name || undefined,
+                            amountFormatted: isBarber ? '6 USDT / 6.024 Bs' : 'Pago Confirmado',
+                        }).catch(() => { });
+                    }).catch(() => { });
+                }
+                this.eventEmitter.emit('memory.updated', {
+                    tenantId: payload.tenantId,
+                    contactId: payload.contactId,
+                    conversationId: payload.conversationId,
+                    updates: {
+                        leadStatus: nextStatus,
+                        tags: Array.from(newTags),
+                        interests: mergedInterests,
+                    },
+                });
             }
         }
         catch (err) {
@@ -605,6 +708,7 @@ exports.LlmListenerService = LlmListenerService = LlmListenerService_1 = __decor
         event_emitter_2.EventEmitter2,
         prisma_service_1.PrismaService,
         funnel_engine_service_1.FunnelEngineService,
-        runtime_engine_service_1.RuntimeEngineService])
+        runtime_engine_service_1.RuntimeEngineService,
+        push_notification_service_1.PushNotificationService])
 ], LlmListenerService);
 //# sourceMappingURL=llm-listener.service.js.map

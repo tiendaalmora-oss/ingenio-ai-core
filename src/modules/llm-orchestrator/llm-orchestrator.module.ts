@@ -6,10 +6,11 @@ import { KosLoaderService } from './services/kos-loader.service';
 import { PromptComposerService } from './services/prompt-composer.service';
 import { DatabaseModule } from '../../shared/database/database.module';
 import { FunnelEngineModule } from '../funnel-engine/funnel-engine.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { AiProviderFactory, AI_PROVIDER_TOKEN } from './providers/ai-provider.factory';
 
 @Module({
-  imports: [DatabaseModule, FunnelEngineModule],
+  imports: [DatabaseModule, FunnelEngineModule, NotificationsModule],
   providers: [
     // AI Provider — reads AI_PROVIDER env var at startup and injects the correct adapter
     AiProviderFactory,

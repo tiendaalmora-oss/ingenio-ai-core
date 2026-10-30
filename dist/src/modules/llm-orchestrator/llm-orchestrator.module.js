@@ -15,13 +15,14 @@ const kos_loader_service_1 = require("./services/kos-loader.service");
 const prompt_composer_service_1 = require("./services/prompt-composer.service");
 const database_module_1 = require("../../shared/database/database.module");
 const funnel_engine_module_1 = require("../funnel-engine/funnel-engine.module");
+const notifications_module_1 = require("../notifications/notifications.module");
 const ai_provider_factory_1 = require("./providers/ai-provider.factory");
 let LlmOrchestratorModule = class LlmOrchestratorModule {
 };
 exports.LlmOrchestratorModule = LlmOrchestratorModule;
 exports.LlmOrchestratorModule = LlmOrchestratorModule = __decorate([
     (0, common_1.Module)({
-        imports: [database_module_1.DatabaseModule, funnel_engine_module_1.FunnelEngineModule],
+        imports: [database_module_1.DatabaseModule, funnel_engine_module_1.FunnelEngineModule, notifications_module_1.NotificationsModule],
         providers: [
             ai_provider_factory_1.AiProviderFactory,
             {

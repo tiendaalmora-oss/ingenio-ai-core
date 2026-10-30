@@ -41,6 +41,8 @@ export class ToolCallListenerService {
                     conversationId: payload.conversationId,
                     OR: [
                       { content: { contains: 'Comprobante de Pago Detectado' } },
+                      { content: { contains: 'El usuario envió una imagen' } },
+                      { content: { contains: 'El usuario adjuntó una imagen' } },
                       { content: { contains: 'Venta manual confirmada' } },
                     ],
                   },
