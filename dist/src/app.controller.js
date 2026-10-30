@@ -27,9 +27,9 @@ let AppController = class AppController {
         return {
             status: 'ok',
             service: 'ingenio-ai-core',
-            version: '2.0.0',
-            commit: 'crm-ai-2.0-high-precision',
-            updatedAt: '2026-10-26T21:15:00Z',
+            version: '2.0.2',
+            commit: 'telegram-sales-alert-and-barberpro-auto-delivery',
+            updatedAt: '2026-10-30T02:22:00Z',
         };
     }
 };

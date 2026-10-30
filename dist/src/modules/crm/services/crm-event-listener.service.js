@@ -14,6 +14,7 @@ exports.CrmEventListenerService = void 0;
 const common_1 = require("@nestjs/common");
 const event_emitter_1 = require("@nestjs/event-emitter");
 const prisma_service_1 = require("../../../shared/database/prisma.service");
+const telegram_alert_util_1 = require("../../../shared/utils/telegram-alert.util");
 let CrmEventListenerService = CrmEventListenerService_1 = class CrmEventListenerService {
     prisma;
     logger = new common_1.Logger(CrmEventListenerService_1.name);
@@ -114,6 +115,24 @@ let CrmEventListenerService = CrmEventListenerService_1 = class CrmEventListener
             if (auditEntries.length > 0) {
                 await this.prisma.memoryAuditLog.createMany({ data: auditEntries });
                 this.logger.log(`[CRM] ${auditEntries.length} audit entries guardadas para ${payload.contactId}`);
+            }
+            const isNewSale = ((resolvedLeadStatus === 'CLOSED' && before?.leadStatus !== 'CLOSED') ||
+                (mergedTags?.includes('PAGO_CONFIRMADO') && !(before?.tags || []).includes('PAGO_CONFIRMADO')));
+            if (isNewSale) {
+                this.prisma.contact.findUnique({
+                    where: { id: payload.contactId },
+                }).then((ct) => {
+                    const prodName = (mergedInterests && mergedInterests[0]) || 'Producto Digital';
+                    const isBarber = prodName.toLowerCase().includes('barber');
+                    (0, telegram_alert_util_1.sendTelegramSaleAlert)({
+                        productName: prodName,
+                        customerName: updates.name || ct?.name || undefined,
+                        customerPhone: ct?.phone || undefined,
+                        amountFormatted: isBarber ? '6 USDT / 6.024 Bs' : 'Pago Confirmado',
+                        statusText: isBarber ? 'Acceso entregado automaticamente por WhatsApp' : 'Comprobante acreditado',
+                        accessUrl: isBarber ? 'https://barber.ingenioos.online/?registro=1' : undefined,
+                    }).catch(() => { });
+                }).catch(() => { });
             }
         }
         catch (error) {

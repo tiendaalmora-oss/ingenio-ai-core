@@ -138,7 +138,7 @@ function matchProductFromCatalog(interests, tags, officialProducts) {
             }
         }
     }
-    const stopWords = new Set(['PARA', 'DE', 'DEL', 'LOS', 'LAS', 'CON', 'DOCENTE', 'BACHILLERATO', 'VENEZUELA', 'KIT', 'MEGA', 'PRODUCTO']);
+    const stopWords = new Set(['PARA', 'DE', 'DEL', 'LOS', 'LAS', 'CON', 'DOCENTE', 'BACHILLERATO', 'VENEZUELA', 'KIT', 'MEGA', 'PRODUCTO', 'SISTEMA', 'METODO', 'CONTROL', '2025', '2026']);
     for (const cand of candidates) {
         const candWords = normalizeText(cand)
             .split(/[\s,.-]+/)
@@ -395,14 +395,10 @@ let AnalyticsService = AnalyticsService_1 = class AnalyticsService {
                         id: true,
                         interactions: {
                             where: {
-                                OR: [
-                                    { content: { contains: 'Comprobante de Pago Detectado' } },
-                                    { content: { contains: '📸' } },
-                                    { type: 'IMAGE' },
-                                ],
+                                content: { contains: 'Comprobante de Pago Detectado' },
                             },
                             orderBy: { timestamp: 'desc' },
-                            take: 3,
+                            take: 5,
                         },
                     },
                     orderBy: { id: 'desc' },

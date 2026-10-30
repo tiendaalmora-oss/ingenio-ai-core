@@ -3,6 +3,7 @@ import { PrismaService } from '../../shared/database/prisma.service';
 import { AdminApiKeyGuard } from '../../shared/guards/admin-api-key.guard';
 import { TenantGuard } from '../../shared/guards/tenant.guard';
 import { TenantId } from '../../shared/decorators/tenant-id.decorator';
+import { sendTelegramSaleAlert } from '../../shared/utils/telegram-alert.util';
 
 const KANBAN_STAGES = ['Nuevo', 'Contactado', 'Interesado', 'Demo', 'Oferta', 'Venta', 'Cliente'];
 
@@ -731,6 +732,18 @@ export class CrmController {
       },
     });
 
+    // 5. Enviar alerta inmediata con sonido a Telegram de Roberto Alexis (CEO)
+    sendTelegramSaleAlert({
+      productName: body.productName,
+      customerName: contact.name || undefined,
+      customerPhone: contact.phone || undefined,
+      amountFormatted: formattedAmount,
+      paymentMethod,
+      reference: body.reference || undefined,
+      statusText: 'Venta registrada en CRM',
+      accessUrl: body.productName.toLowerCase().includes('barber') ? 'https://barber.ingenioos.online/?registro=1' : undefined,
+    }).catch(() => {});
+
     return {
       success: true,
       leadId: id,
@@ -817,6 +830,15 @@ export class CrmController {
         conversationId: convId,
       },
     });
+
+    // Notificar anulación a Telegram
+    sendTelegramSaleAlert({
+      productName: (contact.memory?.interests as string[])?.[0] || 'Producto',
+      customerName: contact.name || undefined,
+      customerPhone: contact.phone || undefined,
+      amountFormatted: '',
+      isCancellation: true,
+    }).catch(() => {});
 
     return {
       success: true,

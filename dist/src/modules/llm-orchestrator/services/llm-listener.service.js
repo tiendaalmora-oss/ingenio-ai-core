@@ -102,7 +102,21 @@ let LlmListenerService = LlmListenerService_1 = class LlmListenerService {
                 conversation.status = 'ACTIVE';
             }
             else if (conversation.status === 'HANDOFF' || conversation.status === 'PAUSED') {
-                this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}' (pausa manual / operador humano activo). Manteniendo bot silenciado.`);
+                if ((payload.content || '').includes('[Comprobante de Pago Detectado]')) {
+                    const updatedTags = Array.from(new Set([...tags, 'PAGO_CONFIRMADO', 'COMPROBANTE_RECIBIDO']));
+                    await this.prisma.businessMemory.upsert({
+                        where: { contactId: payload.contactId },
+                        create: { contactId: payload.contactId, leadStatus: 'CLOSED', tags: updatedTags, lastInteraction: new Date() },
+                        update: { leadStatus: 'CLOSED', tags: updatedTags, lastInteraction: new Date() },
+                    });
+                    await this.prisma.pendingOutboundMessage.deleteMany({
+                        where: { conversationId: payload.conversationId },
+                    });
+                    this.logger.log(`[Executive Loop] Comprobante recibido durante ${conversation.status} en conversación ${payload.conversationId}. Contacto actualizado automáticamente a CLOSED (Venta) en el CRM.`);
+                }
+                else {
+                    this.logger.log(`[Executive Loop] Conversación ${payload.conversationId} en estado '${conversation.status}' (pausa manual / operador humano activo). Manteniendo bot silenciado.`);
+                }
                 return;
             }
             else if (conversation.status === 'RESOLVED' || conversation.status === 'LOST') {

@@ -18,6 +18,7 @@ const prisma_service_1 = require("../../shared/database/prisma.service");
 const admin_api_key_guard_1 = require("../../shared/guards/admin-api-key.guard");
 const tenant_guard_1 = require("../../shared/guards/tenant.guard");
 const tenant_id_decorator_1 = require("../../shared/decorators/tenant-id.decorator");
+const telegram_alert_util_1 = require("../../shared/utils/telegram-alert.util");
 const KANBAN_STAGES = ['Nuevo', 'Contactado', 'Interesado', 'Demo', 'Oferta', 'Venta', 'Cliente'];
 function computeScore(memory, convCount, interactionCount) {
     let score = 30;
@@ -587,6 +588,16 @@ let CrmController = class CrmController {
                 conversationId: convId,
             },
         });
+        (0, telegram_alert_util_1.sendTelegramSaleAlert)({
+            productName: body.productName,
+            customerName: contact.name || undefined,
+            customerPhone: contact.phone || undefined,
+            amountFormatted: formattedAmount,
+            paymentMethod,
+            reference: body.reference || undefined,
+            statusText: 'Venta registrada en CRM',
+            accessUrl: body.productName.toLowerCase().includes('barber') ? 'https://barber.ingenioos.online/?registro=1' : undefined,
+        }).catch(() => { });
         return {
             success: true,
             leadId: id,
@@ -659,6 +670,13 @@ let CrmController = class CrmController {
                 conversationId: convId,
             },
         });
+        (0, telegram_alert_util_1.sendTelegramSaleAlert)({
+            productName: contact.memory?.interests?.[0] || 'Producto',
+            customerName: contact.name || undefined,
+            customerPhone: contact.phone || undefined,
+            amountFormatted: '',
+            isCancellation: true,
+        }).catch(() => { });
         return {
             success: true,
             leadId: id,

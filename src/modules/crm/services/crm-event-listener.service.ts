@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../../../shared/database/prisma.service';
+import { sendTelegramSaleAlert } from '../../../shared/utils/telegram-alert.util';
 
 // Tipos extraídos de los eventos públicos (Para mantener el acoplamiento mínimo, 
 // podríamos importar las clases de evento exactas, pero podemos usar duck-typing para el payload)
@@ -124,6 +125,29 @@ export class CrmEventListenerService {
       if (auditEntries.length > 0) {
         await this.prisma.memoryAuditLog.createMany({ data: auditEntries });
         this.logger.log(`[CRM] ${auditEntries.length} audit entries guardadas para ${payload.contactId}`);
+      }
+
+      // 5. Detectar venta automatica y notificar a Telegram con sonido
+      const isNewSale = (
+        (resolvedLeadStatus === 'CLOSED' && before?.leadStatus !== 'CLOSED') ||
+        (mergedTags?.includes('PAGO_CONFIRMADO') && !(before?.tags as string[] || []).includes('PAGO_CONFIRMADO'))
+      );
+
+      if (isNewSale) {
+        this.prisma.contact.findUnique({
+          where: { id: payload.contactId },
+        }).then((ct) => {
+          const prodName = (mergedInterests && mergedInterests[0]) || 'Producto Digital';
+          const isBarber = prodName.toLowerCase().includes('barber');
+          sendTelegramSaleAlert({
+            productName: prodName,
+            customerName: updates.name || ct?.name || undefined,
+            customerPhone: ct?.phone || undefined,
+            amountFormatted: isBarber ? '6 USDT / 6.024 Bs' : 'Pago Confirmado',
+            statusText: isBarber ? 'Acceso entregado automaticamente por WhatsApp' : 'Comprobante acreditado',
+            accessUrl: isBarber ? 'https://barber.ingenioos.online/?registro=1' : undefined,
+          }).catch(() => {});
+        }).catch(() => {});
       }
     } catch (error) {
       this.logger.error('[CRM] Falló actualización de Business Memory:', error);

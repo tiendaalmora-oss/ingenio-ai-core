@@ -23,6 +23,13 @@ class OpenAiCompatibleProvider extends ai_provider_interface_1.IAiProvider {
             model: this.model,
             messages,
         };
+        if (this.providerName.toLowerCase().includes('openrouter')) {
+            const orderEnv = process.env.AI_PROVIDER_ORDER || 'CoreWeave,Inference.net';
+            body.provider = {
+                order: orderEnv.split(',').map((p) => p.trim()),
+                allow_fallbacks: true,
+            };
+        }
         if (options?.tools && options.tools.length > 0 && options.toolChoice !== 'none') {
             body.tools = options.tools;
             body.tool_choice = options.toolChoice || 'auto';
