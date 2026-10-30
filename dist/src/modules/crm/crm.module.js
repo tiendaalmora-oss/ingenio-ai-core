@@ -13,12 +13,13 @@ const crm_event_listener_service_1 = require("./services/crm-event-listener.serv
 const prisma_contact_repository_1 = require("./services/prisma-contact.repository");
 const prisma_service_1 = require("../../shared/database/prisma.service");
 const contact_repository_interface_1 = require("./ports/out/contact-repository.interface");
+const notifications_module_1 = require("../notifications/notifications.module");
 let CrmModule = class CrmModule {
 };
 exports.CrmModule = CrmModule;
 exports.CrmModule = CrmModule = __decorate([
     (0, common_1.Module)({
-        imports: [],
+        imports: [notifications_module_1.NotificationsModule],
         controllers: [crm_controller_1.CrmController],
         providers: [
             prisma_service_1.PrismaService,

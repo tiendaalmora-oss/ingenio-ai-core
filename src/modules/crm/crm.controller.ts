@@ -4,6 +4,7 @@ import { AdminApiKeyGuard } from '../../shared/guards/admin-api-key.guard';
 import { TenantGuard } from '../../shared/guards/tenant.guard';
 import { TenantId } from '../../shared/decorators/tenant-id.decorator';
 import { sendTelegramSaleAlert } from '../../shared/utils/telegram-alert.util';
+import { PushNotificationService } from '../notifications/push-notification.service';
 
 const KANBAN_STAGES = ['Nuevo', 'Contactado', 'Interesado', 'Demo', 'Oferta', 'Venta', 'Cliente'];
 
@@ -28,7 +29,10 @@ function computeScore(memory: any, convCount: number, interactionCount: number):
 @Controller('crm')
 @UseGuards(AdminApiKeyGuard, TenantGuard)
 export class CrmController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pushNotificationService: PushNotificationService,
+  ) {}
 
   /**
    * GET /crm/leads
@@ -742,6 +746,14 @@ export class CrmController {
       reference: body.reference || undefined,
       statusText: 'Venta registrada en CRM',
       accessUrl: body.productName.toLowerCase().includes('barber') ? 'https://barber.ingenioos.online/?registro=1' : undefined,
+    }).catch(() => {});
+
+    // 6. Enviar notificación Push Web nativa a celulares (con aislamiento multi-tenant)
+    this.pushNotificationService.notifySale(tenantId, {
+      productName: body.productName,
+      customerName: contact.name || undefined,
+      amountFormatted: formattedAmount,
+      reference: body.reference || undefined,
     }).catch(() => {});
 
     return {

@@ -19,6 +19,7 @@ const admin_api_key_guard_1 = require("../../shared/guards/admin-api-key.guard")
 const tenant_guard_1 = require("../../shared/guards/tenant.guard");
 const tenant_id_decorator_1 = require("../../shared/decorators/tenant-id.decorator");
 const telegram_alert_util_1 = require("../../shared/utils/telegram-alert.util");
+const push_notification_service_1 = require("../notifications/push-notification.service");
 const KANBAN_STAGES = ['Nuevo', 'Contactado', 'Interesado', 'Demo', 'Oferta', 'Venta', 'Cliente'];
 function computeScore(memory, convCount, interactionCount) {
     let score = 30;
@@ -47,8 +48,10 @@ function computeScore(memory, convCount, interactionCount) {
 }
 let CrmController = class CrmController {
     prisma;
-    constructor(prisma) {
+    pushNotificationService;
+    constructor(prisma, pushNotificationService) {
         this.prisma = prisma;
+        this.pushNotificationService = pushNotificationService;
     }
     async getLeads(tenantId, search, stage, page = '1', limit = '100') {
         if (!tenantId)
@@ -598,6 +601,12 @@ let CrmController = class CrmController {
             statusText: 'Venta registrada en CRM',
             accessUrl: body.productName.toLowerCase().includes('barber') ? 'https://barber.ingenioos.online/?registro=1' : undefined,
         }).catch(() => { });
+        this.pushNotificationService.notifySale(tenantId, {
+            productName: body.productName,
+            customerName: contact.name || undefined,
+            amountFormatted: formattedAmount,
+            reference: body.reference || undefined,
+        }).catch(() => { });
         return {
             success: true,
             leadId: id,
@@ -785,6 +794,7 @@ __decorate([
 exports.CrmController = CrmController = __decorate([
     (0, common_1.Controller)('crm'),
     (0, common_1.UseGuards)(admin_api_key_guard_1.AdminApiKeyGuard, tenant_guard_1.TenantGuard),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        push_notification_service_1.PushNotificationService])
 ], CrmController);
 //# sourceMappingURL=crm.controller.js.map

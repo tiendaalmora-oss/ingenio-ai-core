@@ -1,7 +1,9 @@
 import { PrismaService } from '../../shared/database/prisma.service';
+import { PushNotificationService } from '../notifications/push-notification.service';
 export declare class CrmController {
     private readonly prisma;
-    constructor(prisma: PrismaService);
+    private readonly pushNotificationService;
+    constructor(prisma: PrismaService, pushNotificationService: PushNotificationService);
     getLeads(tenantId: string, search?: string, stage?: string, page?: string, limit?: string): Promise<{
         total: number;
         page: number;

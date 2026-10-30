@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { sendTelegramSaleAlert } from '../../../shared/utils/telegram-alert.util';
+import { PushNotificationService } from '../../notifications/push-notification.service';
 
 // Tipos extraídos de los eventos públicos (Para mantener el acoplamiento mínimo, 
 // podríamos importar las clases de evento exactas, pero podemos usar duck-typing para el payload)
@@ -10,7 +11,10 @@ import { sendTelegramSaleAlert } from '../../../shared/utils/telegram-alert.util
 export class CrmEventListenerService {
   private readonly logger = new Logger(CrmEventListenerService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pushNotificationService: PushNotificationService,
+  ) {}
 
   @OnEvent('memory.updated', { async: true })
   async handleMemoryUpdated(payload: any) {
@@ -146,6 +150,14 @@ export class CrmEventListenerService {
             amountFormatted: isBarber ? '6 USDT / 6.024 Bs' : 'Pago Confirmado',
             statusText: isBarber ? 'Acceso entregado automaticamente por WhatsApp' : 'Comprobante acreditado',
             accessUrl: isBarber ? 'https://barber.ingenioos.online/?registro=1' : undefined,
+          }).catch(() => {});
+
+          // Disparar Web Push a la barra del teléfono (con aislamiento multi-tenant)
+          this.pushNotificationService.notifySale(payload.tenantId || ct?.tenantId, {
+            productName: prodName,
+            customerName: updates.name || ct?.name || undefined,
+            amountFormatted: isBarber ? '6 USDT / 6.024 Bs' : 'Pago Confirmado',
+            reference: undefined,
           }).catch(() => {});
         }).catch(() => {});
       }

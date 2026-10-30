@@ -15,11 +15,14 @@ const common_1 = require("@nestjs/common");
 const event_emitter_1 = require("@nestjs/event-emitter");
 const prisma_service_1 = require("../../../shared/database/prisma.service");
 const telegram_alert_util_1 = require("../../../shared/utils/telegram-alert.util");
+const push_notification_service_1 = require("../../notifications/push-notification.service");
 let CrmEventListenerService = CrmEventListenerService_1 = class CrmEventListenerService {
     prisma;
+    pushNotificationService;
     logger = new common_1.Logger(CrmEventListenerService_1.name);
-    constructor(prisma) {
+    constructor(prisma, pushNotificationService) {
         this.prisma = prisma;
+        this.pushNotificationService = pushNotificationService;
     }
     async handleMemoryUpdated(payload) {
         this.logger.debug(`handleMemoryUpdated: contactId=${payload.contactId}`);
@@ -132,6 +135,12 @@ let CrmEventListenerService = CrmEventListenerService_1 = class CrmEventListener
                         statusText: isBarber ? 'Acceso entregado automaticamente por WhatsApp' : 'Comprobante acreditado',
                         accessUrl: isBarber ? 'https://barber.ingenioos.online/?registro=1' : undefined,
                     }).catch(() => { });
+                    this.pushNotificationService.notifySale(payload.tenantId || ct?.tenantId, {
+                        productName: prodName,
+                        customerName: updates.name || ct?.name || undefined,
+                        amountFormatted: isBarber ? '6 USDT / 6.024 Bs' : 'Pago Confirmado',
+                        reference: undefined,
+                    }).catch(() => { });
                 }).catch(() => { });
             }
         }
@@ -214,6 +223,7 @@ __decorate([
 ], CrmEventListenerService.prototype, "handleMessageSent", null);
 exports.CrmEventListenerService = CrmEventListenerService = CrmEventListenerService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        push_notification_service_1.PushNotificationService])
 ], CrmEventListenerService);
 //# sourceMappingURL=crm-event-listener.service.js.map

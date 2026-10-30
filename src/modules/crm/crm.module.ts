@@ -4,9 +4,10 @@ import { CrmEventListenerService } from './services/crm-event-listener.service';
 import { PrismaContactRepository } from './services/prisma-contact.repository';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { CONTACT_REPOSITORY } from './ports/out/contact-repository.interface';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [],
+  imports: [NotificationsModule],
   controllers: [CrmController],
   providers: [
     PrismaService,

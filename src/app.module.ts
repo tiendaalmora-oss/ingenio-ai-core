@@ -22,6 +22,7 @@ import { MediaProcessingModule } from './modules/media-processing/media-processi
 import { AgencyModule } from './modules/agency/agency.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { CampaignsModule } from './modules/campaigns/campaigns.module';
     AnalyticsModule,
     AgencyModule,
     CampaignsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

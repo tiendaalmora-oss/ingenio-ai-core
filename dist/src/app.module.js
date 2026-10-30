@@ -31,6 +31,7 @@ const media_processing_module_1 = require("./modules/media-processing/media-proc
 const agency_module_1 = require("./modules/agency/agency.module");
 const auth_module_1 = require("./modules/auth/auth.module");
 const campaigns_module_1 = require("./modules/campaigns/campaigns.module");
+const notifications_module_1 = require("./modules/notifications/notifications.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -61,6 +62,7 @@ exports.AppModule = AppModule = __decorate([
             analytics_module_1.AnalyticsModule,
             agency_module_1.AgencyModule,
             campaigns_module_1.CampaignsModule,
+            notifications_module_1.NotificationsModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],
