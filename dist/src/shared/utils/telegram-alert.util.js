@@ -2,10 +2,12 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendTelegramSaleAlert = sendTelegramSaleAlert;
 async function sendTelegramSaleAlert(payload) {
-    const token = process.env.TELEGRAM_BOT_TOKEN || '8930361437:AAHL0X9pcorsGMccbH3_7pydLlFOxW8lK9E';
-    const chatId = process.env.TELEGRAM_ALERT_CHAT_ID || '6342099746';
-    if (!token || !chatId)
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const chatId = process.env.TELEGRAM_ALERT_CHAT_ID;
+    if (!token || !chatId) {
+        console.warn('[TelegramAlert] TELEGRAM_BOT_TOKEN o TELEGRAM_ALERT_CHAT_ID no configurados en variables de entorno.');
         return false;
+    }
     let text = '';
     if (payload.isCancellation) {
         text = `⚠️🛑 <b>[VENTA ANULADA / ACCESO REVOCADO]</b>\n` +
