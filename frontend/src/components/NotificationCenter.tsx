@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Bell, UserCheck, DollarSign, Flame, ArrowRight, ExternalLink, X, CheckCheck, Sparkles, AlertCircle } from 'lucide-react';
@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../services/api';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import PushNotificationButton from './PushNotificationButton';
 
 export default function NotificationCenter() {
   const [isOpen, setIsOpen] = useState(false);
@@ -143,6 +144,9 @@ export default function NotificationCenter() {
               )}
             </div>
           </div>
+
+          {/* Web Push Toggle for Phones */}
+          <PushNotificationButton />
 
           {/* List */}
           <div className="max-h-[420px] overflow-y-auto divide-y divide-gray-100">
