@@ -5,10 +5,17 @@ import { Loader2 } from 'lucide-react';
 
 export default function LoadingScreen() {
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-50 z-50">
-      <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />
-      <h2 className="text-xl font-semibold text-gray-800">Loading Ingenio AI Studio...</h2>
-      <p className="text-gray-500 mt-2">Connecting to backend services</p>
+    <div className="fixed inset-0 flex flex-col items-center justify-center bg-slate-950 z-50 text-center p-4">
+      <img
+        src="/logo-dark-cropped.png"
+        alt="IngenioCRM"
+        className="h-20 w-auto object-contain mb-6 animate-pulse"
+      />
+      <div className="flex items-center gap-2 text-slate-300 text-sm font-medium">
+        <Loader2 className="w-4 h-4 text-cyan-400 animate-spin" />
+        <span>Iniciando IngenioCRM...</span>
+      </div>
+      <p className="text-slate-500 text-xs mt-2">Conectando con el servidor</p>
     </div>
   );
 }

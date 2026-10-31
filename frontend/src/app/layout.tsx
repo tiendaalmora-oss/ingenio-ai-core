@@ -7,8 +7,12 @@ import AppLayout from '@/layouts/AppLayout';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Ingenio AI Studio',
-  description: 'FrontOffice for Ingenio AI Core',
+  title: 'IngenioCRM | Relaciones que hacen crecer',
+  description: 'CRM Inteligente y Gestión de Ventas - Ingenio Digital',
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/icon-mark.png',
+  },
 };
 
 export default function RootLayout({

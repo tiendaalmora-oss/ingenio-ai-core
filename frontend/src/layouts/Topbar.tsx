@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Activity, Clock, Database, Menu, Building2 } from 'lucide-react';
 import { useUiStore } from '../store/ui.store';
@@ -59,6 +60,11 @@ export default function Topbar({ tenant, tenantName, version, timestamp, health 
         >
           <Menu className="w-5 h-5" />
         </button>
+
+        {/* Mobile brand icon */}
+        <Link href="/dashboard" className="md:hidden flex items-center shrink-0">
+          <img src="/icon-mark.png" alt="IngenioCRM" className="h-6 w-auto object-contain" />
+        </Link>
 
         <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-300 font-medium bg-gray-100 dark:bg-slate-800 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full flex-shrink-0 border border-transparent dark:border-slate-700/60">
           <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 dark:text-slate-400 shrink-0" />

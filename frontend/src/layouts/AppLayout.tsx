@@ -78,7 +78,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
           <h2 className="text-xl font-bold text-slate-900 mb-2">Error de Conexión con el Backend</h2>
           <p className="text-sm text-slate-500 mb-6">
-            No pudimos conectar con el servidor central de Ingenio AI ({api.defaults.baseURL || 'https://core.ai.ingeniodigital.shop'}).
+            No pudimos conectar con el servidor central de IngenioCRM ({api.defaults.baseURL || 'https://core.ai.ingeniodigital.shop'}).
           </p>
           <div className="flex gap-3">
             <button

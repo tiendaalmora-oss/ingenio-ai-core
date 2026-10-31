@@ -49,19 +49,25 @@ export default function LoginScreen({ onSuccess }: LoginScreenProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 flex flex-col items-center justify-center p-4">
+      {/* Brand Header */}
+      <div className="mb-6 text-center">
+        <img
+          src="/logo-dark-cropped.png"
+          alt="IngenioCRM"
+          className="h-20 sm:h-24 mx-auto w-auto object-contain drop-shadow-xl"
+        />
+      </div>
+
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 border border-slate-100">
         
-        {/* Logo / Header */}
+        {/* Header */}
         <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/30">
-            <Lock className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900">Ingenio AI Studio</h1>
+          <h1 className="text-xl font-bold text-slate-900">Bienvenido a IngenioCRM</h1>
           <p className="text-slate-500 text-xs mt-1">
             {loginMode === 'admin'
               ? 'Acceso maestro para administradores de agencia'
-              : 'Ingresa a tu subcuenta independiente'}
+              : 'Ingresa a tu espacio de trabajo independiente'}
           </p>
         </div>
 
@@ -170,7 +176,7 @@ export default function LoginScreen({ onSuccess }: LoginScreenProps) {
         {/* Footer */}
         <div className="mt-8 pt-5 border-t border-slate-100 flex items-center justify-center gap-2 text-xs text-slate-400">
           <ShieldCheck className="w-4 h-4 text-emerald-500" />
-          <span>Acceso Seguro • Ingenio AI Core</span>
+          <span>Acceso Seguro • IngenioCRM</span>
         </div>
 
       </div>

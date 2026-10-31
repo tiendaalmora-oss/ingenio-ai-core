@@ -59,8 +59,15 @@ export default function Sidebar({ menu }: { menu: MenuItem[] }) {
         className={`hidden md:flex flex-col fixed top-0 left-0 z-40 h-screen bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 transition-all duration-300 ${sidebarWidth}`}
       >
         <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-slate-800 flex-shrink-0">
-          {sidebarOpen && (
-            <span className="text-xl font-bold text-gray-800 dark:text-gray-100 truncate">Ingenio AI</span>
+          {sidebarOpen ? (
+            <Link href="/dashboard" className="flex items-center gap-2 min-w-0">
+              <img src="/logo-horizontal-dark.png" alt="IngenioCRM" className="hidden dark:block h-8 w-auto object-contain" />
+              <img src="/logo-horizontal-light.png" alt="IngenioCRM" className="block dark:hidden h-8 w-auto object-contain" />
+            </Link>
+          ) : (
+            <Link href="/dashboard" className="flex items-center justify-center p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition" title="IngenioCRM">
+              <img src="/icon-mark.png" alt="IngenioCRM" className="h-7 w-auto object-contain" />
+            </Link>
           )}
           <button
             onClick={toggleSidebar}
@@ -155,7 +162,10 @@ export default function Sidebar({ menu }: { menu: MenuItem[] }) {
           />
           <aside className="relative z-10 w-72 max-w-[85vw] h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col animate-in slide-in-from-left duration-200 border-r border-transparent dark:border-slate-800">
             <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-slate-800">
-              <span className="text-xl font-bold text-gray-900 dark:text-white">Ingenio AI</span>
+              <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)} className="flex items-center">
+                <img src="/logo-horizontal-dark.png" alt="IngenioCRM" className="hidden dark:block h-8 w-auto object-contain" />
+                <img src="/logo-horizontal-light.png" alt="IngenioCRM" className="block dark:hidden h-8 w-auto object-contain" />
+              </Link>
               <button
                 onClick={() => setMobileMenuOpen(false)}
                 className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-500 dark:text-slate-400"

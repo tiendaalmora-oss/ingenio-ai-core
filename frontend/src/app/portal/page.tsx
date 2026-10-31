@@ -69,7 +69,16 @@ function PortalHandler() {
   }, [key, router, setCredentials]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 flex flex-col items-center justify-center p-4">
+      {/* Brand Header */}
+      <div className="mb-6 text-center">
+        <img
+          src="/logo-dark-cropped.png"
+          alt="IngenioCRM"
+          className="h-20 sm:h-24 mx-auto w-auto object-contain drop-shadow-xl"
+        />
+      </div>
+
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 border border-slate-100 text-center">
         {loading ? (
           <div className="py-8 space-y-4">
