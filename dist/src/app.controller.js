@@ -27,9 +27,9 @@ let AppController = class AppController {
         return {
             status: 'ok',
             service: 'ingenio-ai-core',
-            version: '2.1.0',
-            commit: 'web-push-multitenant-sales-notifications',
-            updatedAt: '2026-10-30T14:45:00Z',
+            version: '2.1.1',
+            commit: '860e400-live-push-and-sync',
+            updatedAt: '2026-10-31T11:45:00Z',
         };
     }
 };

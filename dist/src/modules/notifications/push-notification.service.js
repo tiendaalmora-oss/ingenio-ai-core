@@ -68,6 +68,20 @@ let PushNotificationService = PushNotificationService_1 = class PushNotification
     getPublicKey() {
         return { publicKey: this.publicKey };
     }
+    async getSubscriptions() {
+        return this.prisma.pushSubscription.findMany({
+            orderBy: { createdAt: 'desc' },
+            select: {
+                id: true,
+                endpoint: true,
+                tenantId: true,
+                role: true,
+                device: true,
+                createdAt: true,
+                updatedAt: true,
+            },
+        });
+    }
     async saveSubscription(data) {
         const role = data.role || 'client';
         const tenantId = data.tenantId || null;

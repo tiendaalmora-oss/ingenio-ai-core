@@ -23,6 +23,9 @@ let NotificationsController = class NotificationsController {
     getPublicKey() {
         return this.pushService.getPublicKey();
     }
+    async getSubscriptions() {
+        return this.pushService.getSubscriptions();
+    }
     async subscribe(body) {
         if (!body.endpoint || !body.p256dh || !body.auth) {
             throw new common_1.BadRequestException('Faltan datos de suscripción push (endpoint, p256dh o auth)');
@@ -49,6 +52,12 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], NotificationsController.prototype, "getPublicKey", null);
+__decorate([
+    (0, common_1.Get)('subscriptions'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], NotificationsController.prototype, "getSubscriptions", null);
 __decorate([
     (0, common_1.Post)('subscribe'),
     __param(0, (0, common_1.Body)()),

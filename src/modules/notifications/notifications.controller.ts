@@ -16,6 +16,11 @@ export class NotificationsController {
     return this.pushService.getPublicKey();
   }
 
+  @Get('subscriptions')
+  async getSubscriptions() {
+    return this.pushService.getSubscriptions();
+  }
+
   @Post('subscribe')
   async subscribe(
     @Body()

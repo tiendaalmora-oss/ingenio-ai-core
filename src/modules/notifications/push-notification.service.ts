@@ -37,6 +37,21 @@ export class PushNotificationService {
     return { publicKey: this.publicKey };
   }
 
+  async getSubscriptions() {
+    return (this.prisma as any).pushSubscription.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        endpoint: true,
+        tenantId: true,
+        role: true,
+        device: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
   async saveSubscription(data: {
     endpoint: string;
     p256dh: string;

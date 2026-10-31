@@ -5,6 +5,7 @@ export declare class NotificationsController {
     getPublicKey(): {
         publicKey: string;
     };
+    getSubscriptions(): Promise<any>;
     subscribe(body: {
         endpoint: string;
         p256dh: string;

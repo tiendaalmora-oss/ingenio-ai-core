@@ -15,6 +15,7 @@ export declare class PushNotificationService {
     getPublicKey(): {
         publicKey: string;
     };
+    getSubscriptions(): Promise<any>;
     saveSubscription(data: {
         endpoint: string;
         p256dh: string;
